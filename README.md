@@ -23,7 +23,7 @@ Estos indicadores se usan para medir si la ciudad mejora o empeora según las de
 - `config.py`: almacena constantes del proyecto, colores, ajustes por defecto, roles de juego e indicadores globales.
 - `game_state.py`: mantiene el estado del juego: rol actual, puntaje e indicadores de la ciudad.
 - `renderer.py`: contiene funciones básicas de renderizado, como dibujar texto y paneles. Sirve como capa simple de visualización antes de que exista una interfaz más completa.
-- `audio_manager.py`: gestiona música de fondo y efectos de sonido; si no encuentra archivos reales, usa tonos sencillos para no romper la ejecución.
+- `audio_manager.py`: gestiona música de fondo y efectos de sonido; si no encuentra un archivo real, no reproduce nada.
 - `transition_manager.py`: administra transiciones entre pantallas con fade in/out.
 - `achievements.py`: define logros y rastreo de progreso para recompensas del jugador.
 - `screen_handlers.py`: módulo auxiliar para compatibilidad con pantallas y manejo general.
