@@ -1,8 +1,6 @@
 """Gestor de audio para Alcalde Digital."""
 
-import math
 import os
-from typing import Optional
 
 import pygame
 
@@ -26,14 +24,15 @@ class AudioManager:
         self._bgm_dir = os.path.join(self._base_dir, "Audio", "BGM")
         self._sfx_dir = os.path.join(self._base_dir, "Audio", "SFX")
 
-    def _resolve_audio_path(self, folder: str, nombre: str) -> Optional[str]:
-        for ext in (".ogg", ".wav", ".mp3"):
-            full = os.path.join(folder, f"{nombre}{ext}")
+    def _resolve_audio_path(self, folder, nombre):
+        extensiones = [".ogg", ".wav", ".mp3"]
+        for extension in extensiones:
+            full = os.path.join(folder, nombre + extension)
             if os.path.exists(full):
                 return full
         return None
 
-    def _safe_set_music_volume(self, value: float):
+    def _safe_set_music_volume(self, value):
         try:
             if pygame.mixer.get_init() is not None:
                 pygame.mixer.music.set_volume(max(0.0, min(1.0, value)))
@@ -97,22 +96,8 @@ class AudioManager:
         except Exception:
             pass
 
-        try:
-            if not pygame.mixer.get_init():
-                return
-            sample_rate = 22050
-            duration = 0.12
-            total_samples = int(sample_rate * duration)
-            audio = []
-            for i in range(total_samples):
-                t = i / sample_rate
-                value = int(32767 * math.sin(2 * math.pi * (440 if "click" in nombre.lower() else 220) * t) * 0.3)
-                audio.append(value)
-            sound_data = pygame.mixer.Sound(buffer=bytearray(audio))
-            sound_data.set_volume(self.sfx_volume * max(0.0, min(2.0, float(volume_scale))))
-            sound_data.play()
-        except Exception:
-            pass
+        # Si no hay archivo, no se genera un sonido artificial.
+        return
 
     def sfx_click(self):
         self.play_sfx("click", 1.0)

@@ -1,7 +1,5 @@
-from dataclasses import dataclass, field
 import json
 import os
-from typing import Any, Callable
 
 
 RARITY_COLORS = {
@@ -12,48 +10,52 @@ RARITY_COLORS = {
 }
 
 
-@dataclass(frozen=True)
 class AchievementData:
-    id: str
-    nombre: str
-    descripcion: str
-    categoria: str
-    rareza: str = "comun"
-    objetivo: int = 1
-    secreto: bool = False
-    icono: str = ""
-    condition: Callable[["AchievementTracker", Any], bool] | None = None
-    progress: Callable[["AchievementTracker", Any], int] | None = None
+    def __init__(self, id, nombre, descripcion, categoria, rareza="comun",
+                 objetivo=1, secreto=False, icono="", condition=None,
+                 progress=None):
+        self.id = id
+        self.nombre = nombre
+        self.descripcion = descripcion
+        self.categoria = categoria
+        self.rareza = rareza
+        self.objetivo = objetivo
+        self.secreto = secreto
+        self.icono = icono
+        self.condition = condition
+        self.progress = progress
 
 
-@dataclass
 class Logro:
-    id: str
-    nombre: str 
-    descripcion: str
-    categoria: str = "General"
-    rareza: str = "comun"
-    objetivo: int = 1
-    secreto: bool = False
-    icono: str = ""
-    completo: bool = False
-    progreso: int = 0
-    unlocked_at: int = 0
-    _data: AchievementData | None = field(default=None, repr=False)
+    def __init__(self, id, nombre, descripcion, categoria="General",
+                 rareza="comun", objetivo=1, secreto=False, icono="",
+                 completo=False, progreso=0, unlocked_at=0, _data=None):
+        self.id = id
+        self.nombre = nombre
+        self.descripcion = descripcion
+        self.categoria = categoria
+        self.rareza = rareza
+        self.objetivo = objetivo
+        self.secreto = secreto
+        self.icono = icono
+        self.completo = completo
+        self.progreso = progreso
+        self.unlocked_at = unlocked_at
+        self._data = _data
 
     @property
-    def porcentaje(self) -> int:
+    def porcentaje(self):
         if self.completo:
             return 100
         return int(min(100, (self.progreso / max(1, self.objetivo)) * 100))
 
     @property
-    def descripcion_visible(self) -> str:
+    def descripcion_visible(self):
         if self.secreto and not self.completo:
             return "Logro secreto. Se revelara al desbloquearlo."
         return self.descripcion
 
-    def to_dict(self) -> dict:
+    def to_dict(self):
         return {
             "id": self.id,
             "completo": self.completo,
@@ -62,7 +64,7 @@ class Logro:
         }
 
     @classmethod
-    def from_data(cls, data: AchievementData) -> "Logro":
+    def from_data(cls, data):
         return cls(
             id=data.id,
             nombre=data.nombre,
@@ -80,34 +82,39 @@ class AchievementTracker:
     """Guarda hechos normalizados que las condiciones de logros usan."""
 
     def __init__(self):
-        self.contadores: dict[str, int] = {}
-        self.flags: set = set()
+        self.contadores = {}
+        self.flags = set()
 
-    def registrar_evento(self, nombre: str, cantidad: int = 1):
+    def registrar_evento(self, nombre, cantidad=1):
         self.contadores[nombre] = self.contadores.get(nombre, 0) + cantidad
 
-    def marcar_flag(self, nombre: str):
+    def marcar_flag(self, nombre):
         self.flags.add(nombre)
 
-    def to_dict(self) -> dict:
+    def to_dict(self):
         return {"contadores": self.contadores, "flags": list(self.flags)}
 
-    def load(self, data: dict):
+    def load(self, data):
         self.contadores = dict(data.get("contadores", {}))
         self.flags = set(data.get("flags", []))
 
 
 class AchievementManager:
-    def __init__(self, save_file, definiciones: list[AchievementData]):
+    def __init__(self, save_file, definiciones):
         self.save_file = save_file
         self.tracker = AchievementTracker()
-        self.logros: dict[str, Logro] = {d.id: Logro.from_data(d) for d in definiciones}
+        self.logros = {}
+        for definicion in definiciones:
+            self.logros[definicion.id] = Logro.from_data(definicion)
         self._dirty = False
 
-    def to_list(self) -> list[dict]:
-        return [l.to_dict() for l in self.logros.values()]
+    def to_list(self):
+        resultado = []
+        for logro in self.logros.values():
+            resultado.append(logro.to_dict())
+        return resultado
 
-    def load_global(self) -> None:
+    def load_global(self):
         try:
             with open(self.save_file, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
@@ -124,7 +131,7 @@ class AchievementManager:
                     logro.progreso = int(item.get("progreso", 0))
                     logro.unlocked_at = int(item.get("unlocked_at", 0))
 
-    def save_global(self) -> None:
+    def save_global(self):
         os.makedirs(os.path.dirname(self.save_file), exist_ok=True)
         payload = {
             "save_version": 1,
@@ -138,20 +145,24 @@ class AchievementManager:
         except OSError:
             pass
 
-    def completados(self) -> list[Logro]:
-        return [l for l in self.logros.values() if l.completo]
+    def completados(self):
+        resultado = []
+        for logro in self.logros.values():
+            if logro.completo:
+                resultado.append(logro)
+        return resultado
 
-    def todos(self) -> list[Logro]:
+    def todos(self):
         return list(self.logros.values())
 
-    def porcentaje(self) -> int:
+    def porcentaje(self):
         total = len(self.logros)
         return int((len(self.completados()) / total) * 100) if total else 0
 
 
 class AchievementUI:
     @staticmethod
-    def rarity_color(rareza: str) -> tuple:
+    def rarity_color(rareza):
         return RARITY_COLORS.get(rareza, RARITY_COLORS["comun"])
 
 
@@ -159,10 +170,10 @@ class Lista_Logros(AchievementManager):
     """Alias retrocompatible."""
 
 
-LOGRO_TRIGGERS: dict = {}
+LOGRO_TRIGGERS = {}
 
 
-DEFINICIONES_LOGROS_ALCALDE_DIGITAL: list[AchievementData] = [
+DEFINICIONES_LOGROS_ALCALDE_DIGITAL = [
     AchievementData(
         id="primer_verificado",
         nombre="Primera verificación",
