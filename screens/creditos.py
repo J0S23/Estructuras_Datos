@@ -7,10 +7,10 @@ def render_creditos(screen, font=None, scroll_y=0, paused=False):
     screen.fill((15, 15, 25))
     lines = [
         "ALCALDE DIGITAL",
-        "Integrante 1",
-        "Integrante 2",
-        "Integrante 3",
-        "Python 3.11",
+        "Joseph Arias",
+        "Diego Payares",
+        "Anny Delgado",
+        "Juan David Campo",
         "Pygame",
         "Gracias por jugar.",
     ]

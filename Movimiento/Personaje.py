@@ -68,7 +68,7 @@ class Personaje:
         self.sprint_multiplier = 1.8
         self.scale = escala
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        config = self._load_config(project_root)
+        config = self._load_config(project_root, ruta_pack)
         self.scale = float(config.get("scale", self.scale))
         ruta_pack_resuelta = _resolve_sprite_pack_path(ruta_pack)
         self.animaciones = cargar_animaciones(ruta_pack_resuelta, escala=self.scale)
@@ -112,8 +112,20 @@ class Personaje:
         )
         self.moviendose = False
 
-    def _load_config(self, root_dir):
-        candidate_paths = [
+    def _load_config(self, root_dir, ruta_pack=None):
+        """Busca primero el config propio de este personaje —
+        Hitboxes/<nombre>_config.json, que es lo que genera
+        Editores/personaje_editor.py— y si no existe cae al
+        personaje_config.json general."""
+        candidate_paths = []
+        if ruta_pack:
+            nombre = os.path.splitext(os.path.basename(os.path.normpath(ruta_pack)))[0]
+            if nombre:
+                # Acepta tanto 'ciudadano' (carpeta del pack) como
+                # 'ciudadano_idle' (nombre del sprite suelto que usa el editor).
+                candidate_paths.append(os.path.join(root_dir, "Hitboxes", f"{nombre}_config.json"))
+                candidate_paths.append(os.path.join(root_dir, "Hitboxes", f"{nombre}_idle_config.json"))
+        candidate_paths += [
             os.path.join(root_dir, "Hitboxes", "personaje_config.json"),
             os.path.join(root_dir, "personaje_config.json"),
         ]
