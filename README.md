@@ -48,8 +48,3 @@ python Editores/visor_personajes.py  # revisar que sprites y config tiene cada p
 - `Imagenes/` -- assets (`Fondos/`, `Personajes/<nombre>/`).
 - `Hitboxes/` -- los JSON que generan los editores.
 - `data/` -- publicaciones y dialogos de ejemplo.
-
-## Equipo
-
-Repo de trabajo: `J0S23/Estructuras_Datos`. Diego lleva la logica y el backend;
-los demas integrantes trabajan en los assets graficos.
