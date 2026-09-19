@@ -18,6 +18,9 @@ PERSONAJE_CONFIG_NAME = os.path.join("Hitboxes", "personaje_config.json")
 MINIJUEGO_CONFIG_NAME = os.path.join("Hitboxes", "minijuego_config.json")
 
 DEFAULT_SCALE = 1.6
+# Mismo valor que Movimiento/Personaje.ANCHO_RATIO_DEFECTO: estrecha el sprite
+# horizontalmente porque vienen casi tan anchos como altos.
+ANCHO_RATIO_DEFECTO = 0.7
 MAX_SCALE     = 12.0
 DEFAULT_HB    = {"w_ratio": 0.20, "h_ratio": 0.12,
                  "offset_x_ratio": 0.40, "offset_y_ratio": 0.86}
@@ -100,14 +103,49 @@ def get_minijuego_key(sprite_path):
     return None
 
 
-def get_char_config_path(sprite_path, project_root):
-    """Cada personaje guarda su propio config: Hitboxes/<nombre_del_sprite>_config.json.
+def nombre_de_personaje(sprite_path, project_root):
+    """Nombre con el que se identifica al personaje dueño de un sprite.
 
-    Antes todos compartían personaje_config.json, así que calibrar un rol
-    (Periodista, Influencer...) pisaba la calibración del anterior. Con un
-    archivo por sprite cada rol conserva el suyo.
+    Si el sprite está dentro de una subcarpeta de Imagenes/Personajes
+    (Imagenes/Personajes/P1/Idle_south.png), el personaje es esa carpeta: P1.
+    Si es un PNG suelto, se usa el nombre del archivo.
     """
-    nombre = os.path.splitext(os.path.basename(sprite_path))[0]
+    carpeta = os.path.basename(os.path.dirname(os.path.abspath(sprite_path)))
+    personajes_dir = os.path.basename(os.path.join(project_root, "Imagenes", "Personajes"))
+    if carpeta and carpeta.lower() != personajes_dir.lower():
+        return carpeta
+    return os.path.splitext(os.path.basename(sprite_path))[0]
+
+
+def rutas_config_de_todos(project_root):
+    """Todos los archivos que hay que escribir para aplicar una hitbox a todos.
+
+    Es el config de cada personaje que exista en Imagenes/Personajes/ más el
+    compartido personaje_config.json, que es el que heredan los personajes
+    que todavía no tienen el suyo (P3, P4...).
+    """
+    rutas = []
+    personajes_dir = os.path.join(project_root, "Imagenes", "Personajes")
+    if os.path.isdir(personajes_dir):
+        for nombre in sorted(os.listdir(personajes_dir)):
+            carpeta = os.path.join(personajes_dir, nombre)
+            if not os.path.isdir(carpeta):
+                continue
+            if any(f.lower().endswith(".png") for f in os.listdir(carpeta)):
+                rutas.append(os.path.join(project_root, "Hitboxes", f"{nombre}_config.json"))
+    rutas.append(os.path.join(project_root, PERSONAJE_CONFIG_NAME))
+    return rutas
+
+
+def get_char_config_path(sprite_path, project_root):
+    """Cada personaje guarda su propio config: Hitboxes/<personaje>_config.json.
+
+    El nombre sale de la carpeta del personaje (P1 -> P1_config.json), no del
+    sprite que se esté viendo, para que calibrar desde cualquier pose escriba
+    siempre el mismo archivo. Es también el primer nombre que busca
+    Movimiento/Personaje.py al cargar un personaje.
+    """
+    nombre = nombre_de_personaje(sprite_path, project_root)
     return os.path.join(project_root, "Hitboxes", f"{nombre}_config.json")
 
 
@@ -129,6 +167,10 @@ def collect_entries(project_root):
     # Personajes: solo la pose "idle/parado" por carpeta (búsqueda case-insensitive)
     personajes_dir = os.path.join(img_root, "Personajes")
     if os.path.isdir(personajes_dir):
+        # Se calibra sobre el idle de frente (south): es la pose que mejor
+        # muestra el ancho del personaje. Ojo con el orden de las direcciones:
+        # "idle_south-east" NO debe ganarle a "idle_south", por eso se compara
+        # con endswith contra el nombre sin extensión.
         idle_keywords = ["idle_down", "idle", "parado", "stand"]
         for char_name in sorted(os.listdir(personajes_dir)):
             char_dir = os.path.join(personajes_dir, char_name)
@@ -142,13 +184,30 @@ def collect_entries(project_root):
                 continue
             all_pngs = sorted(f for f in os.listdir(char_dir) if f.lower().endswith(".png"))
             sprite_file = None
-            for kw in idle_keywords:
+
+            # 1) El idle mirando al frente, si existe.
+            for png in all_pngs:
+                base = os.path.splitext(png)[0].lower()
+                if "idle" in base and base.endswith("south"):
+                    sprite_file = os.path.join(char_dir, png)
+                    break
+
+            # 2) Cualquier pose de frente.
+            if sprite_file is None:
                 for png in all_pngs:
-                    if kw in png.lower():
+                    if os.path.splitext(png)[0].lower().endswith("south"):
                         sprite_file = os.path.join(char_dir, png)
                         break
-                if sprite_file:
-                    break
+
+            # 3) Respaldo: la vieja búsqueda por palabra clave.
+            if sprite_file is None:
+                for kw in idle_keywords:
+                    for png in all_pngs:
+                        if kw in png.lower():
+                            sprite_file = os.path.join(char_dir, png)
+                            break
+                    if sprite_file:
+                        break
             if sprite_file is None and all_pngs:
                 sprite_file = os.path.join(char_dir, all_pngs[0])
             if sprite_file:
@@ -157,6 +216,17 @@ def collect_entries(project_root):
                     "path":  sprite_file,
                     "thumb": None,
                 })
+
+    # Opción de aplicar una misma hitbox a todos, de primera en la lista.
+    # Usa el sprite del primer personaje solo para previsualizar.
+    personajes = [e for e in entries if e["label"].startswith("[Personaje]")]
+    if len(personajes) > 1:
+        entries.insert(0, {
+            "label": f"[TODOS] Aplicar una hitbox a los {len(personajes)} personajes",
+            "path":  personajes[0]["path"],
+            "thumb": None,
+            "todos": True,
+        })
 
     # Interactuables y Escenarios
     for section in ("Interactuables", "Escenarios"):
@@ -297,7 +367,7 @@ def run_selector(screen, clock, project_root):
                 elif event.key == pygame.K_END:
                     sel_idx = max(0, len(vis) - 1)
                 elif event.key == pygame.K_RETURN and vis:
-                    return vis[sel_idx]["path"]
+                    return vis[sel_idx]
                 elif event.key == pygame.K_f and event.mod & pygame.KMOD_CTRL:
                     search_active = True; search_text = ""
             elif event.type == pygame.MOUSEWHEEL:
@@ -311,7 +381,7 @@ def run_selector(screen, clock, project_root):
                     row = pygame.Rect(LIST_X, LIST_Y + i * ROW_H, LIST_W, ROW_H - 2)
                     if row.collidepoint(mx, my):
                         if idx == sel_idx and event.button == 1:
-                            return vis[sel_idx]["path"]
+                            return vis[sel_idx]
                         sel_idx = idx
 
         # ── Dibujo ────────────────────────────────────────────────────────────
@@ -388,7 +458,7 @@ def run_selector(screen, clock, project_root):
 
 # ─── Editor principal ─────────────────────────────────────────────────────────
 
-def run_editor(screen, clock, sprite_path, project_root):
+def run_editor(screen, clock, sprite_path, project_root, aplicar_a_todos=False):
     mj_key = get_minijuego_key(sprite_path)
 
     font       = pygame.font.SysFont("consolas", 18)
@@ -436,6 +506,7 @@ def run_editor(screen, clock, sprite_path, project_root):
         # Personaje: config independiente por carpeta
         config_path = get_char_config_path(sprite_path, project_root)
         cfg = load_char_config(sprite_path, project_root)
+        ancho_ratio = float(cfg.get("ancho_ratio", ANCHO_RATIO_DEFECTO))
         scale = float(cfg.get("scale", DEFAULT_SCALE))
         hitboxes = {
             "collision":    read_hitbox(cfg, "hitbox",             DEFAULT_HB),
@@ -535,8 +606,9 @@ def run_editor(screen, clock, sprite_path, project_root):
                     else:
                         col = hitboxes["collision"]
                         itr = hitboxes.get("interactable", col)
-                        save_json(config_path, {
+                        payload = {
                             "scale": scale,
+                            "ancho_ratio": ancho_ratio,
                             "hitbox_w_ratio":                     col["w_ratio"],
                             "hitbox_h_ratio":                     col["h_ratio"],
                             "hitbox_offset_x_ratio":              col["offset_x_ratio"],
@@ -545,11 +617,23 @@ def run_editor(screen, clock, sprite_path, project_root):
                             "interactable_hitbox_h_ratio":        itr["h_ratio"],
                             "interactable_hitbox_offset_x_ratio": itr["offset_x_ratio"],
                             "interactable_hitbox_offset_y_ratio": itr["offset_y_ratio"],
-                        })
+                        }
+
+                        if aplicar_a_todos:
+                            destinos = rutas_config_de_todos(project_root)
+                            for destino in destinos:
+                                save_json(destino, payload)
+                            status_msg = f"Guardado en los {len(destinos)} configs (todos los personajes)"
+                            print("[todos] misma hitbox escrita en:")
+                            for destino in destinos:
+                                print("   ", os.path.basename(destino))
+                        else:
+                            save_json(config_path, payload)
+                            status_msg = f"Guardado: {os.path.basename(config_path)}"
+
                         char_name = os.path.basename(os.path.dirname(sprite_path))
-                        status_msg = f"Guardado: {os.path.basename(config_path)}"
                         # Si es personaje_main, también guardamos en el path canónico
-                        if char_name == MAIN_CHARACTER_FOLDER:
+                        if not aplicar_a_todos and char_name == MAIN_CHARACTER_FOLDER:
                             canonical = os.path.join(project_root, PERSONAJE_CONFIG_NAME)
                             if config_path != canonical:
                                 save_json(canonical, load_json(config_path))
@@ -558,9 +642,11 @@ def run_editor(screen, clock, sprite_path, project_root):
         # ── Render ────────────────────────────────────────────────────────────
         screen.fill(C_BG)
 
-        scaled_w = max(1, int(iw_raw * scale))
+        # Se aplica el mismo estrechamiento horizontal que usa el juego
+        # (Movimiento/Personaje.py), para calibrar sobre lo que se va a ver.
+        scaled_w = max(1, int(iw_raw * scale * ancho_ratio))
         scaled_h = max(1, int(ih_raw * scale))
-        sprite   = pygame.transform.smoothscale(image, (scaled_w, scaled_h))
+        sprite   = pygame.transform.scale(image, (scaled_w, scaled_h))
 
         PREV_X, PREV_Y = 50, 90
         PREV_AREA_W, PREV_AREA_H = 520, 520
@@ -568,8 +654,13 @@ def run_editor(screen, clock, sprite_path, project_root):
 
         # Título
         asset_name = os.path.basename(sprite_path)
-        title_color = C_ORANGE if mj_key else C_TITLE
-        t = title_font.render(f"Editando: {asset_name}", True, title_color)
+        if aplicar_a_todos:
+            titulo_texto = "Editando: TODOS los personajes a la vez"
+            title_color = C_GREEN
+        else:
+            titulo_texto = f"Editando: {asset_name}"
+            title_color = C_ORANGE if mj_key else C_TITLE
+        t = title_font.render(titulo_texto, True, title_color)
         screen.blit(t, (PREV_X - 14, 30))
         back_hint = small_font.render("ESC → volver al selector", True, C_SOFT)
         screen.blit(back_hint, (PREV_X - 14, 56))
@@ -717,7 +808,8 @@ def main():
         selected = run_selector(screen, clock, project_root)
         if selected is None:
             break
-        run_editor(screen, clock, selected, project_root)
+        run_editor(screen, clock, selected["path"], project_root,
+                   aplicar_a_todos=selected.get("todos", False))
 
     pygame.quit()
 

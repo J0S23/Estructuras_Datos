@@ -144,23 +144,56 @@ def choose_image_from_console(project_root):
     return os.path.join("Imagenes", "Fondos", "Salon(1).jpg")
 
 
-def build_dummy_from_game_logic(project_root, img_rect):
+def build_dummy_from_game_logic(project_root, img_rect, tamano_nativo=None):
+    """Rect del modo de prueba, con el MISMO hitbox que usan los personajes.
+
+    Toma el hitbox real de un personaje de Imagenes/Personajes/ (el primero
+    que tenga sprites) y lo convierte a las coordenadas de este editor: el
+    juego dibuja el mapa a mundo.ESCALA_MAPA del archivo original y el editor
+    lo dibuja a otro tamaño, así que se ajusta por proporción para que el
+    cuadrito de prueba ocupe lo mismo respecto al mapa que el personaje real.
+
+    `tamano_nativo` es el (ancho, alto) del archivo de imagen sin escalar.
+    """
     default = pygame.Rect(img_rect.centerx - 14, img_rect.centery - 14, 28, 28)
     try:
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
-        from Movimiento.Personaje import Personaje
-        rutas = os.path.join(project_root, "Imagenes", "Personajes", "personaje_main")
-        personaje = Personaje(
-            img_rect.width // 2 - 14, img_rect.height // 2 - 14,
-            rutas, velocidad=4, fps_animacion=8
+        from Movimiento.Personaje import Personaje, detectar_hojas
+        import mundo as mundo_juego
+
+        personajes_dir = os.path.join(project_root, "Imagenes", "Personajes")
+        carpeta = None
+        for nombre in sorted(os.listdir(personajes_dir)):
+            ruta = os.path.join(personajes_dir, nombre)
+            if os.path.isdir(ruta) and detectar_hojas(ruta):
+                carpeta = ruta
+                break
+        if carpeta is None:
+            return default
+
+        personaje = Personaje(0, 0, carpeta, velocidad=4, fps_animacion=8)
+
+        if tamano_nativo:
+            ancho_juego = tamano_nativo[0] * mundo_juego.ESCALA_MAPA
+            alto_juego = tamano_nativo[1] * mundo_juego.ESCALA_MAPA
+        else:
+            ancho_juego, alto_juego = img_rect.width, img_rect.height
+
+        hb = pygame.Rect(
+            0, 0,
+            max(4, round(personaje.hitbox.width * img_rect.width / max(1, ancho_juego))),
+            max(4, round(personaje.hitbox.height * img_rect.height / max(1, alto_juego))),
         )
-        hb = personaje.hitbox.copy()
-        hb.x += img_rect.x
-        hb.y += img_rect.y
+        hb.center = img_rect.center
         hb.clamp_ip(img_rect)
+        print(f"[modo prueba] hitbox del personaje {os.path.basename(carpeta)}: "
+              f"{personaje.hitbox.width}x{personaje.hitbox.height} en el juego "
+              f"-> {hb.width}x{hb.height} en este editor")
         return hb
-    except Exception:
+    except Exception as e:
+        print(f"[modo prueba] no se pudo leer el hitbox del personaje ({e}); "
+              f"se usa un cuadro de {default.width}x{default.height}")
         return default
 
 
@@ -554,7 +587,7 @@ def main():
     current_line_thickness_px = 8
     test_mode = False
     test_speed = 4
-    test_player = pygame.Rect(0, 0, 28, 28)
+    test_player = pygame.Rect(0, 0, 28, 28)  # su tamaño real lo fija hb_template
 
     # ── Display options ───────────────────────────────────────────────────────
     show_walls = True
@@ -580,7 +613,7 @@ def main():
     EYE_W = 24
 
     # ── Spawn system ──────────────────────────────────────────────────────────
-    hb_template = build_dummy_from_game_logic(project_root, world_rect)
+    hb_template = build_dummy_from_game_logic(project_root, world_rect, raw_image.get_size())
     spawn_rect = hb_template.copy()
     spawn_rules = {"default": None, "by_origin": {}}
     spawn_modal_active = False

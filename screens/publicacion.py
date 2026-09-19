@@ -46,7 +46,7 @@ def render_publicacion(screen, font=None, nodo_raiz=None, nodo_actual=None, smal
         screen.blit(titulo, (40, 170))
         _dibujar_texto_ajustado(screen, small_font, nodo_actual.texto, (40, 210), 880, (255, 255, 255))
         aviso = small_font.render("[ENTER] Volver a la ciudad", True, (220, 220, 220))
-        screen.blit(aviso, (40, 520))
+        screen.blit(aviso, (40, screen.get_height() - 80))
 
 
 def _dibujar_texto_ajustado(screen, font, texto, pos, ancho_max, color):

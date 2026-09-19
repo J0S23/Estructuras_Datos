@@ -702,7 +702,7 @@ def main():
         print("Este editor sirve para alinear un personaje sentado con un mueble")
         print("(pupitres de EmpatiaQuest). Alcalde Digital no tiene esa mecánica:")
         print("no hay carpeta Objetos/ con muebles ni sprites sentados que alinear.")
-        print("Ver Editores/MANUAL.md — este editor no se usa en este proyecto.")
+        print("Ver CLAUDE.md — este editor no se usa en este proyecto.")
         pygame.quit()
         return
 

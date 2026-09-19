@@ -1,89 +1,55 @@
 # Alcalde Digital
 
-Alcalde Digital es un videojuego educativo en Python/Pygame sobre el consumo responsable de información, la verificación de noticias y la gestión de la confianza ciudadana en redes sociales.
+Videojuego educativo en Python/Pygame sobre el uso responsable de las redes
+sociales. Proyecto de laboratorio de **Estructura de Datos II**, Universidad
+del Norte.
 
-## ¿Qué hace este proyecto?
+Ciudad Nova esta en elecciones. Los ciudadanos se comunican por una red social
+ficticia llamada **Civitas**, donde circulan rumores y noticias falsas. Los
+jugadores deciden que hacer con cada publicacion --verificar, compartir,
+ignorar o reportar-- y cada decision mueve los indicadores de la ciudad:
+informacion verificada, confianza ciudadana, convivencia, bienestar digital,
+desinformacion y conflictos. No hay preguntas de conocimiento: se aprende por
+las consecuencias.
 
-El juego simula una ciudad donde el jugador toma decisiones sobre publicaciones, rumores, noticias y relaciones sociales. La idea central es que cada decisión afecta indicadores como:
+## Estructuras de datos
 
-- información verificada
-- confianza ciudadana
-- convivencia
-- bienestar digital
-- desinformación
-- conflictos
+| Estructura | Donde | Para que |
+|---|---|---|
+| Arbol binario de busqueda (ABB) | `Estructuras/abb_publicaciones.py` | Ordena las publicaciones por su indice de veracidad. Recorrido inorden, eliminacion por sucesor inorden y busqueda por rango con poda. Sin rebalanceo. |
+| Arbol N-ario de decision | `Estructuras/arbol_decision.py` | Modela publicacion -> opcion -> consecuencia, con los efectos sobre los indicadores en las hojas. |
+| Arbol N-ario de dialogo | `Estructuras/arbol_dialogo.py` | Conversaciones con NPCs donde el jugador elige la rama por la que desciende. |
+| Grafos | *segunda entrega* | Red social para propagar publicaciones y grafo de la ciudad para moverse entre zonas. |
 
-Estos indicadores se usan para medir si la ciudad mejora o empeora según las decisiones del jugador.
+## Como correrlo
 
-## Mini resumen de la arquitectura
-
-### Módulos principales
-
-- `main.py`: punto de entrada del juego. Aquí se inicializa la lógica principal y se prueba la estructura de datos.
-- `config.py`: almacena constantes del proyecto, colores, ajustes por defecto, roles de juego e indicadores globales.
-- `game_state.py`: mantiene el estado del juego: rol actual, puntaje e indicadores de la ciudad.
-- `renderer.py`: contiene funciones básicas de renderizado, como dibujar texto y paneles. Sirve como capa simple de visualización antes de que exista una interfaz más completa.
-- `audio_manager.py`: gestiona música de fondo y efectos de sonido; si no encuentra un archivo real, no reproduce nada.
-- `transition_manager.py`: administra transiciones entre pantallas con fade in/out.
-- `achievements.py`: define logros y rastreo de progreso para recompensas del jugador.
-- `screen_handlers.py`: módulo auxiliar para compatibilidad con pantallas y manejo general.
-
-### Movimiento y personajes
-
-- `Movimiento/Personaje.py`: carga sprites, calcula hitboxes y controla movimiento del personaje con animaciones.
-- `Movimiento/Animacion.py`: maneja frames de animación y desplazamiento lateral.
-- `Movimiento/Fondo.py`: carga y dibuja fondos de escena.
-
-### Estructuras de datos
-
-- `Estructuras/nodo_decision.py`: nodo de un árbol de decisiones.
-- `Estructuras/arbol_decision.py`: árbol N-ario para modelar decisiones y consecuencias de una publicación.
-- `Estructuras/nodo_abb.py`: nodo de un árbol binario de búsqueda.
-- `Estructuras/abb_publicaciones.py`: ABB para guardar publicaciones ordenadas por veracidad.
-
-### Pantallas
-
-- `screens/menu.py`: pantalla inicial.
-- `screens/ciudad.py`: escena de ciudad.
-- `screens/publicacion.py`: pantalla para mostrar publicaciones y decisiones.
-- `screens/ayuda.py`: guía del juego y explicación de indicadores.
-- `screens/creditos.py`: créditos con scroll simple.
-
-### Datos y contenido
-
-- `data/publicaciones_ejemplo.py`: ejemplos de publicaciones con opciones y efectos en indicadores.
-- `Hitboxes/`: directorio para configuraciones de colisiones.
-- `Imagenes/`: recursos visuales esperados para personajes, fondos e interfaz.
-- `Audio/`: música y efectos de sonido esperados.
-
-## Requisitos
-
-- Python 3.11+
-- Pygame
-
-## Cómo correrlo
-
-Ejecuta desde la raíz del proyecto:
+Requiere Python 3 y Pygame (`pip install pygame`).
 
 ```bash
-python main.py
+python main.py              # prototipo de mundo: mapa, personajes, pantalla dividida
+python main_estructuras.py  # prototipo de logica: ABB, arboles de decision y dialogo
 ```
 
-## Estructura de carpetas
+Los dos prototipos se fusionan mas adelante. Ademas hay editores para preparar
+los assets:
 
-- `main.py`: punto de entrada del proyecto.
-- `config.py`: constantes, colores y configuración global.
-- `renderer.py`: renderizado básico de texto y paneles.
-- `game_state.py`: estado del juego.
-- `audio_manager.py`: música y efectos.
-- `transition_manager.py`: transiciones de pantalla.
-- `achievements.py`: logros y progresos.
-- `Movimiento/`: animación y movimiento del personaje.
-- `Estructuras/`: árboles de decisión y ABB para publicaciones.
-- `screens/`: pantallas del juego.
-- `data/`: datos de ejemplo del proyecto.
-- `Editores/`: herramientas simples para diseñar hitboxes y ajustar personajes.
+```bash
+python Editores/hitbox_editor.py     # dibujar las hitboxes de un mapa
+python Editores/personaje_editor.py  # calibrar escala e hitbox de un personaje
+python Editores/visor_personajes.py  # revisar que sprites y config tiene cada personaje
+```
 
-## Créditos técnicos
+## Estructura del repositorio
 
-El sistema de hitboxes, movimiento, audio y logros está adaptado a partir de patrones del proyecto EmpatiaQuest, reimplementados y simplificados para esta entrega.
+- `Estructuras/` -- los arboles y sus nodos.
+- `Movimiento/` -- carga de sprites, animaciones y movimiento de personajes.
+- `screens/` -- las pantallas del juego (partida, ciudad, publicacion, dialogo, ayuda).
+- `Editores/` -- herramientas para hitboxes y calibracion de personajes.
+- `Imagenes/` -- assets (`Fondos/`, `Personajes/<nombre>/`).
+- `Hitboxes/` -- los JSON que generan los editores.
+- `data/` -- publicaciones y dialogos de ejemplo.
+
+## Equipo
+
+Repo de trabajo: `J0S23/Estructuras_Datos`. Diego lleva la logica y el backend;
+los demas integrantes trabajan en los assets graficos.

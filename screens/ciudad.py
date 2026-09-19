@@ -68,5 +68,5 @@ def render_ciudad(screen, font=None, state=None, small_font=None):
             pygame.draw.rect(screen, (120, 220, 140), (barra_fondo.x + 2, barra_fondo.y + 2, ancho, 10))
             y += 32
 
-    ayuda = small_font.render("[E] Ver publicaciones pendientes   [H] Ayuda   [C] Créditos", True, (200, 200, 200))
-    screen.blit(ayuda, (40, 555))
+    ayuda = small_font.render("[E] Publicaciones   [D] Hablar con alguien   [H] Ayuda   [C] Créditos", True, (200, 200, 200))
+    screen.blit(ayuda, (40, screen.get_height() - 45))

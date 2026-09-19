@@ -1,12 +1,19 @@
-"""Punto de entrada gráfico de Alcalde Digital.
+"""Prototipo del MUNDO de Alcalde Digital: mapa, personajes y pantalla dividida.
 
-Arranca la ventana de Pygame y conecta las pantallas con las estructuras
-de datos del proyecto: el ABB (Estructuras/abb_publicaciones.py) decide en
-qué orden aparecen las publicaciones dudosas, y el árbol de decisión
-(Estructuras/arbol_decision.py) modela las opciones del jugador y sus
-consecuencias sobre los indicadores de la ciudad.
+Se corre con `python main.py`.
+
+Carga el mapa con sus colisiones (mundo.py), crea un personaje por jugador
+—P1 Ciudadano con WASD y P2 Candidato con flechas— y dibuja un viewport por
+jugador con su propia cámara (screens/partida.py), de modo que cada uno ve al
+otro moverse por el mapa.
+
+La lógica del juego y las estructuras de datos (el ABB de publicaciones y los
+árboles de decisión y de diálogo) van aparte, en App_estructuras.py /
+main_estructuras.py. Los dos se van a fusionar más adelante; por ahora se
+ejecutan por separado para poder trabajar en cada uno sin romper el otro.
 """
 
+import os
 import sys
 
 import pygame
@@ -15,29 +22,38 @@ from config import DEFAULT_FPS
 from game_state import GameState
 from transition_manager import TransitionManager
 
-from Estructuras.arbol_decision import ArbolDecision
-from Estructuras.abb_publicaciones import ArbolPublicaciones
-from data.publicaciones_ejemplo import PUBLICACIONES_EJEMPLO
-
 from fuentes import construir_fuentes
 from ui_components import construir_botones
 
+from mundo import Mundo
+from Movimiento.Personaje import Personaje, CONTROLES_WASD, CONTROLES_FLECHAS
+
 from screens.menu import render_menu, OPCIONES_MENU
-from screens.ciudad import render_ciudad
+from screens.partida import render_partida
 from screens.ayuda import render_ayuda
 from screens.creditos import render_creditos
-from screens.publicacion import render_publicacion
 
 
-ANCHO, ALTO = 960, 600
-OPCION_TECLAS = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]
+# Tamaño de la ventana cuando NO está en pantalla completa (tecla F11).
+ANCHO_VENTANA, ALTO_VENTANA = 960, 600
+
+MAPA_PRUEBA = "Colegio"
+
+# Jugadores de la partida local. El orden define el viewport que le toca a
+# cada uno (ver screens/partida.py y CLAUDE.md).
+JUGADORES = [
+    {"carpeta": "P1", "rol": "Ciudadano", "controles": CONTROLES_WASD, "controles_nombre": "WASD"},
+    {"carpeta": "P2", "rol": "Candidato", "controles": CONTROLES_FLECHAS, "controles_nombre": "Flechas"},
+]
 
 
 class Game:
     def __init__(self):
         pygame.init()
         pygame.display.set_caption("Alcalde Digital")
-        self.screen = pygame.display.set_mode((ANCHO, ALTO))
+        self.pantalla_completa = True
+        self.screen = self._crear_ventana()
+        self.ancho, self.alto = self.screen.get_size()
         self.clock = pygame.time.Clock()
 
         # Tipografía pixel del juego (Fuentes/), con respaldo a fuente del sistema.
@@ -48,77 +64,89 @@ class Game:
         self.state = GameState()
         self.transitions = TransitionManager()
         self.current_screen = "menu"
-        self.menu_buttons = construir_botones(OPCIONES_MENU, ANCHO, ALTO)
+        self.menu_buttons = construir_botones(OPCIONES_MENU, self.ancho, self.alto)
         self.menu_selected = 0
-        self.pantalla_anterior = "ciudad"  # a dónde vuelven ayuda/créditos
+        self.pantalla_anterior = "partida"  # a dónde vuelven ayuda/créditos
 
-        self._construir_arboles()
-        self.nodo_publicacion_actual = None
-        self.nodo_actual = None
+        self.mundo = None
+        self.jugadores = []
+        self.mostrar_hitboxes = False
         self.credit_scroll = 0
 
         self.running = True
 
-    # -- Estructuras de datos -------------------------------------------------
-
-    def _construir_arboles(self):
-        """Construye el ABB de publicaciones y un árbol de decisión por publicación."""
-        self.arbol_publicaciones = ArbolPublicaciones()
-        self._arboles_decision = {}
-
-        for item in PUBLICACIONES_EJEMPLO:
-            veracidad = self._estimar_veracidad(item)
-            # Si dos publicaciones estiman la misma veracidad, se desplaza para no chocar en el ABB.
-            while self.arbol_publicaciones.buscar(veracidad) is not None:
-                veracidad += 1
-            self.arbol_publicaciones.insertar(veracidad, item["texto"], item.get("tipo", "publicacion"))
-
-            arbol = ArbolDecision(item)
-            raiz = arbol.construir_desde_dict(item)
-            self._arboles_decision[veracidad] = raiz
+    # -- Ventana -----------------------------------------------------------------
 
     @staticmethod
-    def _estimar_veracidad(item):
-        """Traduce los efectos declarados de una publicación en un puntaje de veracidad 0-100.
+    def _tamano_escritorio():
+        """Resolución del escritorio, para dimensionar la ventana sin bordes."""
+        try:
+            tamanos = pygame.display.get_desktop_sizes()
+            if tamanos:
+                return tamanos[0]
+        except (AttributeError, pygame.error):
+            pass
+        info = pygame.display.Info()
+        return info.current_w, info.current_h
 
-        Más 'desinformacion' o menos 'informacion_verificada' en sus efectos => publicación más dudosa.
-        Esto es lo que justifica el ABB: ordenar y priorizar publicaciones por qué tan confiables son.
+    def _crear_ventana(self):
+        """Pantalla completa sin bordes, o ventana normal si se alterna con F11.
+
+        Se usa NOFRAME (una ventana sin marco del tamaño del escritorio) y no
+        pygame.FULLSCREEN a propósito: la pantalla completa exclusiva cambia el
+        modo de video del monitor, y Windows reacomoda las ventanas de las
+        demás aplicaciones para que quepan en la resolución temporal, dejándolas
+        descolocadas al salir. Sin bordes se ve igual y no afecta a nada más.
+
+        Se arranca maximizado para aprovechar todo el espacio: con cuatro
+        jugadores la pantalla se parte en cuatro y cada viewport queda muy
+        chico si la ventana es pequeña.
         """
-        efectos = item.get("efectos", {})
-        veracidad = 50 - efectos.get("desinformacion", 0) + efectos.get("informacion_verificada", 0)
-        return max(0, min(100, veracidad))
+        if self.pantalla_completa:
+            return pygame.display.set_mode(self._tamano_escritorio(), pygame.NOFRAME)
+        return pygame.display.set_mode((ANCHO_VENTANA, ALTO_VENTANA))
 
-    def iniciar_siguiente_publicacion(self):
-        """Saca del ABB la publicación con menor veracidad (la más dudosa) y arranca su árbol de decisión."""
-        pendientes = self.arbol_publicaciones.recorrido_inorden()
-        if not pendientes:
+    def _aplicar_tamano(self):
+        """Recalcula lo que depende del tamaño de la ventana."""
+        self.ancho, self.alto = self.screen.get_size()
+        self.menu_buttons = construir_botones(OPCIONES_MENU, self.ancho, self.alto)
+        self.menu_selected = min(self.menu_selected, len(self.menu_buttons) - 1)
+
+    def alternar_pantalla_completa(self):
+        self.pantalla_completa = not self.pantalla_completa
+        self.screen = self._crear_ventana()
+        self._aplicar_tamano()
+
+    # -- Partida -----------------------------------------------------------------
+
+    def iniciar_partida(self):
+        """Carga el mapa y crea los personajes en una posición libre."""
+        if self.mundo is None:
+            self.mundo = Mundo(MAPA_PRUEBA)
+
+        self.jugadores = []
+        centro = (self.mundo.ancho // 2, self.mundo.alto // 2)
+        for i, datos in enumerate(JUGADORES):
+            ruta = os.path.join("Imagenes", "Personajes", datos["carpeta"])
+            jugador = Personaje(0, 0, ruta, velocidad=4, controles=datos["controles"])
+            jugador.rol = datos["rol"]
+            jugador.controles_nombre = datos["controles_nombre"]
+
+            # Se separan un poco para que no aparezcan encimados.
+            preferido = (centro[0] + (i - 0.5) * 120, centro[1])
+            x, y = self.mundo.punto_libre(preferido, jugador.hitbox_w, jugador.hitbox_h)
+            jugador.hitbox.topleft = (int(x), int(y))
+            jugador.sync_sprite_from_hitbox()
+            self.jugadores.append(jugador)
+
+        self.transitions.request(self, "partida")
+
+    def _actualizar_partida(self):
+        if not self.jugadores or self.mundo is None:
             return
-        objetivo = pendientes[0]
-        raiz = self._arboles_decision.pop(objetivo["veracidad"], None)
-        self.arbol_publicaciones.eliminar(objetivo["veracidad"])
-        if raiz is None:
-            return
-        self.nodo_publicacion_actual = raiz
-        self.nodo_actual = raiz
-        self.state.publicaciones_vistas.append(raiz.texto)
-        self.transitions.request(self, "publicacion")
-
-    def elegir_opcion(self, indice):
-        """Avanza el árbol de decisión según la opción elegida por el jugador y aplica sus efectos."""
-        if self.nodo_actual is None or indice >= len(self.nodo_actual.hijos):
-            return
-        arbol = ArbolDecision(None)
-        hijo = self.nodo_actual.hijos[indice]
-        arbol.aplicar_efectos(hijo, self.state.indicadores)
-
-        if hijo.hijos:
-            consecuencia = hijo.hijos[0]
-            arbol.aplicar_efectos(consecuencia, self.state.indicadores)
-            self.nodo_actual = consecuencia
-        else:
-            self.nodo_actual = hijo
-
-        self.state.puntaje += 10
+        teclas = pygame.key.get_pressed()
+        for jugador in self.jugadores:
+            jugador.actualizar(teclas, colisiona=self.mundo.colisiona)
 
     # -- Loop principal ---------------------------------------------------------
 
@@ -126,6 +154,8 @@ class Game:
         while self.running:
             dt = self.clock.tick(DEFAULT_FPS)
             self._manejar_eventos()
+            if self.current_screen == "partida" and self.transitions.is_idle():
+                self._actualizar_partida()
             self.transitions.update(self, dt)
             self._dibujar()
             pygame.display.flip()
@@ -142,8 +172,8 @@ class Game:
                 self._manejar_click(evento.pos)
 
     def _manejar_tecla(self, key):
-        if key == pygame.K_ESCAPE:
-            self.running = False
+        if key == pygame.K_F11:
+            self.alternar_pantalla_completa()
             return
         if self.transitions.active:
             return  # ignora entradas mientras hay un fundido en curso
@@ -155,27 +185,17 @@ class Game:
                 self.menu_selected = (self.menu_selected + 1) % len(self.menu_buttons)
             elif key == pygame.K_RETURN:
                 self._activar_opcion_menu(self.menu_buttons[self.menu_selected].action)
+            elif key == pygame.K_ESCAPE:
+                self.running = False
 
-        elif self.current_screen == "ciudad":
-            if key == pygame.K_e:
-                self.iniciar_siguiente_publicacion()
-            elif key == pygame.K_h:
-                self.pantalla_anterior = "ciudad"
-                self.transitions.request(self, "ayuda")
-            elif key == pygame.K_c:
-                self.pantalla_anterior = "ciudad"
-                self.transitions.request(self, "creditos")
-
-        elif self.current_screen == "publicacion":
-            en_raiz = self.nodo_actual is self.nodo_publicacion_actual
-            if en_raiz and key in OPCION_TECLAS:
-                indice = OPCION_TECLAS.index(key)
-                self.elegir_opcion(indice)
-            elif not en_raiz and key == pygame.K_RETURN:
-                self.transitions.request(self, "ciudad")
+        elif self.current_screen == "partida":
+            if key == pygame.K_h:
+                self.mostrar_hitboxes = not self.mostrar_hitboxes
+            elif key == pygame.K_ESCAPE:
+                self.transitions.request(self, "menu")
 
         elif self.current_screen in ("ayuda", "creditos"):
-            if key in (pygame.K_RETURN, pygame.K_BACKSPACE):
+            if key in (pygame.K_RETURN, pygame.K_BACKSPACE, pygame.K_ESCAPE):
                 self.transitions.request(self, self.pantalla_anterior)
 
     def _manejar_click(self, pos):
@@ -190,7 +210,8 @@ class Game:
 
     def _activar_opcion_menu(self, accion):
         if accion == "jugar":
-            self.transitions.request(self, "ciudad")
+            self.pantalla_anterior = "partida"
+            self.iniciar_partida()
         elif accion == "salir":
             self.running = False
         else:
@@ -203,10 +224,8 @@ class Game:
     def _dibujar(self):
         if self.current_screen == "menu":
             render_menu(self.screen, self.menu_buttons, self.menu_selected)
-        elif self.current_screen == "ciudad":
-            render_ciudad(self.screen, self.font, self.state, self.small_font)
-        elif self.current_screen == "publicacion":
-            render_publicacion(self.screen, self.font, self.nodo_publicacion_actual, self.nodo_actual, self.small_font)
+        elif self.current_screen == "partida":
+            render_partida(self.screen, self.mundo, self.jugadores, self.mostrar_hitboxes)
         elif self.current_screen == "ayuda":
             render_ayuda(self.screen, self.small_font)
         elif self.current_screen == "creditos":

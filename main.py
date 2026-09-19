@@ -1,8 +1,9 @@
-"""Punto de entrada del proyecto: lanza la ventana del juego (App.py).
+"""Punto de entrada del prototipo del mundo: mapa, personajes y pantalla dividida.
 
-La prueba de lógica de las estructuras en consola se movió a
-test_estructuras.py para no perderla, pero el lab exige que el juego
-se pueda ver y jugar gráficamente, no solo por consola.
+    python main.py
+
+Para el prototipo de la lógica y las estructuras de datos (árboles), ver
+`main_estructuras.py`.
 """
 
 from App import Game

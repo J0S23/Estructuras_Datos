@@ -1,6 +1,6 @@
 """Carga de imágenes con respaldo: si el archivo aún no existe, no rompe nada.
 
-Mientras el equipo va agregando arte a Imagenes/ (ver Imagenes/README.md),
+Mientras el equipo va agregando arte a Imagenes/ (ver CLAUDE.md, seccion 4),
 las pantallas siguen funcionando con colores sólidos de relleno.
 
 Además tolera que el nombre del archivo no sea exactamente el esperado: si se
