@@ -1,4 +1,17 @@
+"""Prueba por consola de las estructuras, sin abrir ventana.
+
+    python pruebas/prueba_estructuras.py
+
+Al vivir en pruebas/ hay que meter la raíz del proyecto en sys.path, o los
+import de Estructuras/ y data/ no la encuentran.
+"""
+
 import os
+import sys
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, RAIZ)
+os.chdir(RAIZ)
 
 from Estructuras.arbol_decision import ArbolDecision
 from Estructuras.abb_publicaciones import ArbolPublicaciones

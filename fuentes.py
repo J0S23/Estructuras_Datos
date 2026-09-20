@@ -69,3 +69,26 @@ def construir_fuentes():
 def fuente(estilo="body"):
     """Atajo para un estilo suelto."""
     return construir_fuentes()[estilo]
+
+
+_CACHE_TAMANOS = {}
+
+
+def fuente_de_tamano(px):
+    """Fuente del juego en un tamaño arbitrario, cacheada.
+
+    La usan las pantallas que tienen que encoger el texto para que quepa en
+    ventanas pequeñas (la ayuda y el panel del ABB), en vez de asumir que la
+    pantalla siempre es grande.
+    """
+    px = max(10, int(px))
+    if px in _CACHE_TAMANOS:
+        return _CACHE_TAMANOS[px]
+
+    ruta = ruta_fuente()
+    if ruta:
+        f = pygame.font.Font(ruta, px)
+    else:
+        f = pygame.font.SysFont(_fuente_del_sistema(), px)
+    _CACHE_TAMANOS[px] = f
+    return f

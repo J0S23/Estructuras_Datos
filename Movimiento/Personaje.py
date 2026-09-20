@@ -191,7 +191,6 @@ class Personaje:
         self.x = x
         self.y = y
         self.velocidad = velocidad
-        self.sprint_multiplier = 1.8
         self.scale = escala
 
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -259,7 +258,7 @@ class Personaje:
         Joseph_Idle_east_config.json), no con el nombre de la carpeta del
         personaje. Por eso se buscan, en orden:
 
-        1. Hitboxes/<carpeta>_config.json          (P1_config.json)
+        1. Hitboxes/<carpeta>_config.json          (Anny_config.json)
         2. Hitboxes/<sprite>_config.json           para cualquier sprite que
            esté dentro de la carpeta del personaje
         3. Hitboxes/personaje_config.json          config compartido
@@ -338,10 +337,13 @@ class Personaje:
 
     def leer_movimiento(self, teclas):
         """Devuelve (dx, dy) en -1/0/1 según las teclas de este personaje."""
-        dx = int(any(teclas[k] for k in self.controles["derecha"])) - \
-             int(any(teclas[k] for k in self.controles["izquierda"]))
-        dy = int(any(teclas[k] for k in self.controles["abajo"])) - \
-             int(any(teclas[k] for k in self.controles["arriba"]))
+        # .get con tupla vacía: un personaje sin controles asignados —los
+        # puestos 3 y 4, que esperan mando— simplemente no se mueve, en vez de
+        # reventar por una clave que falta.
+        dx = int(any(teclas[k] for k in self.controles.get("derecha", ()))) - \
+             int(any(teclas[k] for k in self.controles.get("izquierda", ())))
+        dy = int(any(teclas[k] for k in self.controles.get("abajo", ()))) - \
+             int(any(teclas[k] for k in self.controles.get("arriba", ())))
         return dx, dy
 
     def actualizar(self, teclas=None, colisiona=None):
@@ -351,8 +353,7 @@ class Personaje:
         dx, dy = self.leer_movimiento(teclas)
         self.moviendose = dx != 0 or dy != 0
 
-        sprint = any(teclas[k] for k in self.controles.get("sprint", ()))
-        velocidad = self.velocidad * (self.sprint_multiplier if sprint else 1)
+        velocidad = self.velocidad
 
         if self.moviendose:
             # En diagonal se normaliza para que no sea más rápido que en recto.
@@ -401,12 +402,16 @@ class Personaje:
 
 # Esquemas de control listos para usar (ver CLAUDE.md: jugador 1 WASD,
 # jugador 2 flechas).
+#
+# No hay correr: el esquema traía un "sprint" heredado de EmpatiaQuest atado a
+# shift. Solo le servía al jugador 1, y en el jugador 2 el shift derecho es la
+# tecla del árbol de habilidades, así que abrirlo lo hacía correr al mismo
+# tiempo. Todos se mueven a la misma velocidad.
 CONTROLES_WASD = {
     "arriba": (pygame.K_w,),
     "abajo": (pygame.K_s,),
     "izquierda": (pygame.K_a,),
     "derecha": (pygame.K_d,),
-    "sprint": (pygame.K_LSHIFT,),
 }
 
 CONTROLES_FLECHAS = {
@@ -414,14 +419,16 @@ CONTROLES_FLECHAS = {
     "abajo": (pygame.K_DOWN,),
     "izquierda": (pygame.K_LEFT,),
     "derecha": (pygame.K_RIGHT,),
-    "sprint": (pygame.K_RSHIFT,),
 }
 
 # Ambos a la vez: útil para probar con un solo personaje en pantalla.
+# Sin controles: el personaje se dibuja y se anima, pero no se mueve. Lo usan
+# los puestos 3 y 4 mientras no haya soporte de mando.
+CONTROLES_NINGUNO = {}
+
 CONTROLES_AMBOS = {
     "arriba": (pygame.K_w, pygame.K_UP),
     "abajo": (pygame.K_s, pygame.K_DOWN),
     "izquierda": (pygame.K_a, pygame.K_LEFT),
     "derecha": (pygame.K_d, pygame.K_RIGHT),
-    "sprint": (pygame.K_LSHIFT, pygame.K_RSHIFT),
 }

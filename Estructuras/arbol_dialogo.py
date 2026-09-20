@@ -79,23 +79,3 @@ class ArbolDialogo:
         if nodo_actual is None or indice < 0 or indice >= len(nodo_actual.hijos):
             return None
         return nodo_actual.hijos[indice]
-
-    def profundidad(self, nodo=None, _inicio=True):
-        """Niveles del árbol. Recorrido postorden: primero los hijos, luego el nodo."""
-        if _inicio:
-            nodo = self.raiz
-        if nodo is None:
-            return 0
-        if not nodo.hijos:
-            return 1
-        return 1 + max(self.profundidad(h, _inicio=False) for h in nodo.hijos)
-
-    def contar_finales(self, nodo=None, _inicio=True):
-        """Cuántos desenlaces distintos tiene la conversación (hojas del árbol)."""
-        if _inicio:
-            nodo = self.raiz
-        if nodo is None:
-            return 0
-        if not nodo.hijos:
-            return 1
-        return sum(self.contar_finales(h, _inicio=False) for h in nodo.hijos)

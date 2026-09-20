@@ -67,14 +67,3 @@ class ArbolDecision:
         for clave, valor in (nodo.efectos or {}).items():
             if clave in estado_ciudad:
                 estado_ciudad[clave] = max(0, min(100, int(estado_ciudad[clave]) + int(valor)))
-
-    def recorrer_por_eleccion(self, nodo_actual, eleccion_texto):
-        if nodo_actual is None:
-            return None
-        for hijo in nodo_actual.hijos:
-            if hijo.texto == eleccion_texto:
-                return hijo
-        for hijo in nodo_actual.hijos:
-            if hijo.tipo == "opcion" and hijo.texto.lower() == eleccion_texto.lower():
-                return hijo
-        return None

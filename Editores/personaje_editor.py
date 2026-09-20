@@ -107,7 +107,8 @@ def nombre_de_personaje(sprite_path, project_root):
     """Nombre con el que se identifica al personaje dueño de un sprite.
 
     Si el sprite está dentro de una subcarpeta de Imagenes/Personajes
-    (Imagenes/Personajes/P1/Idle_south.png), el personaje es esa carpeta: P1.
+    (Imagenes/Personajes/Anny/Anny_idle_south.png), el personaje es esa
+    carpeta: Anny.
     Si es un PNG suelto, se usa el nombre del archivo.
     """
     carpeta = os.path.basename(os.path.dirname(os.path.abspath(sprite_path)))
@@ -140,7 +141,7 @@ def rutas_config_de_todos(project_root):
 def get_char_config_path(sprite_path, project_root):
     """Cada personaje guarda su propio config: Hitboxes/<personaje>_config.json.
 
-    El nombre sale de la carpeta del personaje (P1 -> P1_config.json), no del
+    El nombre sale de la carpeta del personaje (Anny -> Anny_config.json), no del
     sprite que se esté viendo, para que calibrar desde cualquier pose escriba
     siempre el mismo archivo. Es también el primer nombre que busca
     Movimiento/Personaje.py al cargar un personaje.

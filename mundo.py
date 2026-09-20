@@ -8,6 +8,7 @@ desnormalizan contra el tamaño al que se dibuja el mundo.
 
 import json
 import os
+from collections import deque
 
 import pygame
 
@@ -96,6 +97,50 @@ class Mundo:
                 if not self.colisiona(candidato):
                     return candidato.x, candidato.y
         return px, py
+
+    def area_alcanzable(self, desde, ancho=48, alto=19, paso=16):
+        """Celdas del mapa a las que se puede llegar caminando desde `desde`.
+
+        Un rectángulo puede no chocar con ninguna pared y aun así ser
+        inalcanzable, porque está dentro de un cuarto cerrado. La única forma
+        de saberlo es recorrer el mapa como lo haría el jugador: se avanza de
+        celda en celda en las cuatro direcciones (BFS con una cola) y se
+        devuelve todo lo que se pudo tocar.
+        """
+        inicio = (int(desde[0]) // paso * paso, int(desde[1]) // paso * paso)
+        vistos = {inicio}
+        cola = deque([inicio])
+        while cola:
+            cx, cy = cola.popleft()
+            for dx, dy in ((paso, 0), (-paso, 0), (0, paso), (0, -paso)):
+                vecino = (cx + dx, cy + dy)
+                if vecino in vistos:
+                    continue
+                if not (0 <= vecino[0] <= self.ancho - ancho
+                        and 0 <= vecino[1] <= self.alto - alto):
+                    continue
+                if self.colisiona(pygame.Rect(vecino[0], vecino[1], ancho, alto)):
+                    continue
+                vistos.add(vecino)
+                cola.append(vecino)
+        return vistos
+
+    def zonas_inalcanzables(self, zonas, desde, ancho=48, alto=19, paso=16):
+        """Zonas que el jugador no podría alcanzar desde `desde`.
+
+        Se llama al empezar la partida. Si devuelve algo, es que alguien puso
+        una zona dentro de un cuarto cerrado y hay que mover sus coordenadas en
+        data/tareas.py. Vale el costo: encontrar esto jugando es mucho más caro
+        que un recorrido al arrancar.
+        """
+        alcanzable = self.area_alcanzable(desde, ancho, alto, paso)
+        malas = []
+        for zona in zonas:
+            rect = zona["rect"]
+            if not any(pygame.Rect(c[0], c[1], ancho, alto).colliderect(rect)
+                       for c in alcanzable):
+                malas.append(zona)
+        return malas
 
     def camara(self, centro, ancho_vista, alto_vista):
         """Rect de cámara centrado en `centro`, recortado a los bordes del mapa."""

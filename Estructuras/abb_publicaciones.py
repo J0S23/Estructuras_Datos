@@ -18,8 +18,8 @@ Las cinco preguntas que plantea el laboratorio:
 
 3) ¿Qué variante se usa?
    Un ABB clásico, sin balanceo (no es AVL ni rojo-negro). La clave es la
-   veracidad estimada (0-100) y el contenido es el título y el tipo de la
-   publicación. No admite claves repetidas: insertar una clave existente
+   veracidad (0-100) que cada publicación declara en
+   data/publicaciones_ejemplo.py, y el contenido es su título y su tipo. No admite claves repetidas: insertar una clave existente
    reemplaza su contenido, y quien inserta se encarga de desplazar la clave
    si quiere conservar ambas (ver Game._construir_arboles en App.py).
    Limitación conocida: si las publicaciones se insertaran ya ordenadas, el
@@ -40,6 +40,19 @@ Las cinco preguntas que plantea el laboratorio:
    mayor veracidad. Por eso el juego toma el primer elemento del recorrido
    para obtener la publicación más dudosa. `buscar_menores_a` hace un
    recorrido parcial: poda el subárbol derecho cuando ya superó el umbral.
+   `altura` y `contar` recorren el árbol completo en postorden y sirven para
+   mostrar en pantalla la forma que tomó el árbol.
+
+Dónde se usa cada operación dentro del juego:
+
+| Operación            | Cuándo la ejecuta el juego |
+| -------------------- | -------------------------- |
+| `insertar`           | Al arrancar, una vez por publicación de `data/publicaciones_ejemplo.py`. |
+| `buscar`             | Al insertar, para detectar claves repetidas y desplazarlas. |
+| `recorrido_inorden`  | Cada vez que se pide la siguiente publicación, y para dibujar el panel `[TAB]`. |
+| `eliminar`           | Cuando una publicación ya fue atendida y sale del árbol. |
+| `buscar_menores_a`   | Cada frame, para el aviso de cadenas dudosas en el HUD del ciudadano. |
+| `altura` / `contar`  | En el panel `[TAB]`, para mostrar la forma del árbol. |
 """
 
 from Estructuras.nodo_abb import NodoPublicacion
@@ -123,6 +136,30 @@ class ArbolPublicaciones:
 
         _inorden(self.raiz)
         return resultado
+
+    def altura(self):
+        """Niveles del árbol (un árbol vacío mide 0, uno de un solo nodo mide 1).
+
+        Sirve para mostrar en pantalla qué tan desbalanceado quedó: con n nodos
+        lo mejor posible es una altura cercana a log2(n), y lo peor es n (el
+        árbol degenerado en lista). Como no hay rebalanceo, la altura real
+        depende del orden en que se insertaron las publicaciones.
+        """
+        def _altura(nodo):
+            if nodo is None:
+                return 0
+            return 1 + max(_altura(nodo.izquierdo), _altura(nodo.derecho))
+
+        return _altura(self.raiz)
+
+    def contar(self):
+        """Cantidad de publicaciones que quedan en el árbol."""
+        def _contar(nodo):
+            if nodo is None:
+                return 0
+            return 1 + _contar(nodo.izquierdo) + _contar(nodo.derecho)
+
+        return _contar(self.raiz)
 
     def buscar_menores_a(self, umbral):
         """Devuelve las publicaciones con veracidad menor al umbral, ordenadas.

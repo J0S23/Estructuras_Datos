@@ -5,12 +5,15 @@ personajes se dibujan en todos los viewports, así que cada jugador ve al otro
 moverse por el mapa.
 
 Los layouts siguen el CLAUDE.md: con dos jugadores la pantalla se parte en
-vertical (izquierda y derecha).
+vertical (izquierda y derecha); con tres, dos arriba y uno abajo a lo ancho;
+con cuatro, en cuartos.
 """
 
 import pygame
 
 from fuentes import fuente
+from screens.paneles import render_panel, render_hud, render_mensaje, render_pista_zona
+from screens.panel_habilidades import render_panel_habilidades
 
 
 COLOR_SEPARADOR = (18, 16, 30)
@@ -41,11 +44,13 @@ def calcular_viewports(ancho, alto, cantidad):
 
     mitad_y = alto // 2
     if cantidad == 3:
-        # Ciudadano izquierda, Candidato derecha, Influencer arriba.
+        # Jugadores 1 y 2 arriba, lado a lado; el 3 abajo ocupando todo el
+        # ancho. Queda como una Y invertida: dos ramas arriba y el tronco
+        # abajo.
         return [
-            pygame.Rect(0, mitad_y, mitad_x, alto - mitad_y),
-            pygame.Rect(mitad_x, mitad_y, ancho - mitad_x, alto - mitad_y),
-            pygame.Rect(0, 0, ancho, mitad_y),
+            pygame.Rect(0, 0, mitad_x, mitad_y),
+            pygame.Rect(mitad_x, 0, ancho - mitad_x, mitad_y),
+            pygame.Rect(0, mitad_y, ancho, alto - mitad_y),
         ]
 
     # Cuatro: ciudadano arriba-izq, candidato arriba-der,
@@ -58,8 +63,9 @@ def calcular_viewports(ancho, alto, cantidad):
     ]
 
 
-def render_partida(screen, mundo, jugadores, mostrar_hitboxes=False):
-    """Dibuja un viewport por jugador, cada uno con su cámara."""
+def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
+                   mostrar_hitboxes=False):
+    """Dibuja un viewport por jugador, cada uno con su cámara, HUD y paneles."""
     ancho, alto = screen.get_size()
     viewports = calcular_viewports(ancho, alto, len(jugadores))
     screen.fill(COLOR_SEPARADOR)
@@ -68,7 +74,21 @@ def render_partida(screen, mundo, jugadores, mostrar_hitboxes=False):
         if indice >= len(viewports):
             break
         vista = viewports[indice]
-        _dibujar_vista(screen, vista, mundo, jugadores, jugador, mostrar_hitboxes)
+        _dibujar_vista(screen, vista, mundo, jugadores, jugador, zonas, mostrar_hitboxes)
+
+        # Lo de la interfaz va después del mundo pero sigue recortado al
+        # viewport: si el ciudadano abre una tarea, el candidato no la ve ni se
+        # le congela su mitad.
+        clip_previo = screen.get_clip()
+        screen.set_clip(vista)
+        render_hud(screen, vista, jugador, segundos_restantes)
+        render_pista_zona(screen, vista, jugador)
+        if jugador.panel is not None and jugador.panel.get("tipo") == "habilidades":
+            render_panel_habilidades(screen, vista, jugador)
+        else:
+            render_panel(screen, vista, jugador)
+        render_mensaje(screen, vista, jugador)
+        screen.set_clip(clip_previo)
 
     _dibujar_separadores(screen, viewports)
     if mostrar_hitboxes:
@@ -80,7 +100,7 @@ def render_partida(screen, mundo, jugadores, mostrar_hitboxes=False):
 def _dibujar_pista(screen):
     """Recordatorio de las teclas del prototipo, abajo a la derecha."""
     font = fuente("small")
-    texto = "[H] ver hitboxes   [ESC] menu"
+    texto = "[H] hitboxes   [TAB] ver el ABB   [ESC] menu"
     etiqueta = font.render(texto, True, (200, 210, 235))
     sombra = font.render(texto, True, COLOR_SOMBRA)
     pos = (screen.get_width() - etiqueta.get_width() - 12,
@@ -116,7 +136,7 @@ def _dibujar_leyenda(screen, mundo, jugadores):
     screen.blit(pista, (screen.get_width() - pista.get_width() - 12, y + 4))
 
 
-def _dibujar_vista(screen, vista, mundo, jugadores, dueño, mostrar_hitboxes):
+def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitboxes):
     camara = mundo.camara(dueño.hitbox.center, vista.width, vista.height)
 
     # Recorta el dibujo al viewport para que nada se salga a la mitad vecina.
@@ -141,6 +161,18 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, mostrar_hitboxes):
             if zona.colliderect(camara):
                 pygame.draw.rect(screen, COLOR_ZONA, _a_pantalla(zona, vista, camara), 2)
 
+    # Zonas de tarea: se dibujan antes que los personajes para que queden en
+    # el piso. Solo se marcan las que ese jugador puede usar, así cada mitad de
+    # la pantalla le muestra a su dueño a dónde le toca ir.
+    for zona in zonas:
+        if zona["roles"] and getattr(dueño, "rol", None) not in zona["roles"]:
+            continue
+        rect = zona["rect"]
+        if not rect.colliderect(camara):
+            continue
+        en_pantalla = _a_pantalla(rect, vista, camara)
+        _dibujar_zona(screen, en_pantalla, zona, dueño)
+
     # Todos los personajes, ordenados por Y para que el de adelante tape al de atrás.
     for jugador in sorted(jugadores, key=lambda j: j.hitbox.bottom):
         offset = (camara.x - vista.x, camara.y - vista.y)
@@ -154,8 +186,25 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, mostrar_hitboxes):
             pygame.draw.rect(screen, COLOR_COLISION,
                              _a_pantalla(jugador.hitbox, vista, camara), 2)
 
-    _dibujar_etiqueta(screen, vista, dueño)
     screen.set_clip(clip_previo)
+
+
+def _dibujar_zona(screen, rect, zona, dueño):
+    """Marca una zona en el piso, más brillante si el jugador está encima."""
+    encima = getattr(dueño, "zona_cerca", None) is zona
+    color = zona.get("color", COLOR_ZONA)
+    grosor = 4 if encima else 2
+
+    marca = pygame.Surface(rect.size, pygame.SRCALPHA)
+    marca.fill((*color, 70 if encima else 38))
+    screen.blit(marca, rect.topleft)
+    pygame.draw.ellipse(screen, color, rect, grosor)
+
+    etiqueta = fuente("small").render(zona["nombre"], True, color)
+    sombra = fuente("small").render(zona["nombre"], True, COLOR_SOMBRA)
+    pos = (rect.centerx - etiqueta.get_width() // 2, rect.top - etiqueta.get_height() - 4)
+    screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
+    screen.blit(etiqueta, pos)
 
 
 def _a_pantalla(rect, vista, camara):
@@ -176,11 +225,24 @@ def _dibujar_etiqueta(screen, vista, jugador):
     screen.blit(etiqueta, pos)
 
 
-def _dibujar_separadores(screen, viewports):
+def _dibujar_separadores(screen, viewports, color=COLOR_SEPARADOR,
+                         grosor=GROSOR_SEPARADOR):
+    """Dibuja el borde interior de cada viewport.
+
+    Antes se trazaban líneas de lado a lado de la pantalla a la altura de cada
+    borde. Con dos o cuatro jugadores daba igual porque los cortes van de punta
+    a punta, pero con tres la línea vertical que separa a J1 de J2 seguía bajando
+    y partía en dos la vista de J3. Recorriendo los bordes de cada viewport, el
+    separador se dibuja solo donde de verdad hay dos vistas pegadas.
+    """
     ancho, alto = screen.get_size()
-    bordes_x = {v.right for v in viewports if v.right < ancho}
-    bordes_y = {v.bottom for v in viewports if v.bottom < alto}
-    for x in bordes_x:
-        pygame.draw.rect(screen, COLOR_SEPARADOR, (x - GROSOR_SEPARADOR // 2, 0, GROSOR_SEPARADOR, alto))
-    for y in bordes_y:
-        pygame.draw.rect(screen, COLOR_SEPARADOR, (0, y - GROSOR_SEPARADOR // 2, ancho, GROSOR_SEPARADOR))
+    mitad = max(1, grosor // 2)
+    for vista in viewports:
+        if vista.left > 0:
+            pygame.draw.rect(screen, color, (vista.left - mitad, vista.top, grosor, vista.height))
+        if vista.right < ancho:
+            pygame.draw.rect(screen, color, (vista.right - mitad, vista.top, grosor, vista.height))
+        if vista.top > 0:
+            pygame.draw.rect(screen, color, (vista.left, vista.top - mitad, vista.width, grosor))
+        if vista.bottom < alto:
+            pygame.draw.rect(screen, color, (vista.left, vista.bottom - mitad, vista.width, grosor))
