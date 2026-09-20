@@ -51,7 +51,7 @@ for ancho, alto in RESOLUCIONES:
         j2.abrir_panel({"tipo":"opciones","titulo":"Plaza central",
                         "cuerpo":[ev["texto"], "", ev["pista"]],
                         "opciones":[{"texto":o["texto"]} for o in ops],
-                        "pie":"[↑/↓] elegir   [ENTER] confirmar"})
+                        "pie":"[Flechas] elegir   [ENTER] confirmar"})
         sup2 = pygame.Surface((ancho, alto)); sup2.fill((40,44,60))
         render_panel(sup2, vista, j2)
         pygame.image.save(sup2.subsurface(vista).copy(), f"{OUT}/op_{ancho}x{alto}_{n}j.png")

@@ -83,7 +83,7 @@ def _nombre(tecla):
     """Nombre corto de una tecla, para las pistas de la selección de rol."""
     nombres = {
         pygame.K_w: "W", pygame.K_s: "S", pygame.K_e: "E",
-        pygame.K_UP: "↑", pygame.K_DOWN: "↓", pygame.K_RETURN: "ENTER",
+        pygame.K_UP: "ARRIBA", pygame.K_DOWN: "ABAJO", pygame.K_RETURN: "ENTER",
         pygame.K_i: "I", pygame.K_k: "K", pygame.K_o: "O",
         pygame.K_t: "T", pygame.K_g: "G", pygame.K_y: "Y",
     }
@@ -236,7 +236,10 @@ class Game:
                 "rol": None,
                 "personaje": PERSONAJE_POR_PUESTO[puesto],
                 "controles": NOMBRE_CONTROLES[puesto],
-                "tecla_mover": f"{_nombre(teclas['arriba'][0])}/{_nombre(teclas['abajo'][0])}",
+                # "Flechas" en vez de "ARRIBA/ABAJO": más corto y es como la
+                # gente llama a esas teclas.
+                "tecla_mover": ("Flechas" if pygame.K_UP in teclas["arriba"]
+                                else f"{_nombre(teclas['arriba'][0])}/{_nombre(teclas['abajo'][0])}"),
                 "tecla_ok": _nombre(teclas["interactuar"][0]),
             })
         self.transitions.request(self, "roles")
@@ -436,7 +439,7 @@ class Game:
             "titulo": zona["nombre"],
             "cuerpo": [raiz.texto, "", "¿Qué haces con esta publicación?"],
             "opciones": [{"texto": hijo.texto} for hijo in raiz.hijos],
-            "pie": (f"[{jugador.nombre_tecla('arriba')}/{jugador.nombre_tecla('abajo')}] elegir   "
+            "pie": (f"[{jugador.pista_mover()}] elegir   "
                     f"[{jugador.nombre_tecla('interactuar')}] confirmar"),
         })
 
@@ -465,7 +468,7 @@ class Game:
             "titulo": zona["nombre"],
             "cuerpo": ["¿Cuál de estas está circulando como falsa?", ""],
             "opciones": [{"texto": item["titulo"]} for item in muestra],
-            "pie": (f"[{jugador.nombre_tecla('arriba')}/{jugador.nombre_tecla('abajo')}] elegir   "
+            "pie": (f"[{jugador.pista_mover()}] elegir   "
                     f"[{jugador.nombre_tecla('interactuar')}] reportar"),
         })
 
@@ -481,7 +484,7 @@ class Game:
             "titulo": zona["nombre"],
             "cuerpo": [evento["texto"], "", evento["pista"]],
             "opciones": [{"texto": o["texto"]} for o in opciones],
-            "pie": (f"[{jugador.nombre_tecla('arriba')}/{jugador.nombre_tecla('abajo')}] elegir   "
+            "pie": (f"[{jugador.pista_mover()}] elegir   "
                     f"[{jugador.nombre_tecla('interactuar')}] confirmar"),
         })
 
@@ -497,7 +500,7 @@ class Game:
             "titulo": zona["nombre"],
             "cuerpo": [f"Propuesta del día: {evento['texto']}", "", "¿Cómo la presentas?"],
             "opciones": [{"texto": o["texto"]} for o in opciones],
-            "pie": (f"[{jugador.nombre_tecla('arriba')}/{jugador.nombre_tecla('abajo')}] elegir   "
+            "pie": (f"[{jugador.pista_mover()}] elegir   "
                     f"[{jugador.nombre_tecla('interactuar')}] confirmar"),
         })
 
@@ -511,7 +514,7 @@ class Game:
     def _panel_dialogo(self, jugador, dialogo, nodo, titulo):
         hijos = nodo.hijos if nodo is not None else []
         if hijos:
-            pie = (f"[{jugador.nombre_tecla('arriba')}/{jugador.nombre_tecla('abajo')}] elegir   "
+            pie = (f"[{jugador.pista_mover()}] elegir   "
                    f"[{jugador.nombre_tecla('interactuar')}] responder")
         else:
             pie = f"[{jugador.nombre_tecla('interactuar')}] terminar"
@@ -693,25 +696,37 @@ class Game:
     # -- Entrada ------------------------------------------------------------------
 
     def _tecla_en_partida(self, key):
-        """Reparte la tecla entre los jugadores; cada uno tiene las suyas."""
+        """Reparte la tecla al jugador dueño de esa tecla.
+
+        Cada rama sale con `return` SOLO si la tecla era de ese jugador. Antes,
+        la rama del jugador con un panel abierto terminaba en un `return` suelto
+        que se ejecutaba siempre, incluso cuando la tecla no era suya: mientras
+        el jugador 1 tenía algo abierto se tragaba todas las teclas y el
+        jugador 2 no podía abrir nada. Al revés no pasaba, porque el jugador 1
+        se revisa primero y su rama sí hacía `continue`.
+        """
         for jugador in self.jugadores:
             if jugador.es_tecla(key, "habilidades"):
                 self.alternar_habilidades(jugador)
                 return
+
             if not jugador.ocupado:
                 if jugador.es_tecla(key, "interactuar"):
                     self.interactuar(jugador)
                     return
-                continue
+                continue  # no era suya: que la vea el siguiente
 
             total = self._total_opciones(jugador)
             if jugador.es_tecla(key, "arriba"):
                 jugador.mover_cursor(-1, total)
-            elif jugador.es_tecla(key, "abajo"):
+                return
+            if jugador.es_tecla(key, "abajo"):
                 jugador.mover_cursor(1, total)
-            elif jugador.es_tecla(key, "interactuar"):
+                return
+            if jugador.es_tecla(key, "interactuar"):
                 self.confirmar(jugador)
-            return
+                return
+            # Tampoco era suya aunque tenga un panel abierto: se sigue buscando.
 
     def _total_opciones(self, jugador):
         panel = jugador.panel or {}

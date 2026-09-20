@@ -159,6 +159,9 @@ class ArbolHabilidades:
                 break
         if elegido is None:
             return False, "Esa habilidad no está disponible todavía.", 0
+        # Con costo 0 esto nunca se cumple: hoy las habilidades son gratis y lo
+        # que limita es el árbol, no el precio. Se deja porque volver a
+        # cobrarlas es solo darle valor a COSTO_NIVEL_* en data/habilidades.py.
         if puntos_disponibles < elegido.costo:
             faltan = elegido.costo - puntos_disponibles
             return False, f"Te faltan {faltan} puntos para {elegido.nombre}.", 0

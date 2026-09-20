@@ -31,6 +31,11 @@ COLOR_LISTO = (96, 188, 118)
 
 MARGEN = 18
 
+# Franja de arriba reservada para el aviso de "faltan N por elegir". Las
+# secciones que tocan el borde superior empiezan su contenido por debajo, o el
+# aviso se monta encima del título del jugador de la derecha.
+ALTO_AVISO = 34
+
 
 # --------------------------------------------------------------------------
 # Paso 1: cuántos juegan
@@ -78,7 +83,7 @@ def render_cantidad(screen, seleccionado):
                                                       caja.y + 8 + linea + linea // 2)))
         y += alto_opcion + separacion
 
-    pie = f.render("[W/S] o [↑/↓] elegir    [ENTER] continuar    [ESC] volver al menú",
+    pie = f.render("[W/S] o flechas para elegir    [ENTER] continuar    [ESC] volver al menú",
                    True, (194, 216, 248))
     screen.blit(pie, pie.get_rect(center=(ancho // 2, alto - 40)))
 
@@ -108,7 +113,9 @@ def render_roles(screen, viewports, seleccion):
     for indice, vista in enumerate(viewports):
         if indice >= len(seleccion):
             break
-        _seccion_jugador(screen, vista, indice, seleccion[indice], tomados)
+        # Solo las secciones pegadas al borde superior ceden espacio al aviso.
+        tope = ALTO_AVISO if vista.top < ALTO_AVISO else 0
+        _seccion_jugador(screen, vista, indice, seleccion[indice], tomados, tope)
 
     _separadores(screen, viewports)
 
@@ -123,7 +130,7 @@ def render_roles(screen, viewports, seleccion):
     # Arriba y no abajo: con cuatro jugadores el borde inferior lo ocupan las
     # pistas de teclas de los dos de abajo, y el aviso se les montaba encima.
     etiqueta = f.render(mensaje, True, color)
-    caja = etiqueta.get_rect(center=(screen.get_width() // 2, 18))
+    caja = etiqueta.get_rect(center=(screen.get_width() // 2, ALTO_AVISO // 2))
     fondo = pygame.Surface((etiqueta.get_width() + 28, etiqueta.get_height() + 12),
                            pygame.SRCALPHA)
     fondo.fill((18, 16, 30, 235))
@@ -133,7 +140,7 @@ def render_roles(screen, viewports, seleccion):
     screen.blit(etiqueta, caja)
 
 
-def _seccion_jugador(screen, vista, indice, estado, tomados):
+def _seccion_jugador(screen, vista, indice, estado, tomados, tope=0):
     f = fuente_de_tamano(max(12, min(20, vista.width // 34)))
     f_titulo = fuente_de_tamano(max(14, min(26, vista.width // 26)))
     paso = f.get_linesize() + 2
@@ -142,7 +149,7 @@ def _seccion_jugador(screen, vista, indice, estado, tomados):
     clip_previo = screen.get_clip()
     screen.set_clip(vista)
 
-    y = vista.y + MARGEN
+    y = vista.y + tope + MARGEN
     titulo = f_titulo.render(f"Jugador {indice + 1}", True,
                              COLOR_LISTO if estado["listo"] else COLOR_TEXTO)
     screen.blit(titulo, (vista.x + MARGEN, y))

@@ -30,8 +30,10 @@ Requiere Python 3 y Pygame (`pip install pygame`).
 python main.py                        # el juego
 python pruebas/prueba_partida.py      # una ronda completa sin abrir ventana
 python pruebas/prueba_seleccion.py    # el flujo de cantidad y roles, a 2, 3 y 4
+python pruebas/prueba_controles.py    # que nadie se robe las teclas de otro
 python pruebas/prueba_paneles.py      # los paneles a varias resoluciones
 python pruebas/prueba_estructuras.py  # los arboles por consola
+python pruebas/prueba_textos.py       # que la fuente pueda dibujar todo el texto
 ```
 
 ### Como se juega

@@ -5,9 +5,14 @@ un NodoHabilidad. La raíz se tiene desde el inicio de la ronda; de ahí en
 adelante el jugador gasta puntos y **escoge una de dos ramas**, perdiendo la
 otra hasta que termine la partida.
 
-`costo` está pensado para una ronda de cinco minutos: el segundo nivel se
-alcanza cumpliendo un par de tareas y el tercero exige jugar bien la ronda
-entera, así que casi nunca da para llegar al fondo sin esforzarse.
+`costo` está en 0: las habilidades **no se pagan con puntos**. Lo que limita la
+progresión es el árbol mismo —al bajar se escoge una de dos ramas y la otra se
+cierra por el resto de la ronda—, no un precio. Los puntos quedan solo para
+medir cómo le fue a cada rol al final.
+
+Si más adelante se quiere volver a cobrarlas, basta con darle valor a
+COSTO_NIVEL_2 y COSTO_NIVEL_3: el panel vuelve a mostrar el precio y a bloquear
+lo que no alcance, sin tocar nada más.
 
 Cómo se conectan con el juego: cuando el jugador interactúa con una zona, el
 evento revisa qué claves tiene desbloqueadas (`arbol.tiene("REPLICA")`) y
@@ -15,8 +20,8 @@ agrega esa opción al panel. Por eso la clave de cada nodo importa y no debe
 cambiarse sin actualizar `data/tareas.py`.
 """
 
-COSTO_NIVEL_2 = 30
-COSTO_NIVEL_3 = 70
+COSTO_NIVEL_2 = 0
+COSTO_NIVEL_3 = 0
 
 
 CANDIDATO = {

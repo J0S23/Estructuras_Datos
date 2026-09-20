@@ -131,13 +131,26 @@ class Jugador:
             return "?"
         nombres = {
             pygame.K_w: "W", pygame.K_s: "S", pygame.K_e: "E", pygame.K_q: "Q",
-            pygame.K_UP: "↑", pygame.K_DOWN: "↓",
+            pygame.K_UP: "ARRIBA", pygame.K_DOWN: "ABAJO",
             pygame.K_RETURN: "ENTER", pygame.K_KP_ENTER: "ENTER",
             pygame.K_RSHIFT: "SHIFT DER",
             pygame.K_i: "I", pygame.K_k: "K", pygame.K_o: "O", pygame.K_u: "U",
             pygame.K_t: "T", pygame.K_g: "G", pygame.K_y: "Y", pygame.K_r: "R",
         }
         return nombres.get(teclas[0], "?")
+
+    def pista_mover(self):
+        """Cómo se nombra en pantalla el par de teclas para mover el cursor.
+
+        Para el puesto de las flechas devuelve "Flechas" en vez de los nombres
+        sueltos: la tipografía del juego (Determination Mono) **no trae los
+        glifos de flecha** (U+2190-2193), así que escribir "↑/↓" salía como dos
+        cuadritos vacíos. Las tildes y la ñ sí están; el problema era solo con
+        las flechas.
+        """
+        if pygame.K_UP in self.teclas.get("arriba", ()):
+            return "Flechas"
+        return f"{self.nombre_tecla('arriba')}/{self.nombre_tecla('abajo')}"
 
     # -- Puntos y mensajes ------------------------------------------------------
 

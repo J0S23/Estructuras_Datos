@@ -327,9 +327,11 @@ def render_panel_habilidades(screen, vista, jugador):
 
             color = COLOR_TENUE if not alcanza else (
                 COLOR_SELECCION if seleccionada else COLOR_TEXTO)
-            encabezado = f"{'> ' if seleccionada else '  '}{nodo.nombre}  ({nodo.costo} pts)"
-            if not alcanza:
-                encabezado += f"  — te faltan {nodo.costo - jugador.puntos}"
+            encabezado = f"{'> ' if seleccionada else '  '}{nodo.nombre}"
+            if nodo.costo:
+                encabezado += f"  ({nodo.costo} pts)"
+                if not alcanza:
+                    encabezado += f"  — te faltan {nodo.costo - jugador.puntos}"
             screen.blit(f.render(encabezado, True, color), (caja.x + MARGEN, y))
             y += paso
 
@@ -407,7 +409,7 @@ def _alto_necesario(arbol, opciones, f, paso, ancho_texto, alto_max,
 
 def _pie(screen, caja, f, jugador, modo):
     if modo == "elegir":
-        texto = (f"[{jugador.nombre_tecla('arriba')}/{jugador.nombre_tecla('abajo')}] elegir   "
+        texto = (f"[{jugador.pista_mover()}] elegir   "
                  f"[{jugador.nombre_tecla('interactuar')}] desbloquear   "
                  f"[{jugador.nombre_tecla('habilidades')}] cerrar")
     else:
