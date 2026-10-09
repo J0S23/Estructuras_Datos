@@ -67,9 +67,26 @@ hablar con un vecino); la **Plaza** y la **Emisora** son del candidato
 los assets:
 
 ```bash
+python Editores/editor_mapa.py       # poner aliens, escondites, terminales... (ver abajo)
 python Editores/hitbox_editor.py     # dibujar las hitboxes de un mapa
 python Editores/personaje_editor.py  # calibrar escala e hitbox de un personaje
 python Editores/visor_personajes.py  # revisar que sprites y config tiene cada personaje
+```
+
+### Editar el mapa sin tocar codigo
+
+`python Editores/editor_mapa.py` abre el mapa y deja poner con el mouse todo lo
+que va encima: inicio de los jugadores (1), rutas de patrulla de los aliens (2),
+escondites (3), terminales (4), paneles danados (5), piezas (6) y mover las
+zonas (7). Clic izquierdo pone o arrastra, clic derecho borra, `Ctrl+S` guarda,
+`M` hace que el juego use ese mapa y `F5` guarda y abre el juego para probar.
+Marca en rojo lo que choca con paredes y en naranja lo que no se alcanza
+caminando. Guarda en `Hitboxes/<mapa>_objetos.json`; las paredes se siguen
+dibujando con `hitbox_editor.py`. Para un mapa nuevo: dibujar sus paredes con
+el editor de hitboxes y despues poner todo lo demas con el editor de mapa.
+
+```bash
+python pruebas/prueba_editor_mapa.py  # el editor y que el juego use lo guardado
 ```
 
 ## Estructura del repositorio

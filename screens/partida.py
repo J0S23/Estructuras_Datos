@@ -12,8 +12,11 @@ con cuatro, en cuartos.
 import pygame
 
 from fuentes import fuente
-from screens.paneles import render_panel, render_hud, render_mensaje, render_pista_zona
+from screens.paneles import (render_panel, render_hud, render_mensaje, render_pista_zona,
+                             render_pulso, render_tension, render_minijuego,
+                             render_escondido)
 from screens.panel_habilidades import render_panel_habilidades
+from screens import roles as dibujo_roles
 
 
 COLOR_SEPARADOR = (18, 16, 30)
@@ -64,23 +67,31 @@ def calcular_viewports(ancho, alto, cantidad):
 
 
 def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
-                   mostrar_hitboxes=False):
+                   mostrar_hitboxes=False, aliens=(), escondites=(), extras=None):
     """Dibuja un viewport por jugador, cada uno con su cámara, HUD y paneles."""
     ancho, alto = screen.get_size()
     viewports = calcular_viewports(ancho, alto, len(jugadores))
+    extras = dict(extras or {})
+    extras.setdefault("aliens", aliens)
+    extras.setdefault("escondites", escondites)
+    extras.setdefault("jugadores", jugadores)
+    extras.setdefault("mundo", mundo)
     screen.fill(COLOR_SEPARADOR)
 
     for indice, jugador in enumerate(jugadores):
         if indice >= len(viewports):
             break
         vista = viewports[indice]
-        _dibujar_vista(screen, vista, mundo, jugadores, jugador, zonas, mostrar_hitboxes)
+        _dibujar_vista(screen, vista, mundo, jugadores, jugador, zonas, mostrar_hitboxes,
+                       aliens, escondites, extras)
 
         # Lo de la interfaz va después del mundo pero sigue recortado al
         # viewport: si el ciudadano abre una tarea, el candidato no la ve ni se
         # le congela su mitad.
         clip_previo = screen.get_clip()
         screen.set_clip(vista)
+        render_escondido(screen, vista, jugador)
+        render_tension(screen, vista, jugador)
         render_hud(screen, vista, jugador, segundos_restantes)
         render_pista_zona(screen, vista, jugador)
         if jugador.panel is not None and jugador.panel.get("tipo") == "habilidades":
@@ -88,6 +99,9 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
         else:
             render_panel(screen, vista, jugador)
         render_mensaje(screen, vista, jugador)
+        render_pulso(screen, vista, jugador)
+        dibujo_roles.render_minimapa(screen, vista, jugador, extras)
+        render_minijuego(screen, vista, jugador)
         screen.set_clip(clip_previo)
 
     _dibujar_separadores(screen, viewports)
@@ -100,7 +114,7 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
 def _dibujar_pista(screen):
     """Recordatorio de las teclas del prototipo, abajo a la derecha."""
     font = fuente("small")
-    texto = "[H] hitboxes   [TAB] ver el ABB   [ESC] menu"
+    texto = "[H] hitboxes   [B] arbol del alien   [TAB] ver el ABB   [ESC] menu"
     etiqueta = font.render(texto, True, (200, 210, 235))
     sombra = font.render(texto, True, COLOR_SOMBRA)
     pos = (screen.get_width() - etiqueta.get_width() - 12,
@@ -136,7 +150,8 @@ def _dibujar_leyenda(screen, mundo, jugadores):
     screen.blit(pista, (screen.get_width() - pista.get_width() - 12, y + 4))
 
 
-def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitboxes):
+def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitboxes,
+                   aliens=(), escondites=(), extras=None):
     camara = mundo.camara(dueño.hitbox.center, vista.width, vista.height)
 
     # Recorta el dibujo al viewport para que nada se salga a la mitad vecina.
@@ -173,9 +188,22 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         en_pantalla = _a_pantalla(rect, vista, camara)
         _dibujar_zona(screen, en_pantalla, zona, dueño)
 
-    # Todos los personajes, ordenados por Y para que el de adelante tape al de atrás.
-    for jugador in sorted(jugadores, key=lambda j: j.hitbox.bottom):
-        offset = (camara.x - vista.x, camara.y - vista.y)
+    offset = (camara.x - vista.x, camara.y - vista.y)
+
+    for escondite in escondites:
+        if escondite["rect"].inflate(0, 120).colliderect(camara):
+            _dibujar_escondite(screen, escondite, offset, dueño)
+    tiempo_ms = pygame.time.get_ticks()
+    if extras:
+        dibujo_roles.dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms)
+
+    # Los conos de visión van en el piso, debajo de todos los personajes.
+    for alien in aliens:
+        alien.dibujar_vision(screen, offset)
+
+    # Jugadores y aliens juntos, ordenados por Y para que el de adelante tape
+    # al de atrás.
+    for jugador in sorted(list(jugadores) + list(aliens), key=lambda j: j.hitbox.bottom):
         jugador.dibujar(screen, offset)
         if mostrar_hitboxes:
             # Hitboxes del personaje: la de colisión y la de interacción.
@@ -186,7 +214,39 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
             pygame.draw.rect(screen, COLOR_COLISION,
                              _a_pantalla(jugador.hitbox, vista, camara), 2)
 
+    if extras:
+        dibujo_roles.dibujar_encima(screen, offset, camara, dueño, extras, tiempo_ms)
+        dibujo_roles.dibujar_flechas(screen, vista, camara, dueño, extras)
+
     screen.set_clip(clip_previo)
+
+
+def _dibujar_escondite(screen, escondite, offset, dueño):
+    """Casillero provisional (falta el arte): una caja de metal con rendijas."""
+    entrada = escondite["rect"]
+    caja = pygame.Rect(0, 0, 50, 78)
+    caja.midbottom = (entrada.centerx - offset[0], entrada.top + 6 - offset[1])
+
+    mio = escondite["ocupante"] is dueño
+    cerca = getattr(dueño, "escondite_cerca", None) is escondite
+    revisado = escondite.get("revisado_por") is not None
+
+    pygame.draw.rect(screen, (10, 12, 20), caja.move(3, 3), border_radius=4)
+    pygame.draw.rect(screen, (78, 96, 120), caja, border_radius=4)
+    borde = (236, 70, 60) if revisado else (255, 214, 64) if (cerca or mio) else (34, 40, 58)
+    pygame.draw.rect(screen, borde, caja, 3 if (cerca or mio or revisado) else 2, border_radius=4)
+    for i in range(4):
+        y = caja.y + 12 + i * 7
+        pygame.draw.line(screen, (34, 40, 58), (caja.x + 12, y), (caja.right - 12, y), 2)
+    pygame.draw.circle(screen, (200, 205, 220), (caja.right - 10, caja.centery + 8), 3)
+
+    if cerca or mio:
+        texto = "Escondido" if mio else escondite["nombre"]
+        etiqueta = fuente("small").render(texto, True, (255, 214, 64))
+        sombra = fuente("small").render(texto, True, COLOR_SOMBRA)
+        pos = (caja.centerx - etiqueta.get_width() // 2, caja.y - etiqueta.get_height() - 4)
+        screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
+        screen.blit(etiqueta, pos)
 
 
 def _dibujar_zona(screen, rect, zona, dueño):

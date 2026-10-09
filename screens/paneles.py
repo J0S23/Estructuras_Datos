@@ -227,16 +227,29 @@ def render_mensaje(screen, vista, jugador):
 
 
 def render_pista_zona(screen, vista, jugador):
-    """Aviso de 'presiona X para ...' cuando el jugador está sobre una zona."""
-    if jugador.zona_cerca is None or jugador.ocupado:
+    """Aviso de 'presiona X para ...' sobre una zona, un escondite o adentro."""
+    if jugador.ocupado or getattr(jugador, "minijuego", None) is not None:
         return
-    zona = jugador.zona_cerca
+    tecla = jugador.nombre_tecla('interactuar')
+    if getattr(jugador, "escondido", False):
+        texto = f"[{tecla}] Salir del escondite"
+    elif jugador.zona_cerca is not None:
+        texto = f"[{tecla}] {jugador.zona_cerca['nombre']}"
+    elif getattr(jugador, "estacion_cerca", None) is not None:
+        estacion = jugador.estacion_cerca
+        accion = "Usar terminal" if estacion["tipo"] == "terminal" else "Reparar panel"
+        texto = f"[{tecla}] {accion}"
+    elif getattr(jugador, "escondite_cerca", None) is not None:
+        texto = f"[{tecla}] Esconderse"
+    else:
+        return
     f = _fuente_para(vista)
-    texto = f"[{jugador.nombre_tecla('interactuar')}] {zona['nombre']}"
     etiqueta = f.render(texto, True, COLOR_TITULO)
     caja = etiqueta.get_rect()
     caja.centerx = vista.centerx
-    caja.bottom = vista.bottom - 42
+    # Bien arriba del borde: abajo a la izquierda va el pulso, y en la mitad
+    # inferior de la pantalla también la pista de teclas.
+    caja.bottom = vista.bottom - 96
 
     fondo = pygame.Surface((caja.width + 24, caja.height + 12), pygame.SRCALPHA)
     fondo.fill((14, 15, 28, 225))
@@ -244,3 +257,192 @@ def render_pista_zona(screen, vista, jugador):
     pygame.draw.rect(screen, COLOR_BORDE, (caja.x - 12, caja.y - 6,
                                            caja.width + 24, caja.height + 12), 2)
     screen.blit(etiqueta, caja.topleft)
+
+
+# -- Pulso ----------------------------------------------------------------------
+
+COLOR_PULSO_CALMA = (96, 200, 120)
+COLOR_PULSO_ALERTA = (255, 196, 64)
+COLOR_PULSO_PANICO = (236, 70, 60)
+
+# El borde rojo del viewport se cachea por tamaño: armarlo cuesta, y el
+# tamaño del viewport solo cambia al alternar F11.
+_cache_vineta = {}
+
+
+def _color_pulso(pulso):
+    if pulso < 45:
+        return COLOR_PULSO_CALMA
+    if pulso < 72:
+        return COLOR_PULSO_ALERTA
+    return COLOR_PULSO_PANICO
+
+
+def _intensidad_latido(fase):
+    """Qué tan "lleno" está el corazón en esta fase del latido (0 a 1).
+
+    Un latido real son dos golpes seguidos (pum-pum) y una pausa; esto lo
+    imita con dos picos al principio de cada ciclo.
+    """
+    if fase < 0.12:
+        return 1 - abs(fase - 0.06) / 0.06
+    if 0.18 < fase < 0.28:
+        return 0.6 * (1 - abs(fase - 0.23) / 0.05)
+    return 0.0
+
+
+def _dibujar_corazon(screen, centro, tamano, color):
+    cx, cy = centro
+    r = max(3, int(tamano * 0.3))
+    pygame.draw.circle(screen, color, (int(cx - r * 0.85), int(cy - r * 0.3)), r)
+    pygame.draw.circle(screen, color, (int(cx + r * 0.85), int(cy - r * 0.3)), r)
+    pygame.draw.polygon(screen, color, [
+        (cx - r * 1.8, cy - r * 0.05),
+        (cx + r * 1.8, cy - r * 0.05),
+        (cx, cy + r * 1.9),
+    ])
+
+
+def render_pulso(screen, vista, jugador):
+    """Corazón que late al ritmo del pulso y la barra, abajo a la izquierda."""
+    f = _fuente_para(vista)
+    color = _color_pulso(jugador.pulso)
+    golpe = _intensidad_latido(jugador.fase_latido)
+
+    ancho_barra = max(110, min(200, vista.width // 5))
+    alto_barra = max(10, f.get_linesize() // 2)
+    x = vista.x + 16
+    base = vista.bottom - 16
+    if vista.bottom >= screen.get_height() - 2:
+        base -= 26   # deja libre la pista de teclas de abajo de la pantalla
+
+    fondo = pygame.Rect(x - 8, base - alto_barra - f.get_linesize() - 18,
+                        ancho_barra + 64, alto_barra + f.get_linesize() + 26)
+    capa = pygame.Surface(fondo.size, pygame.SRCALPHA)
+    capa.fill((14, 15, 28, 205))
+    screen.blit(capa, fondo.topleft)
+
+    tamano = 26 + golpe * 8
+    _dibujar_corazon(screen, (x + 16, fondo.centery), tamano, color)
+
+    texto = f.render(f"{jugador.latidos_por_minuto} lpm", True, COLOR_TEXTO)
+    screen.blit(texto, (x + 40, fondo.y + 6))
+
+    barra = pygame.Rect(x + 40, base - alto_barra - 2, ancho_barra, alto_barra)
+    pygame.draw.rect(screen, (40, 42, 64), barra)
+    lleno = barra.copy()
+    lleno.width = int(barra.width * jugador.pulso / 100)
+    pygame.draw.rect(screen, color, lleno)
+    pygame.draw.rect(screen, COLOR_BORDE, barra, 1)
+
+    if jugador.visto:
+        aviso = f.render("¡TE VEN!", True, COLOR_PULSO_PANICO)
+        screen.blit(aviso, (texto.get_width() + x + 52, fondo.y + 6))
+
+
+def _vineta(tamano):
+    """Borde rojo que se desvanece hacia el centro, para un viewport."""
+    if tamano not in _cache_vineta:
+        ancho, alto = tamano
+        capa = pygame.Surface(tamano, pygame.SRCALPHA)
+        grosor = max(24, min(ancho, alto) // 6)
+        for i in range(grosor):
+            alfa = int(170 * (1 - i / grosor) ** 2)
+            pygame.draw.rect(capa, (200, 20, 30, alfa), (i, i, ancho - 2 * i, alto - 2 * i), 1)
+        _cache_vineta[tamano] = capa
+    return _cache_vineta[tamano]
+
+
+def render_tension(screen, vista, jugador):
+    """Bordes rojos que laten cuando el pulso está alto."""
+    if jugador.pulso < 55:
+        return
+    fuerza = (jugador.pulso - 55) / 45
+    golpe = _intensidad_latido(jugador.fase_latido)
+    alfa = int(255 * min(1.0, fuerza * (0.55 + 0.45 * golpe)))
+    if alfa <= 0:
+        return
+    capa = _vineta(vista.size)
+    capa.set_alpha(alfa)
+    screen.blit(capa, vista.topleft)
+
+
+# -- Escondites y minijuego ---------------------------------------------------------
+
+COLOR_AMENAZA = (236, 70, 60)
+COLOR_ZONA_VERDE = (96, 200, 120)
+_cache_escondido = {}
+
+
+def render_escondido(screen, vista, jugador):
+    """Adentro del escondite: todo oscuro salvo una rendija a la altura de los ojos."""
+    if not getattr(jugador, "escondido", False):
+        return
+    if vista.size not in _cache_escondido:
+        capa = pygame.Surface(vista.size, pygame.SRCALPHA)
+        capa.fill((4, 5, 10, 205))
+        alto_rendija = max(40, vista.height // 7)
+        centro = vista.height // 2
+        for i in range(alto_rendija):
+            # La rendija se aclara hacia el centro.
+            d = abs(i - alto_rendija / 2) / (alto_rendija / 2)
+            alfa = int(205 * d ** 2)
+            pygame.draw.line(capa, (4, 5, 10, alfa), (0, centro - alto_rendija // 2 + i),
+                             (vista.width, centro - alto_rendija // 2 + i))
+        _cache_escondido[vista.size] = capa
+    screen.blit(_cache_escondido[vista.size], vista.topleft)
+
+
+def render_minijuego(screen, vista, jugador):
+    """La barra de timing y, al lado, la de cuánto le falta al alien para entrar."""
+    juego = getattr(jugador, "minijuego", None)
+    if juego is None:
+        return
+    f = _fuente_para(vista)
+    ancho = max(260, min(480, vista.width - 60))
+    alto = f.get_linesize() * 3 + 74
+    panel = pygame.Rect(0, 0, ancho, alto)
+    panel.centerx = vista.centerx
+    panel.bottom = vista.bottom - 96
+
+    capa = pygame.Surface(panel.size, pygame.SRCALPHA)
+    capa.fill(COLOR_FONDO)
+    screen.blit(capa, panel.topleft)
+    borde = COLOR_BORDE
+    if juego.destello_ms > 0:
+        borde = COLOR_ZONA_VERDE if juego.destello == "acierto" else COLOR_AMENAZA
+    pygame.draw.rect(screen, borde, panel, 3 if juego.destello_ms > 0 else 2)
+
+    titulo = f.render("¡Un alien revisa tu escondite!", True, COLOR_AMENAZA)
+    screen.blit(titulo, (panel.x + 14, panel.y + 10))
+    tecla = jugador.nombre_tecla("interactuar")
+    pista = f.render(f"[{tecla}] cuando la aguja esté en verde", True, COLOR_TEXTO)
+    screen.blit(pista, (panel.x + 14, panel.y + 10 + f.get_linesize()))
+
+    # Barra de timing.
+    ancho_lateral = 30
+    barra = pygame.Rect(panel.x + 14, panel.y + 22 + f.get_linesize() * 2,
+                        panel.width - 28 - ancho_lateral - 18, 26)
+    pygame.draw.rect(screen, (40, 42, 64), barra)
+    inicio, fin = juego.zona
+    verde = pygame.Rect(barra.x + int(inicio * barra.width), barra.y,
+                        max(2, int((fin - inicio) * barra.width)), barra.height)
+    pygame.draw.rect(screen, COLOR_ZONA_VERDE, verde)
+    pygame.draw.rect(screen, COLOR_BORDE, barra, 2)
+    x_aguja = barra.x + int(juego.aguja * barra.width)
+    pygame.draw.rect(screen, (250, 250, 255), (x_aguja - 3, barra.y - 6, 6, barra.height + 12))
+
+    calma = f.render(f"{jugador.latidos_por_minuto} lpm", True, _color_pulso(jugador.pulso))
+    screen.blit(calma, (barra.x, barra.bottom + 8))
+
+    # Barra lateral: el alien está por entrar. Se llena de abajo hacia arriba.
+    f_chica = fuente_de_tamano(max(10, f.get_height() - 5))
+    etiqueta = f_chica.render("ALIEN", True, COLOR_AMENAZA)
+    lateral = pygame.Rect(barra.right + 18, panel.y + 12, ancho_lateral,
+                          panel.height - 30 - etiqueta.get_height())
+    pygame.draw.rect(screen, (40, 42, 64), lateral)
+    alto_lleno = int(lateral.height * juego.amenaza / 100)
+    lleno = pygame.Rect(lateral.x, lateral.bottom - alto_lleno, lateral.width, alto_lleno)
+    pygame.draw.rect(screen, COLOR_AMENAZA, lleno)
+    pygame.draw.rect(screen, COLOR_BORDE, lateral, 2)
+    screen.blit(etiqueta, (lateral.centerx - etiqueta.get_width() // 2, lateral.bottom + 6))

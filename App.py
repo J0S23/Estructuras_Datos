@@ -44,17 +44,26 @@ from Movimiento.Personaje import (Personaje, CONTROLES_WASD, CONTROLES_FLECHAS,
 from Estructuras.abb_publicaciones import ArbolPublicaciones
 from Estructuras.arbol_decision import ArbolDecision
 from Estructuras.arbol_dialogo import ArbolDialogo
+from Estructuras.arbol_comportamiento import ArbolComportamiento
+
+from alien import Alien
+import acciones_rol
+from minijuego_latidos import MinijuegoLatidos
 
 from data.publicaciones_ejemplo import PUBLICACIONES_EJEMPLO
 from data.dialogos_ejemplo import DIALOGOS_EJEMPLO
 from data.tareas import (ZONAS, ACUSACIONES, PROPUESTAS,
                          opciones_acusacion, opciones_propuesta)
 from data.roles import ROLES, PERSONAJE_POR_PUESTO, MINIMO_JUGADORES
+from data.comportamiento_alien import ARBOL_ALIEN
+from data.escondites import ANCHO_ENTRADA, ALTO_ENTRADA
+import objetos_mapa
 
 from screens.menu import render_menu, OPCIONES_MENU
 from screens.partida import render_partida, calcular_viewports
 from screens.seleccion import render_cantidad, render_roles, OPCIONES
 from screens.arbol_abb import render_arbol_abb
+from screens.arbol_alien import render_arbol_alien
 from screens.panel_habilidades import precargar_iconos
 from screens.resultados import render_resultados
 from screens.ayuda import render_ayuda
@@ -63,11 +72,15 @@ from screens.creditos import render_creditos, reiniciar_scroll
 
 ANCHO_VENTANA, ALTO_VENTANA = 960, 600
 
-MAPA = "Colegio"
+# El mapa ya no se fija aquí: lo dice Hitboxes/mapa_activo.json, que se cambia
+# desde el editor de mapa (Editores/editor_mapa.py, tecla M).
 DURACION_RONDA_S = 300  # cinco minutos, como pide el diseño
 
 # Debajo de esta veracidad una publicación cuenta como dudosa.
 UMBRAL_DUDOSA = 40
+
+# Lo que cuesta que te atrape un alien.
+PUNTOS_POR_SER_ATRAPADO = 10
 
 # Máximo que puede ganar o perder un jugador en una sola tarea.
 TOPE_PUNTOS_TAREA = 20
@@ -118,6 +131,15 @@ class Game:
         self.seleccion_roles = []
         self.zonas = []          # zonas del mapa ya convertidas a píxeles
         self.mostrar_hitboxes = False
+        self.aliens = []
+        self.escondites = []
+        self.objetos = None   # lo que está puesto en el mapa (objetos_mapa.py)
+        # Lo de las habilidades de los roles (acciones_rol.py).
+        self.terminales, self.paneles, self.piezas = [], [], []
+        self.senuelos, self.senales = [], []
+        self.arbol_alien = None
+        self.mostrar_arbol_alien = False
+        self.alien_en_vista = 0      # cuál alien muestra la vista del árbol
         self.credit_scroll = reiniciar_scroll()
 
         self.arbol_publicaciones = None
@@ -279,8 +301,12 @@ class Game:
 
     def iniciar_partida(self):
         """Carga el mapa, arma los árboles y crea a los jugadores."""
-        if self.mundo is None:
-            self.mundo = Mundo(MAPA)
+        nombre_mapa = objetos_mapa.mapa_activo()
+        if self.mundo is None or self.mundo.nombre_mapa != nombre_mapa:
+            self.mundo = Mundo(nombre_mapa)
+        # Dónde va cada cosa del mapa: lo que se puso con el editor de mapa, y
+        # lo que no, de data/ (ver objetos_mapa.py).
+        self.objetos = objetos_mapa.cargar(nombre_mapa)
         self._construir_arboles()
         self._preparar_zonas()
 
@@ -289,6 +315,9 @@ class Game:
 
         self.jugadores = []
         centro = (self.mundo.ancho // 2, self.mundo.alto // 2)
+        if self.objetos.get("spawn"):
+            centro = (int(self.objetos["spawn"][0] * self.mundo.ancho),
+                      int(self.objetos["spawn"][1] * self.mundo.alto))
         for puesto, estado in enumerate(self.seleccion_roles):
             nombre_personaje = estado["personaje"]
             ruta = os.path.join("Imagenes", "Personajes", nombre_personaje)
@@ -305,6 +334,7 @@ class Game:
             personaje.sync_sprite_from_hitbox()
 
             jugador = Jugador(personaje, estado["rol"], puesto)
+            jugador.spawn = personaje.hitbox.topleft
             jugador.nombre_personaje = nombre_personaje
             personaje.controles_nombre = jugador.controles_nombre
             self.jugadores.append(jugador)
@@ -314,8 +344,94 @@ class Game:
         # panel a mitad de la ronda.
         precargar_iconos([j.rol for j in self.jugadores])
 
+        self._preparar_escondites()
+        self.terminales, self.paneles, self.piezas = acciones_rol.preparar_estaciones(self.mundo, self.objetos)
+        self.senuelos, self.senales = [], []
+        self._crear_aliens()
         self._avisar_zonas_inalcanzables()
         self.transitions.request(self, "partida")
+
+    def _crear_aliens(self):
+        """Un alien por ruta del mapa (las que se trazan en el editor de mapa).
+
+        Una ruta de un solo punto es un guardia: se queda ahí, mirando.
+
+        Todos comparten el mismo árbol de comportamiento: es contenido, como el
+        árbol de decisión de una publicación. Lo que cambia entre aliens es la
+        ruta y lo que percibe cada uno.
+        """
+        self.arbol_alien = ArbolComportamiento(ARBOL_ALIEN)
+        self.aliens = []
+        rutas = [ruta for ruta in self.objetos["rutas_aliens"] if len(ruta) >= 1]
+        for numero, ruta in enumerate(rutas, start=1):
+            puntos = [(int(rx * self.mundo.ancho), int(ry * self.mundo.alto)) for rx, ry in ruta]
+            alien = Alien(numero, puntos, self.arbol_alien)
+            for i, j in self.mundo.tramos_bloqueados(puntos, alien.hitbox.width,
+                                                     alien.hitbox.height):
+                print(f"[AVISO] La ruta del {alien.nombre} choca con una pared entre los "
+                      f"puntos {i} y {j}. Muévela con el editor de mapa.")
+            self.aliens.append(alien)
+        self.alien_en_vista = 0
+        self.mostrar_arbol_alien = False
+
+    def _preparar_escondites(self):
+        """Pasa los escondites de data/escondites.py a rects en píxeles."""
+        self.escondites = []
+        for datos in self.objetos["escondites"]:
+            escondite = dict(datos)
+            escondite["rect"] = pygame.Rect(0, 0, ANCHO_ENTRADA, ALTO_ENTRADA)
+            escondite["rect"].center = (int(datos["rx"] * self.mundo.ancho),
+                                        int(datos["ry"] * self.mundo.alto))
+            escondite["ocupante"] = None       # el jugador que está adentro
+            escondite["revisado_por"] = None   # el alien que lo está revisando
+            escondite["enfriamiento_ms"] = 0   # tiempo en que los aliens lo ignoran
+            self.escondites.append(escondite)
+
+    def escondite_bajo(self, jugador):
+        """Escondite libre frente al que está parado el jugador, o None."""
+        for escondite in self.escondites:
+            if escondite["ocupante"] is None and escondite["rect"].colliderect(jugador.hitbox):
+                return escondite
+        return None
+
+    def _alien_revisa(self, jugador, alien, escondite):
+        """Un alien llegó a revisar un escondite: arranca el minijuego."""
+        if jugador is None:
+            return
+        jugador.minijuego = MinijuegoLatidos(jugador.pulso, alien, escondite)
+        jugador.avisar(f"¡El {alien.nombre} revisa tu escondite!", (236, 70, 60))
+
+    def _actualizar_minijuegos(self, dt):
+        for jugador in self.jugadores:
+            juego = jugador.minijuego
+            if juego is None:
+                continue
+            alien = juego.alien
+            if alien.escondite_objetivo is not juego.escondite:
+                # El alien dejó de revisar (lo hackearon): se acabó el peligro.
+                jugador.minijuego = None
+                jugador.avisar("El alien se fue de tu escondite.", (96, 200, 120))
+                continue
+            juego.actualizar(dt)
+            if not juego.terminado:
+                continue
+            if juego.resultado == "calmado":
+                jugador.minijuego = None
+                alien.rendirse()
+                jugador.sumar_puntos(5)
+                jugador.avisar("Te calmaste. El alien se fue. +5", (96, 200, 120))
+            else:
+                alien.entrar_al_escondite()
+                self._atrapar(jugador, alien)
+
+    def _atrapar(self, jugador, alien):
+        """Lo llama un alien cuando su árbol llega a la hoja ATRAPAR."""
+        if jugador is None:
+            return
+        jugador.atrapado()
+        jugador.sumar_puntos(-PUNTOS_POR_SER_ATRAPADO)
+        jugador.avisar(f"¡Te atrapó el {alien.nombre}! -{PUNTOS_POR_SER_ATRAPADO}",
+                       (236, 70, 60))
 
     def _avisar_zonas_inalcanzables(self):
         """Avisa por consola si alguna zona quedó encerrada tras una pared.
@@ -333,12 +449,15 @@ class Game:
             referencia.personaje.hitbox_w, referencia.personaje.hitbox_h)
         for zona in malas:
             print(f"[AVISO] La zona '{zona['clave']}' ({zona['nombre']}) no se puede "
-                  f"alcanzar caminando. Corrige rx/ry en data/tareas.py.")
+                  f"alcanzar caminando. Muévela con el editor de mapa.")
 
     def _preparar_zonas(self):
         """Pasa las zonas de data/tareas.py a rects en píxeles del mapa."""
         self.zonas = []
+        posiciones = self.objetos.get("zonas", {})
         for datos in ZONAS:
+            # La posición puede venir del editor de mapa; el contenido, no.
+            datos = dict(datos, **posiciones.get(datos["clave"], {}))
             radio = int(datos["radio"] * self.mundo.ancho)
             zona = dict(datos)
             zona["rect"] = pygame.Rect(
@@ -361,34 +480,48 @@ class Game:
         if not self.jugadores or self.mundo is None:
             return
         teclas = pygame.key.get_pressed()
-        dudosas = len(self.publicaciones_dudosas())
         for jugador in self.jugadores:
             jugador.actualizar(teclas, colisiona=self.mundo.colisiona)
             jugador.zona_cerca = self.zona_bajo(jugador)
             jugador.actualizar_mensaje(dt)
-            jugador.info = self._info_de_rol(jugador, dudosas)
+            jugador.info = acciones_rol.linea_de_estado(jugador)
+
+        acciones_rol.actualizar(self, dt)
+        for jugador in self.jugadores:
+            jugador.escondite_cerca = (None if jugador.escondido or jugador.zona_cerca
+                                       or jugador.estacion_cerca
+                                       else self.escondite_bajo(jugador))
+        for escondite in self.escondites:
+            escondite["enfriamiento_ms"] = max(0, escondite["enfriamiento_ms"] - dt)
+
+        for alien in self.aliens:
+            alien.actualizar(dt, self.mundo, self.jugadores, self._atrapar,
+                             self.escondites, self._alien_revisa)
+        self._actualizar_minijuegos(dt)
+        self._actualizar_pulsos(dt)
 
         self.tiempo_restante_ms -= dt
         if self.tiempo_restante_ms <= 0:
             self.tiempo_restante_ms = 0
             self.terminar_ronda()
 
-    def _info_de_rol(self, jugador, dudosas):
-        """Línea extra del HUD según el rol.
+    def _extras_dibujo(self):
+        """Lo del mapa que dibujan las habilidades (screens/roles.py)."""
+        return {
+            "terminales": self.terminales, "paneles": self.paneles, "piezas": self.piezas,
+            "senuelos": self.senuelos, "senales": self.senales,
+        }
 
-        Al ciudadano le importa cuántas cadenas dudosas siguen circulando, y
-        ese número sale de `buscar_menores_a`: una búsqueda por rango sobre el
-        ABB que poda el subárbol derecho en cuanto una clave alcanza el umbral,
-        en vez de recorrer los nodos uno por uno. Se recalcula cada frame y baja
-        sola cuando alguien reporta o atiende una publicación.
-        """
-        if jugador.rol != "Ciudadano":
-            return ""
-        if dudosas == 0:
-            return "Nada dudoso circulando ahora mismo."
-        if dudosas == 1:
-            return "1 cadena dudosa circulando."
-        return f"{dudosas} cadenas dudosas circulando."
+    def _actualizar_pulsos(self, dt):
+        """Cada jugador ajusta su pulso según el alien más cercano."""
+        for jugador in self.jugadores:
+            centro = jugador.hitbox.center
+            distancia = min((math.hypot(a.centro[0] - centro[0], a.centro[1] - centro[1])
+                             for a in self.aliens), default=None)
+            if not jugador.cazable:
+                distancia = None
+            visto = any(a.objetivo is jugador for a in self.aliens)
+            jugador.actualizar_pulso(dt, distancia, visto)
 
     def terminar_ronda(self):
         for jugador in self.jugadores:
@@ -706,13 +839,42 @@ class Game:
         se revisa primero y su rama sí hacía `continue`.
         """
         for jugador in self.jugadores:
+            # Escondido manda sobre todo lo demás: la tecla de interactuar es
+            # la del minijuego si un alien lo está revisando, y si no, la de
+            # salir. Mientras está metido no abre habilidades ni zonas.
+            if jugador.escondido:
+                if jugador.es_tecla(key, "interactuar"):
+                    if jugador.minijuego is not None:
+                        jugador.minijuego.presionar(jugador)
+                    else:
+                        jugador.salir_del_escondite()
+                    return
+                if jugador.es_tecla(key, "habilidades") or jugador.es_tecla(key, "habilidad"):
+                    return
+                continue
+
             if jugador.es_tecla(key, "habilidades"):
                 self.alternar_habilidades(jugador)
                 return
 
+            if jugador.es_tecla(key, "habilidad"):
+                if not jugador.ocupado:
+                    acciones_rol.usar_habilidad(self, jugador)
+                return
+
             if not jugador.ocupado:
                 if jugador.es_tecla(key, "interactuar"):
-                    self.interactuar(jugador)
+                    # Prioridad: zona, luego estación de su rol, luego escondite.
+                    estacion = (None if self.zona_bajo(jugador)
+                                else acciones_rol.estacion_bajo(self, jugador))
+                    escondite = (None if self.zona_bajo(jugador) or estacion
+                                 else self.escondite_bajo(jugador))
+                    if estacion is not None:
+                        acciones_rol.usar_estacion(self, jugador, estacion)
+                    elif escondite is not None:
+                        jugador.esconderse(escondite)
+                    else:
+                        self.interactuar(jugador)
                     return
                 continue  # no era suya: que la vea el siguiente
 
@@ -793,6 +955,10 @@ class Game:
         elif self.current_screen == "partida":
             if key == pygame.K_h:
                 self.mostrar_hitboxes = not self.mostrar_hitboxes
+            elif key == pygame.K_b:
+                self.mostrar_arbol_alien = not self.mostrar_arbol_alien
+            elif key == pygame.K_n and self.aliens:
+                self.alien_en_vista = (self.alien_en_vista + 1) % len(self.aliens)
             elif key == pygame.K_TAB:
                 self.pantalla_anterior = "partida"
                 self.transitions.request(self, "arbol")
@@ -848,7 +1014,11 @@ class Game:
             render_roles(self.screen, viewports, self.seleccion_roles)
         elif self.current_screen == "partida":
             render_partida(self.screen, self.mundo, self.jugadores, self.zonas,
-                           self.tiempo_restante_ms / 1000.0, self.mostrar_hitboxes)
+                           self.tiempo_restante_ms / 1000.0, self.mostrar_hitboxes,
+                           self.aliens, self.escondites, self._extras_dibujo())
+            if self.mostrar_arbol_alien and self.aliens:
+                render_arbol_alien(self.screen, self.aliens[self.alien_en_vista],
+                                   self.arbol_alien, self.alien_en_vista + 1, len(self.aliens))
         elif self.current_screen == "arbol":
             render_arbol_abb(self.screen, self.arbol_publicaciones, self.font, self.small_font)
         elif self.current_screen == "resultados":
