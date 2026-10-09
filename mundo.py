@@ -82,6 +82,40 @@ class Mundo:
             return True
         return rect.collidelist(self.paredes) != -1
 
+    def linea_libre(self, desde, hasta, ancho=4, alto=4, paso=10):
+        """True si se puede ir en línea recta de `desde` a `hasta` sin paredes.
+
+        Se avanza por la línea en pasitos de `paso` píxeles y en cada uno se
+        prueba un rect de `ancho` x `alto`. Con el rect chiquito por defecto
+        sirve como línea de vista (¿el alien ve al jugador?); con el tamaño de
+        la hitbox de un personaje sirve para saber si puede caminar por ahí
+        (¿la ruta de patrulla atraviesa una pared?).
+        """
+        dx, dy = hasta[0] - desde[0], hasta[1] - desde[1]
+        pasos = max(1, int(max(abs(dx), abs(dy)) // paso))
+        for i in range(pasos + 1):
+            x = desde[0] + dx * i / pasos
+            y = desde[1] + dy * i / pasos
+            rect = pygame.Rect(0, 0, ancho, alto)
+            rect.center = (int(x), int(y))
+            if self.colisiona(rect):
+                return False
+        return True
+
+    def tramos_bloqueados(self, ruta, ancho, alto):
+        """Tramos de una ruta cerrada que atraviesan una pared.
+
+        Devuelve una lista de (i, j): el tramo que va del punto i al j. Se llama
+        al empezar la partida, igual que zonas_inalcanzables, para que una ruta
+        mal puesta se avise en consola en vez de dejar a un alien pegado.
+        """
+        malos = []
+        for i, punto in enumerate(ruta):
+            siguiente = ruta[(i + 1) % len(ruta)]
+            if not self.linea_libre(punto, siguiente, ancho, alto, paso=6):
+                malos.append((i, (i + 1) % len(ruta)))
+        return malos
+
     def interactuable_en(self, rect):
         """Devuelve el rect interactuable que toca, o None."""
         indice = rect.collidelist(self.interactuables)
