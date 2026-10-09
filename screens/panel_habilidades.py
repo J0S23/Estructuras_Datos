@@ -134,41 +134,30 @@ def _quitar_fondo_negro(imagen):
     return copia
 
 
+_CACHE_APAGADOS = {}
+
+
 def _apagar(imagen, alpha=90):
-    """Copia en gris y translúcida, para las ramas que el jugador ya perdió."""
+    """Copia en gris y translúcida, para las ramas que el jugador ya perdió.
+
+    Se guarda por imagen: antes se hacía una copia nueva en cada frame.
+    """
+    clave = (id(imagen), alpha)
+    if clave in _CACHE_APAGADOS:
+        return _CACHE_APAGADOS[clave]
     copia = imagen.copy()
     gris = pygame.Surface(copia.get_size(), pygame.SRCALPHA)
     gris.fill((90, 92, 110, 255))
     copia.blit(gris, (0, 0), special_flags=pygame.BLEND_RGB_MULT)
     copia.set_alpha(alpha)
+    _CACHE_APAGADOS[clave] = copia
     return copia
 
 
-# Clave del nodo -> nombre del archivo. Casi todas coinciden con la clave en
-# minúscula capitalizada (que es lo que hace el respaldo), pero el arte no
-# siempre usa la misma palabra: ACORRALAR se llama Acorralada.png.
-#
-# Falta CRISIS.png del influencer. Mientras no esté, ese nodo se dibuja como
-# una pastilla con la inicial y el juego sigue igual; apenas aparezca el
-# archivo se usa solo, sin tocar código.
-NOMBRE_ARCHIVO = {
-    # Candidato
-    "LIDERAZGO": "Liderazgo",
-    "DEBATE": "Debate",
-    "PROPUESTA": "Propuesta",
-    "REPLICA": "Replica",
-    "ACORRALAR": "Acorralada",
-    "PRIORIDAD": "Prioridad",
-    "IMPACTO": "Impacto",
-    # Influencer
-    "INFLUENCIA": "Influencia",
-    "ANTICIPO": "Anticipo",
-    "TENDENCIA": "Tendencia",
-    "BLINDAJE": "Blindaje",
-    "CRISIS": "Crisis",
-    "DESAFIO": "Desafio",
-    "MOVILIZACION": "Movilizacion",
-}
+# Clave del nodo -> nombre del archivo, para cuando el arte no use la misma
+# palabra que la clave. Si no está aquí se usa la clave capitalizada
+# (HACKEO -> Hackeo.png), que hoy sirve para todas.
+NOMBRE_ARCHIVO = {}
 
 
 def precargar_iconos(roles, lados=LADOS_ICONO):
@@ -195,7 +184,44 @@ def _claves(datos):
         yield from _claves(hijo)
 
 
+# Panel ya dibujado de cada jugador: {id(jugador): (estado, superficie)}.
+_CACHE_PANELES = {}
+
+
+def _estado_panel(vista, jugador):
+    """Todo lo que cambia lo que se ve en el panel. Si no cambió, no se redibuja."""
+    arbol = jugador.arbol
+    nodos = tuple((n.clave, n.desbloqueada, n.descartada) for n, _ in arbol.por_niveles())
+    return (vista.size, jugador.rol, jugador.cursor, jugador.puntos,
+            jugador.controles_nombre, nodos)
+
+
 def render_panel_habilidades(screen, vista, jugador):
+    """Dibuja el panel del árbol de habilidades en el viewport del jugador.
+
+    El panel casi nunca cambia mientras está abierto: solo cuando el jugador
+    mueve el cursor, desbloquea algo o le cambian los puntos. Pero armarlo es
+    caro (medir texto para escoger la letra, partir descripciones, dibujar
+    iconos y una capa translúcida del tamaño del panel), y antes se armaba
+    entero en cada frame. Con dos jugadores con el panel abierto eso duplicaba
+    el tiempo de dibujo y el juego se ponía lento. Ahora se dibuja una vez en
+    una superficie aparte y en los frames siguientes solo se pega.
+    """
+    estado = _estado_panel(vista, jugador)
+    guardado = _CACHE_PANELES.get(id(jugador))
+    if guardado is None or guardado[0] != estado:
+        superficie = pygame.Surface(vista.size, pygame.SRCALPHA)
+        _dibujar_panel_habilidades(superficie, pygame.Rect((0, 0), vista.size), jugador)
+        # Se guarda solo el recuadro del panel, no el viewport entero: pegar
+        # una capa translúcida cuesta según su tamaño.
+        recuadro = superficie.get_bounding_rect()
+        guardado = (estado, superficie.subsurface(recuadro).convert_alpha(), recuadro.topleft)
+        _CACHE_PANELES[id(jugador)] = guardado
+    _, imagen, esquina = guardado
+    screen.blit(imagen, (vista.x + esquina[0], vista.y + esquina[1]))
+
+
+def _dibujar_panel_habilidades(screen, vista, jugador):
     """Dibuja el árbol de habilidades y las opciones que puede desbloquear.
 
     El panel se dimensiona a partir de su contenido en vez de tener un alto
@@ -233,8 +259,7 @@ def render_panel_habilidades(screen, vista, jugador):
     y += paso + 4
 
     if arbol.vacio:
-        for linea in ["Este rol todavía no tiene árbol de habilidades definido.",
-                      "El del candidato y el del influencer ya están."]:
+        for linea in ["Este rol todavía no tiene árbol de habilidades definido."]:
             screen.blit(f.render(linea, True, COLOR_TENUE), (caja.x + MARGEN, y))
             y += paso
         _pie(screen, caja, f, jugador, "cerrar")
@@ -396,7 +421,10 @@ def _alto_necesario(arbol, opciones, f, paso, ancho_texto, alto_max,
     alto += alto_arbol + lado // 2 + 8 + paso + 14
 
     if not opciones:
-        alto += paso * 2
+        alto += paso                      # "Llegaste al final de tu rama."
+        if arbol.actual is not None and arbol.actual.detalle_puntos:
+            alto += paso * len(_partir(arbol.actual.detalle_puntos, f, ancho_texto))
+        alto += 8
     else:
         alto += paso + 6                  # "Escoge una..."
         for nodo in opciones:

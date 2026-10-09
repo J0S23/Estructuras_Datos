@@ -23,14 +23,6 @@ EXTENSIONES = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
 # un archivo cuyo nombre contenga alguna de estas palabras.
 ALIAS = {
     "fondo_menu": ("fondomenu", "fondodemenu", "menu"),
-    "fondo_ciudad": ("fondociudad", "ciudad"),
-    "icono_confianza": ("confianza",),
-    "icono_verificacion": ("verificacion", "verificado"),
-    "icono_desinformacion": ("desinformacion",),
-    "icono_convivencia": ("convivencia",),
-    "ciudadano_idle": ("ciudadano",),
-    "periodista_idle": ("periodista",),
-    "influencer_idle": ("influencer",),
 }
 
 
