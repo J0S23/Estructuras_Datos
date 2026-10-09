@@ -19,6 +19,9 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas", "seleccion")
 os.makedirs(OUT, exist_ok=True)
 import App
+import objetos_mapa
+# Siempre con los valores de data/, no con lo que haya guardado el editor de mapa.
+objetos_mapa.USAR_ARCHIVOS = False
 from data.roles import ROLES
 
 CONFIRMAR = [pygame.K_e, pygame.K_RETURN, pygame.K_o, pygame.K_y]
@@ -46,7 +49,7 @@ for cantidad in (2, 3, 4):
     movidos = [i for i,(a,b) in enumerate(zip(antes,despues)) if a!=b]
     print("  [S] mueve solo al jugador:", movidos, "(debe ser [0])")
 
-    # --- jugador 1 toma Ciudadano ---
+    # --- jugador 1 toma el primer rol ---
     g.seleccion_roles[0]["cursor"] = 0
     g._manejar_tecla(CONFIRMAR[0])
     print("  j1 ->", g.seleccion_roles[0]["rol"])
@@ -54,7 +57,7 @@ for cantidad in (2, 3, 4):
     # --- jugador 2 intenta el MISMO rol ---
     g.seleccion_roles[1]["cursor"] = 0
     g._manejar_tecla(CONFIRMAR[1])
-    print("  j2 intenta Ciudadano -> listo:", g.seleccion_roles[1]["listo"], "(debe ser False)")
+    print("  j2 intenta el mismo rol -> listo:", g.seleccion_roles[1]["listo"], "(debe ser False)")
 
     # --- cada uno toma uno distinto ---
     for puesto in range(1, cantidad):

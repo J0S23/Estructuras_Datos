@@ -26,7 +26,7 @@ from screens.paneles import render_panel
 from screens.partida import calcular_viewports
 from data.tareas import ACUSACIONES, opciones_acusacion
 
-precargar_iconos(["Candidato"])
+precargar_iconos(["Forjador"])
 p = Personaje(0, 0, os.path.join("Imagenes","Personajes","Joseph"), controles=CONTROLES_FLECHAS)
 
 RESOLUCIONES = [(1920,1080), (1366,768), (1280,720)]
@@ -38,15 +38,15 @@ for ancho, alto in RESOLUCIONES:
         sup = pygame.Surface((ancho, alto)); sup.fill((40,44,60))
 
         # --- panel de habilidades con la rama mas larga ---
-        j = Jugador(p, "Candidato", puesto=1); j.puntos = 200
-        j.arbol.desbloquear("DEBATE", 200)
+        j = Jugador(p, "Forjador", puesto=1); j.puntos = 200
+        j.arbol.desbloquear("REPARACION", 200)
         j.abrir_panel({"tipo":"habilidades"})
         render_panel_habilidades(sup, vista, j)
         pygame.image.save(sup.subsurface(vista).copy(), f"{OUT}/hab_{ancho}x{alto}_{n}j.png")
 
         # --- panel de opciones mas cargado: acusacion con todas las habilidades ---
-        j2 = Jugador(p, "Candidato", puesto=1); j2.puntos = 300
-        j2.arbol.desbloquear("DEBATE", 300); j2.arbol.desbloquear("REPLICA", 300)
+        j2 = Jugador(p, "Forjador", puesto=1); j2.puntos = 300
+        j2.arbol.desbloquear("FABRICACION", 300)
         ev = ACUSACIONES[0]; ops = opciones_acusacion(ev, j2.arbol)
         j2.abrir_panel({"tipo":"opciones","titulo":"Plaza central",
                         "cuerpo":[ev["texto"], "", ev["pista"]],

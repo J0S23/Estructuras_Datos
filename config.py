@@ -20,7 +20,7 @@ TRANSITION_DURATION_MS = 300
 
 # -- Ciudad Nova ------------------------------------------------------------
 
-ROLES_JUGABLES = ["Ciudadano", "Periodista", "Influencer", "Candidato"]
+ROLES_JUGABLES = ["Tecnomante", "Forjador", "Biomante", "Resonante"]
 
 INDICADORES_CIUDAD_INICIALES = {
     "informacion_verificada": 50,

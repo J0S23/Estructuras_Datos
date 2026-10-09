@@ -1,190 +1,187 @@
 """Árboles de habilidades de cada rol (árbol binario, uno por jugador).
 
-Cada nodo es un diccionario que `Estructuras/arbol_habilidades.py` convierte en
-un NodoHabilidad. La raíz se tiene desde el inicio de la ronda; de ahí en
-adelante el jugador gasta puntos y **escoge una de dos ramas**, perdiendo la
+Son los de la lámina de Anny: una habilidad base por rol y dos hijas. Cada nodo
+es un diccionario que `Estructuras/arbol_habilidades.py` convierte en un
+NodoHabilidad. La raíz se tiene desde el inicio de la ronda; después el
+jugador **escoge una de las dos hijas** con su tecla de habilidades y pierde la
 otra hasta que termine la partida.
 
-`costo` está en 0: las habilidades **no se pagan con puntos**. Lo que limita la
-progresión es el árbol mismo —al bajar se escoge una de dos ramas y la otra se
-cierra por el resto de la ronda—, no un precio. Los puntos quedan solo para
-medir cómo le fue a cada rol al final.
+`costo` está en 0: lo que limita la progresión es el árbol mismo (escoger una
+rama cierra la otra), no un precio. Si se quiere que haya que ganarse la
+segunda habilidad, basta con darle valor a COSTO_NIVEL_2.
 
-Si más adelante se quiere volver a cobrarlas, basta con darle valor a
-COSTO_NIVEL_2 y COSTO_NIVEL_3: el panel vuelve a mostrar el precio y a bloquear
-lo que no alcance, sin tocar nada más.
+`uso` dice cómo se usa la habilidad en partida, y lo lee acciones_rol.py:
+- "pasiva": funciona sola todo el tiempo.
+- "estacion": se usa con la tecla de interactuar frente a una terminal o un
+  panel del mapa.
+- "activa": se usa con la tecla de habilidad, en cualquier lado, y después
+  tiene un tiempo de recarga (`recarga_s`).
 
-Cómo se conectan con el juego: cuando el jugador interactúa con una zona, el
-evento revisa qué claves tiene desbloqueadas (`arbol.tiene("REPLICA")`) y
-agrega esa opción al panel. Por eso la clave de cada nodo importa y no debe
-cambiarse sin actualizar `data/tareas.py`.
+Las claves importan: acciones_rol.py pregunta `arbol.tiene("ESCANEO")`. No se
+cambian sin actualizar ese archivo.
 """
 
 COSTO_NIVEL_2 = 0
-COSTO_NIVEL_3 = 0
 
 
-CANDIDATO = {
-    "clave": "LIDERAZGO",
-    "nombre": "Liderazgo",
-    "descripcion": ("La base del candidato. Le permite presentarse ante la ciudad "
-                    "y que lo que diga tenga peso en la campaña."),
+TECNOMANTE = {
+    "clave": "CONEXION",
+    "nombre": "Conexión digital",
+    "descripcion": ("Le permite acceder a los sistemas electrónicos de la nave "
+                    "y visualizar su estado."),
     "costo": 0,
-    "detalle_puntos": "Se tiene desde el inicio de la ronda.",
+    "detalle_puntos": "En una terminal: muestra el mapa de la nave con los aliens.",
+    "uso": "estacion",
     "hijos": [
         {
-            "clave": "DEBATE",
-            "nombre": "Debate",
-            "descripcion": ("Permite intervenir directamente ante una acusación, rumor "
-                            "o discusión relacionada con las elecciones."),
+            "clave": "HACKEO",
+            "nombre": "Hackeo básico",
+            "descripcion": ("Desbloquea puertas, terminales y sistemas de "
+                            "seguridad simples."),
             "costo": COSTO_NIVEL_2,
-            "detalle_puntos": "+15 si responde usando información verdadera.",
-            "hijos": [
-                {
-                    "clave": "REPLICA",
-                    "nombre": "Réplica",
-                    "descripcion": ("Permite responder de inmediato a una acusación hecha "
-                                    "contra el candidato, sin esperar turno."),
-                    "costo": COSTO_NIVEL_3,
-                    "detalle_puntos": "+20 adicionales si demuestra que la acusación es falsa.",
-                    "hijos": [],
-                },
-                {
-                    "clave": "ACORRALAR",
-                    "nombre": "Acorralar",
-                    "descripcion": ("Permite usar una contradicción o información encontrada "
-                                    "durante la partida para cuestionar la declaración de otro "
-                                    "candidato."),
-                    "costo": COSTO_NIVEL_3,
-                    "detalle_puntos": "+25 si demuestra la contradicción, -10 si se equivoca.",
-                    "hijos": [],
-                },
-            ],
+            "detalle_puntos": "En una terminal: apaga a los aliens cercanos unos segundos. +10",
+            "uso": "estacion",
+            "hijos": [],
         },
         {
-            "clave": "PROPUESTA",
-            "nombre": "Propuesta",
-            "descripcion": ("Permite destacar una propuesta propia para que tenga mayor "
-                            "relevancia durante los eventos de Ciudad Nova."),
+            "clave": "ESCANEO",
+            "nombre": "Escaneo de sistemas",
+            "descripcion": ("Revela información del entorno, como cámaras, "
+                            "puertas y señales de vida cercanas."),
             "costo": COSTO_NIVEL_2,
-            "detalle_puntos": "+15 si la propuesta genera una consecuencia positiva.",
-            "hijos": [
-                {
-                    "clave": "PRIORIDAD",
-                    "nombre": "Prioridad",
-                    "descripcion": "Permite darle prioridad a una propuesta durante un evento importante.",
-                    "costo": COSTO_NIVEL_3,
-                    "detalle_puntos": "+20 adicionales si la propuesta priorizada sale bien.",
-                    "hijos": [],
-                },
-                {
-                    "clave": "IMPACTO",
-                    "nombre": "Impacto",
-                    "descripcion": ("Permite potenciar una propuesta cuando esta tiene una "
-                                    "consecuencia importante sobre Ciudad Nova."),
-                    "costo": COSTO_NIVEL_3,
-                    "detalle_puntos": "+25 adicionales si mejora de verdad los indicadores.",
-                    "hijos": [],
-                },
-            ],
+            "detalle_puntos": "Tecla de habilidad: mapa con los aliens y sus conos, en cualquier lado.",
+            "uso": "activa",
+            "recarga_s": 18,
+            "hijos": [],
         },
     ],
 }
 
-
-# El influencer no juega con puntos sino con SEGUIDORES, y varias de sus
-# habilidades son porcentajes sobre lo que gana por publicación en vez de un
-# número fijo. Por eso sus nodos llevan además `efecto`, que es lo que el juego
-# tendrá que leer cuando el rol sea jugable: multiplicadores y banderas, no
-# sumas sueltas. Mientras tanto el árbol ya se construye y se dibuja igual.
-INFLUENCER = {
-    "clave": "INFLUENCIA",
-    "nombre": "Influencia",
-    "descripcion": ("La base del influencer. Su voz llega a una comunidad de "
-                    "seguidores que reacciona a lo que publica."),
+FORJADOR = {
+    "clave": "INGENIO",
+    "nombre": "Ingenio mecánico",
+    "descripcion": ("Le permite interactuar con la maquinaria de la nave, "
+                    "reconocer piezas útiles y preparar reparaciones."),
     "costo": 0,
-    "detalle_puntos": "Se tiene desde el inicio de la ronda.",
-    "efecto": {"tipo": "base"},
+    "detalle_puntos": "Ve y recoge las piezas sueltas del mapa.",
+    "uso": "pasiva",
     "hijos": [
         {
-            "clave": "ANTICIPO",
-            "nombre": "Anticipo",
-            "descripcion": ("Detecta con anticipación que un evento relacionado con "
-                            "las redes está a punto de ocurrir."),
+            "clave": "REPARACION",
+            "nombre": "Reparación básica",
+            "descripcion": ("Restaura el funcionamiento de sistemas dañados, como "
+                            "generadores, puertas y paneles."),
             "costo": COSTO_NIVEL_2,
-            "detalle_puntos": "Avisa del próximo evento antes de que pase.",
-            "efecto": {"tipo": "aviso_evento"},
-            "hijos": [
-                {
-                    "clave": "BLINDAJE",
-                    "nombre": "Blindaje",
-                    "descripcion": ("Una vez por partida puede protegerse de las "
-                                    "consecuencias negativas de una publicación propia."),
-                    "costo": COSTO_NIVEL_3,
-                    "detalle_puntos": "Anula un resultado negativo. Un solo uso por ronda.",
-                    "efecto": {"tipo": "escudo", "usos": 1},
-                    "hijos": [],
-                },
-                {
-                    "clave": "CRISIS",
-                    "nombre": "Crisis",
-                    "descripcion": ("Interviene cuando una publicación o evento pone en "
-                                    "riesgo su imagen o la de su comunidad."),
-                    "costo": COSTO_NIVEL_3,
-                    "detalle_puntos": ("Si sale bien duplica sus seguidores; si falla, "
-                                       "gana la mitad por publicación."),
-                    "efecto": {"tipo": "apuesta", "exito": 2.0, "fracaso": 0.5},
-                    "hijos": [],
-                },
-            ],
+            "detalle_puntos": "En un panel dañado: lo repara con 1 pieza. +15",
+            "uso": "estacion",
+            "hijos": [],
         },
         {
-            "clave": "TENDENCIA",
-            "nombre": "Tendencia",
-            "descripcion": ("Lo que publica pega más: cada publicación le rinde más "
-                            "seguidores que antes de tomar la habilidad."),
+            "clave": "FABRICACION",
+            "nombre": "Fabricación improvisada",
+            "descripcion": ("Crea herramientas y dispositivos usando piezas "
+                            "encontradas en la nave."),
             "costo": COSTO_NIVEL_2,
-            "detalle_puntos": "+25% de seguidores por publicación.",
-            "efecto": {"tipo": "multiplicador", "factor": 1.25},
-            "hijos": [
-                {
-                    "clave": "DESAFIO",
-                    "nombre": "Desafío",
-                    "descripcion": ("Reta a otro jugador a un enfrentamiento directo por "
-                                    "su influencia."),
-                    "costo": COSTO_NIVEL_3,
-                    "detalle_puntos": ("Si gana le quita la mitad de sus seguidores; si "
-                                       "pierde, se queda sin el 10% de los suyos."),
-                    "efecto": {"tipo": "duelo", "premio": 0.5, "castigo": 0.1},
-                    "hijos": [],
-                },
-                {
-                    "clave": "MOVILIZACION",
-                    "nombre": "Movilización",
-                    "descripcion": ("Moviliza a su comunidad para amplificar un mensaje o "
-                                    "una acción durante los eventos importantes de la ciudad."),
-                    "costo": COSTO_NIVEL_3,
-                    "detalle_puntos": ("Amplifica el evento: más alcance, y peso en la "
-                                       "votación final."),
-                    "efecto": {"tipo": "amplificar", "factor": 2.0},
-                    "hijos": [],
-                },
-            ],
+            "detalle_puntos": "Tecla de habilidad: con 1 pieza arma un señuelo que atrae a los aliens.",
+            "uso": "activa",
+            "recarga_s": 6,
+            "hijos": [],
         },
     ],
 }
 
+BIOMANTE = {
+    "clave": "VINCULO",
+    "nombre": "Vínculo vital",
+    "descripcion": ("Le permite percibir, canalizar y transferir energía vital "
+                    "entre seres vivos."),
+    "costo": 0,
+    "detalle_puntos": "Ve el pulso de sus compañeros encima de ellos.",
+    "uso": "pasiva",
+    "hijos": [
+        {
+            "clave": "REGENERACION",
+            "nombre": "Regeneración dirigida",
+            "descripcion": ("Cura heridas específicas y detiene efectos "
+                            "negativos."),
+            "costo": COSTO_NIVEL_2,
+            "detalle_puntos": ("Tecla de habilidad: calma el pulso de quien esté cerca, "
+                               "y si hay un escondite revisado, le quita amenaza. +5"),
+            "uso": "activa",
+            "recarga_s": 14,
+            "hijos": [],
+        },
+        {
+            "clave": "IMPULSO",
+            "nombre": "Impulso energético",
+            "descripcion": ("Transfiere energía vital a un compañero, restaurando su "
+                            "energía para que pueda seguir actuando."),
+            "costo": COSTO_NIVEL_2,
+            "detalle_puntos": "Tecla de habilidad: recarga al instante la habilidad de los compañeros cercanos. +5",
+            "uso": "activa",
+            "recarga_s": 20,
+            "hijos": [],
+        },
+    ],
+}
 
-# Pendientes: faltan el del ciudadano y el del periodista. Mientras tanto el
-# panel [Q] de esos roles dice que su árbol todavía no está definido, en vez de
-# inventarse habilidades que no acordamos.
-CIUDADANO = None
-PERIODISTA = None
+RESONANTE = {
+    "clave": "SINTONIA",
+    "nombre": "Sintonía de señales",
+    "descripcion": ("Le permite percibir, interpretar y trabajar con múltiples "
+                    "señales que circulan por la nave."),
+    "costo": 0,
+    "detalle_puntos": "Flechas en el borde de su pantalla hacia los aliens que no ve.",
+    "uso": "pasiva",
+    "hijos": [
+        {
+            "clave": "INTERCEPCION",
+            "nombre": "Interceptación básica",
+            "descripcion": ("Capta y analiza transmisiones de la nave, descubriendo "
+                            "mensajes ocultos o información relevante."),
+            "costo": COSTO_NIVEL_2,
+            "detalle_puntos": "Tecla de habilidad: ve la ruta y la decisión de cada alien por 8 s.",
+            "uso": "activa",
+            "recarga_s": 16,
+            "hijos": [],
+        },
+        {
+            "clave": "EMISION",
+            "nombre": "Emisión modulada",
+            "descripcion": ("Transmite y modifica señales para comunicarse, "
+                            "confundir, distraer o establecer contacto."),
+            "costo": COSTO_NIVEL_2,
+            "detalle_puntos": "Tecla de habilidad: una señal falsa lejos de ti que los aliens van a revisar.",
+            "uso": "activa",
+            "recarga_s": 15,
+            "hijos": [],
+        },
+    ],
+}
 
 
 ARBOLES_POR_ROL = {
-    "Candidato": CANDIDATO,
-    "Ciudadano": CIUDADANO,
-    "Influencer": INFLUENCER,
-    "Periodista": PERIODISTA,
+    "Tecnomante": TECNOMANTE,
+    "Forjador": FORJADOR,
+    "Biomante": BIOMANTE,
+    "Resonante": RESONANTE,
 }
+
+
+def datos_de(clave):
+    """El diccionario de un nodo por su clave, en cualquier árbol (o None)."""
+    def buscar(nodo):
+        if nodo is None:
+            return None
+        if nodo["clave"] == clave:
+            return nodo
+        for hijo in nodo.get("hijos", []):
+            encontrado = buscar(hijo)
+            if encontrado is not None:
+                return encontrado
+        return None
+    for arbol in ARBOLES_POR_ROL.values():
+        encontrado = buscar(arbol)
+        if encontrado is not None:
+            return encontrado
+    return None

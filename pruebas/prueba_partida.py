@@ -22,6 +22,9 @@ OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
 import App
+import objetos_mapa
+# Siempre con los valores de data/, no con lo que haya guardado el editor de mapa.
+objetos_mapa.USAR_ARCHIVOS = False
 from data.roles import ROLES
 
 g = App.Game()
@@ -39,9 +42,9 @@ for _ in range(80):
     if g.transitions.is_idle(): break
     g.transitions.update(g, 33)
 g.current_screen = "roles"
-g.seleccion_roles[0]["cursor"] = 0         # Ciudadano
+g.seleccion_roles[0]["cursor"] = 0         # Tecnomante
 g._manejar_tecla(pygame.K_e)
-g.seleccion_roles[1]["cursor"] = 1         # Candidato
+g.seleccion_roles[1]["cursor"] = 1         # Forjador
 g._manejar_tecla(pygame.K_RETURN)
 def avanzar():
     for _ in range(80):
@@ -94,20 +97,18 @@ g._tecla_en_partida(pygame.K_RSHIFT)
 assert can.panel["tipo"] == "habilidades"
 print("\nHABILIDADES opciones:", [n.clave for n in can.arbol.opciones()])
 cap("c_habilidades.png")
-g._tecla_en_partida(pygame.K_RETURN)  # desbloquea DEBATE
+g._tecla_en_partida(pygame.K_RETURN)  # desbloquea REPARACION
 print("  tras desbloquear:", [n.clave for n in can.arbol.desbloqueadas()], "| puntos:", can.puntos)
-print("  nuevas opciones:", [n.clave for n in can.arbol.opciones()])
+assert [n.clave for n in can.arbol.desbloqueadas()] == ["INGENIO", "REPARACION"]
+assert can.arbol.opciones() == [], "FABRICACION debió quedar descartada"
 cap("d_habilidades_2.png")
-g._tecla_en_partida(pygame.K_DOWN)
-g._tecla_en_partida(pygame.K_RETURN)  # desbloquea ACORRALAR
-print("  camino final:", [n.clave for n in can.arbol.desbloqueadas()], "| puntos:", can.puntos)
 g._tecla_en_partida(pygame.K_RSHIFT)  # cierra
 assert not can.ocupado
 
-# ---------- 4. Candidato: acusacion CON habilidades ----------
+# ---------- 4. Plaza otra vez (las zonas del diseño anterior siguen abiertas a todos) ----------
 ir_a(can, "plaza")
 g._tecla_en_partida(pygame.K_RETURN)
-print("\nPLAZA con DEBATE+ACORRALAR:", [o["texto"] for o in can.panel["opciones"]])
+print("\nPLAZA otra vez:", [o["texto"] for o in can.panel["opciones"]])
 cap("e_acusacion.png")
 g._tecla_en_partida(pygame.K_RETURN); g._tecla_en_partida(pygame.K_RETURN)
 
@@ -165,16 +166,13 @@ print("\nronda termino, pantalla:", g.current_screen)
 # ---------- 10. Panel del ABB ----------
 g.current_screen = "arbol"; cap("j_abb.png")
 
-# ---------- 11. Arbol del influencer ----------
-# El rol todavia no es jugable, pero su arbol ya existe: se comprueba que se
-# construya bien y que el panel lo dibuje sin romperse, incluido el nodo al
-# que le falta el arte (CRISIS).
+# ---------- 11. Arbol de la Resonante en el panel ----------
 from jugador import Jugador
-inf = Jugador(can.personaje, "Influencer", puesto=2)
+inf = Jugador(can.personaje, "Resonante", puesto=2)
 inf.puntos = 200
-assert not inf.arbol.vacio, "el arbol del influencer no se construyo"
-print("\nINFLUENCER niveles:", [n.clave for n, _ in inf.arbol.por_niveles()])
-inf.arbol.desbloquear("TENDENCIA", inf.puntos)
+assert not inf.arbol.vacio, "el arbol de la Resonante no se construyo"
+print("\nRESONANTE niveles:", [n.clave for n, _ in inf.arbol.por_niveles()])
+inf.arbol.desbloquear("EMISION", inf.puntos)
 inf.abrir_panel({"tipo": "habilidades"})
 g.jugadores = [ciu, inf]
 g.current_screen = "partida"

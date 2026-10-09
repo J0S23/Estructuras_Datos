@@ -76,6 +76,8 @@ class ArbolHabilidades:
             descripcion=datos.get("descripcion", ""),
             costo=datos.get("costo", 0),
             detalle_puntos=datos.get("detalle_puntos", ""),
+            uso=datos.get("uso", "pasiva"),
+            recarga_s=datos.get("recarga_s", 0),
         )
         nodo.padre = padre
 

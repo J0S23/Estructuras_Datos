@@ -8,8 +8,13 @@ escoge una de dos ramas y pierde la otra para el resto de la ronda.
 
 
 class NodoHabilidad:
-    def __init__(self, clave, nombre, descripcion, costo=0, detalle_puntos=""):
+    def __init__(self, clave, nombre, descripcion, costo=0, detalle_puntos="",
+                 uso="pasiva", recarga_s=0):
         self.clave = clave
+        # Cómo se usa en partida ("pasiva", "estacion" o "activa") y cuánto
+        # tarda en recargarse si es activa. Lo lee acciones_rol.py.
+        self.uso = uso
+        self.recarga_s = recarga_s
         self.nombre = nombre
         self.descripcion = descripcion
         self.costo = costo

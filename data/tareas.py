@@ -21,10 +21,18 @@ reemplaza leyéndolas del JSON; mientras tanto viven aquí para no bloquear el
 trabajo de los demás.
 """
 
+from data.roles import ROLES
+
+
 # --------------------------------------------------------------------------
 # Zonas
 # --------------------------------------------------------------------------
 # tipo: qué abre la zona. roles: quién puede usarla (vacío = todos).
+#
+# Estas zonas son del diseño anterior (elecciones en Ciudad Nova) y quedaron
+# abiertas a cualquier rol mientras se reescriben para la historia nueva: son
+# las que ejercitan el ABB de publicaciones, el árbol de decisión y el de
+# diálogo, que pasarán a ser los mensajes de NEXUS.
 ZONAS = [
     {
         "clave": "plaza",
@@ -32,7 +40,7 @@ ZONAS = [
         "pista": "Aquí se debaten las acusaciones de la campaña.",
         "rx": 0.4948, "ry": 0.4954, "radio": 0.045,
         "tipo": "debate",
-        "roles": ["Candidato"],
+        "roles": [],
         "color": (236, 108, 84),
     },
     {
@@ -41,7 +49,7 @@ ZONAS = [
         "pista": "Las publicaciones que circulan en Civitas se ven aquí.",
         "rx": 0.1302, "ry": 0.2559, "radio": 0.045,
         "tipo": "verificar",
-        "roles": ["Ciudadano"],
+        "roles": [],
         "color": (96, 188, 118),
     },
     {
@@ -50,7 +58,7 @@ ZONAS = [
         "pista": "Desde aquí se presentan las propuestas de campaña.",
         "rx": 0.8698, "ry": 0.2454, "radio": 0.045,
         "tipo": "propuesta",
-        "roles": ["Candidato"],
+        "roles": [],
         "color": (236, 108, 84),
     },
     {
@@ -59,7 +67,7 @@ ZONAS = [
         "pista": "Donde se reportan las cadenas falsas que están circulando.",
         "rx": 0.0781, "ry": 0.5475, "radio": 0.045,
         "tipo": "reportar",
-        "roles": ["Ciudadano"],
+        "roles": [],
         "color": (96, 188, 118),
     },
     {
@@ -71,7 +79,7 @@ ZONAS = [
         # Antes era de los dos roles y se marcaba en las dos mitades de la
         # pantalla. Hablar con un vecino sobre lo que vio en Civitas es trabajo
         # del ciudadano, así que se la queda él.
-        "roles": ["Ciudadano"],
+        "roles": [],
         "color": (96, 188, 118),
     },
 ]
@@ -80,12 +88,7 @@ ZONAS = [
 # --------------------------------------------------------------------------
 # Objetivo de cada rol, para el HUD
 # --------------------------------------------------------------------------
-OBJETIVOS = {
-    "Ciudadano": "No te dejes engañar ni esparzas noticias falsas.",
-    "Candidato": "Gana las votaciones sin que te pillen mintiendo.",
-    "Influencer": "Consigue seguidores antes de que se acabe la ronda.",
-    "Periodista": "Verifica lo que se publica y frena lo falso.",
-}
+OBJETIVOS = {r["nombre"]: r["objetivo"] for r in ROLES}
 
 
 # --------------------------------------------------------------------------

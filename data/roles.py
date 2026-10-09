@@ -1,39 +1,46 @@
 """Los roles jugables y los personajes disponibles.
 
-El rol ya no viene atado al puesto del jugador. Antes `JUGADORES` en App.py
-decía "el primero es Ciudadano, el segundo Candidato"; ahora cada uno escoge el
-suyo en la pantalla de selección, y dos jugadores no pueden repetir rol.
+Los cuatro roles de la tripulación secuestrada, como los diseñó Anny. Cada uno
+tiene su árbol de habilidades en data/habilidades.py y lo que hace cada
+habilidad en el juego está en acciones_rol.py.
+
+El rol no viene atado al puesto del jugador: cada uno escoge el suyo en la
+pantalla de selección, y dos jugadores no pueden repetir rol.
 
 `personaje` es la carpeta de sprites que usa ese puesto, no el rol: hoy solo
 existen dos personajes dibujados (Anny y Joseph), así que los puestos 3 y 4 los
-repiten hasta que el equipo de arte entregue los que faltan.
+repiten hasta que lleguen los sprites de los cuatro roles.
 """
 
 # Orden en que se ofrecen los roles en la pantalla de selección.
 ROLES = [
     {
-        "nombre": "Ciudadano",
-        "objetivo": "No te dejes engañar ni esparzas noticias falsas.",
-        "resumen": "Verifica lo que circula y reporta las cadenas falsas.",
-        "color": (96, 188, 118),
+        "nombre": "Tecnomante",
+        "lema": "Dominio de los sistemas",
+        "objetivo": "Usa las terminales para vigilar y frenar a los aliens.",
+        "resumen": "Hackea terminales y escanea la nave.",
+        "color": (150, 120, 255),
     },
     {
-        "nombre": "Candidato",
-        "objetivo": "Gana las votaciones sin que te pillen mintiendo.",
-        "resumen": "Responde acusaciones y presenta propuestas.",
-        "color": (236, 108, 84),
+        "nombre": "Forjador",
+        "lema": "Ingenio que mantiene al equipo",
+        "objetivo": "Junta piezas y repara los paneles de la nave.",
+        "resumen": "Recoge piezas, repara y fabrica señuelos.",
+        "color": (255, 170, 50),
     },
     {
-        "nombre": "Influencer",
-        "objetivo": "Consigue seguidores antes de que se acabe la ronda.",
-        "resumen": "Publica lo que sea que te dé alcance, con su riesgo.",
-        "color": (206, 122, 214),
+        "nombre": "Biomante",
+        "lema": "Vida que sostiene al equipo",
+        "objetivo": "Mantén al equipo calmado y en pie.",
+        "resumen": "Siente el pulso de todos y lo calma.",
+        "color": (90, 220, 120),
     },
     {
-        "nombre": "Periodista",
-        "objetivo": "Verifica lo que se publica y frena lo falso.",
-        "resumen": "Contrasta lo que suben los demás antes de que se riegue.",
-        "color": (92, 164, 232),
+        "nombre": "Resonante",
+        "lema": "Puente entre mundos",
+        "objetivo": "Escucha a los aliens y despístalos con señales.",
+        "resumen": "Oye a los aliens y emite señales falsas.",
+        "color": (255, 90, 170),
     },
 ]
 
