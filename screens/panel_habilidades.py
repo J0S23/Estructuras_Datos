@@ -188,11 +188,16 @@ def _claves(datos):
 _CACHE_PANELES = {}
 
 
+def _puntos(jugador):
+    """Con qué se pagan las habilidades: los puntos del equipo, si hay equipo."""
+    return getattr(jugador, "puntos_para_habilidades", jugador.puntos)
+
+
 def _estado_panel(vista, jugador):
     """Todo lo que cambia lo que se ve en el panel. Si no cambió, no se redibuja."""
     arbol = jugador.arbol
     nodos = tuple((n.clave, n.desbloqueada, n.descartada) for n, _ in arbol.por_niveles())
-    return (vista.size, jugador.rol, jugador.cursor, jugador.puntos,
+    return (vista.size, jugador.rol, jugador.cursor, _puntos(jugador),
             jugador.controles_nombre, nodos)
 
 
@@ -254,7 +259,8 @@ def _dibujar_panel_habilidades(screen, vista, jugador):
     y = caja.y + MARGEN
     titulo = f"Árbol de habilidades · {jugador.rol}"
     screen.blit(f.render(titulo, True, COLOR_TITULO), (caja.x + MARGEN, y))
-    puntos = f.render(f"{jugador.puntos} pts", True, COLOR_TITULO)
+    puntos = f.render(f"{_puntos(jugador)} pts del equipo" if getattr(jugador, "equipo", None)
+                      else f"{_puntos(jugador)} pts", True, COLOR_TITULO)
     screen.blit(puntos, (caja.right - puntos.get_width() - MARGEN, y))
     y += paso + 4
 
@@ -339,7 +345,7 @@ def _dibujar_panel_habilidades(screen, vista, jugador):
 
         for i, nodo in enumerate(opciones):
             seleccionada = (i == jugador.cursor)
-            alcanza = jugador.puntos >= nodo.costo
+            alcanza = _puntos(jugador) >= nodo.costo
             descripcion = _partir(nodo.descripcion, f, ancho_texto)[:lineas_desc] if lineas_desc else []
             detalle = _partir(nodo.detalle_puntos, f, ancho_texto)
 
@@ -356,7 +362,7 @@ def _dibujar_panel_habilidades(screen, vista, jugador):
             if nodo.costo:
                 encabezado += f"  ({nodo.costo} pts)"
                 if not alcanza:
-                    encabezado += f"  — te faltan {nodo.costo - jugador.puntos}"
+                    encabezado += f"  — faltan {nodo.costo - _puntos(jugador)}"
             screen.blit(f.render(encabezado, True, color), (caja.x + MARGEN, y))
             y += paso
 

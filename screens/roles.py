@@ -43,6 +43,44 @@ def _tiene(jugador, clave):
 
 # -- En el mundo, debajo de los personajes ------------------------------------------
 
+def _dibujar_sello(screen, offset, camara, panel, tiempo_ms):
+    """El sello de un panel: apagado, solo un contorno punteado (y una línea
+    hasta su panel, para saber cuál lo levanta); activo, un campo de energía."""
+    sello = panel.get("sello_rect")
+    if sello is None or not sello.inflate(200, 200).colliderect(camara):
+        return
+    r = sello.move(-offset[0], -offset[1])
+    if panel["reparado"]:
+        capa = pygame.Surface(r.size, pygame.SRCALPHA)
+        alfa = int(110 + 50 * math.sin(tiempo_ms / 160))
+        capa.fill((90, 200, 255, alfa))
+        screen.blit(capa, r.topleft)
+        vertical = r.height > r.width
+        largo = r.height if vertical else r.width
+        for i in range(0, largo, 10):
+            d = (i + tiempo_ms // 40) % largo
+            if vertical:
+                pygame.draw.line(screen, (220, 245, 255), (r.x, r.y + d), (r.right - 1, r.y + d), 1)
+            else:
+                pygame.draw.line(screen, (220, 245, 255), (r.x + d, r.y), (r.x + d, r.bottom - 1), 1)
+        pygame.draw.rect(screen, (150, 230, 255), r, 2)
+        return
+    for x in range(r.x, r.right, 8):
+        pygame.draw.line(screen, (90, 160, 210), (x, r.y), (min(x + 4, r.right), r.y), 1)
+        pygame.draw.line(screen, (90, 160, 210), (x, r.bottom - 1), (min(x + 4, r.right), r.bottom - 1), 1)
+    for y in range(r.y, r.bottom, 8):
+        pygame.draw.line(screen, (90, 160, 210), (r.x, y), (r.x, min(y + 4, r.bottom)), 1)
+        pygame.draw.line(screen, (90, 160, 210), (r.right - 1, y), (r.right - 1, min(y + 4, r.bottom)), 1)
+    a = (panel["rect"].centerx - offset[0], panel["rect"].centery - offset[1])
+    b = r.center
+    largo = max(1, int(math.dist(a, b) // 14))
+    for i in range(0, largo, 2):
+        p0 = (a[0] + (b[0] - a[0]) * i / largo, a[1] + (b[1] - a[1]) * i / largo)
+        p1 = (a[0] + (b[0] - a[0]) * (i + 1) / largo, a[1] + (b[1] - a[1]) * (i + 1) / largo)
+        pygame.draw.line(screen, (90, 160, 210), p0, p1, 1)
+
+
+
 def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
     """Terminales, paneles, piezas, señuelos y señales."""
     cerca = getattr(dueño, "estacion_cerca", None)
@@ -60,6 +98,7 @@ def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
         pygame.draw.rect(screen, (255, 214, 64) if cerca is t else color, caja, 2, border_radius=4)
 
     for p in extras.get("paneles", ()):
+        _dibujar_sello(screen, offset, camara, p, tiempo_ms)
         if not p["rect"].inflate(0, 120).colliderect(camara):
             continue
         caja = pygame.Rect(0, 0, 52, 40)
@@ -78,8 +117,11 @@ def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
         borde = (255, 214, 64) if cerca is p else (COLOR_BIOMANTE if p["reparado"] else COLOR_ALIEN)
         pygame.draw.rect(screen, borde, caja, 2, border_radius=3)
 
-    # Las piezas solo las reconoce el Forjador (Ingenio mecánico).
-    if _tiene(dueño, "INGENIO"):
+    # Las piezas solo las reconoce el Forjador (Ingenio mecánico), salvo que no
+    # haya Forjador o que un mensaje de NEXUS las haya revelado.
+    mision = extras.get("mision")
+    visibles_todos = mision is not None and (mision.piezas_para_todos or mision.revelar_piezas_ms > 0)
+    if _tiene(dueño, "INGENIO") or visibles_todos:
         for pieza in extras.get("piezas", ()):
             if pieza["recogida"] or not pieza["rect"].colliderect(camara):
                 continue
@@ -207,13 +249,15 @@ def render_minimapa(screen, vista, dueño, extras):
     for e in extras.get("escondites", ()):
         pygame.draw.rect(screen, (140, 160, 190), (*a_mapa(e["rect"].center), 5, 5), 1)
     if "escaneo" in dueño.efectos:
-        from alien import ALCANCE_VISION, MEDIO_ANGULO_VISION
         for alien in extras.get("aliens", ()):
             cx, cy = a_mapa(alien.centro)
-            r = ALCANCE_VISION * ex
+            medio = alien.datos["medio_angulo"]
+            if alien.alcance_vision <= 0:
+                continue   # el Ciego no tiene cono
+            r = alien.alcance_vision * ex
             puntos = [(cx, cy)] + [
                 (cx + math.cos(alien.angulo + a) * r, cy + math.sin(alien.angulo + a) * r)
-                for a in (-MEDIO_ANGULO_VISION, 0, MEDIO_ANGULO_VISION)]
+                for a in (-medio, 0, medio)]
             capa = pygame.Surface(caja.size, pygame.SRCALPHA)
             pygame.draw.polygon(capa, (*COLOR_ALIEN, 70),
                                 [(x - caja.x, y - caja.y) for x, y in puntos])

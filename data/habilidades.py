@@ -6,9 +6,9 @@ NodoHabilidad. La raíz se tiene desde el inicio de la ronda; después el
 jugador **escoge una de las dos hijas** con su tecla de habilidades y pierde la
 otra hasta que termine la partida.
 
-`costo` está en 0: lo que limita la progresión es el árbol mismo (escoger una
-rama cierra la otra), no un precio. Si se quiere que haya que ganarse la
-segunda habilidad, basta con darle valor a COSTO_NIVEL_2.
+La base es gratis; la segunda habilidad cuesta COSTO_NIVEL_2 puntos **del
+equipo** (mision.Equipo): lo que gana cualquiera de la tripulación suma, y se
+gasta al desbloquear. Abrir la puerta de la prisión ya alcanza para una.
 
 `uso` dice cómo se usa la habilidad en partida, y lo lee acciones_rol.py:
 - "pasiva": funciona sola todo el tiempo.
@@ -21,7 +21,7 @@ Las claves importan: acciones_rol.py pregunta `arbol.tiene("ESCANEO")`. No se
 cambian sin actualizar ese archivo.
 """
 
-COSTO_NIVEL_2 = 0
+COSTO_NIVEL_2 = 15
 
 
 TECNOMANTE = {

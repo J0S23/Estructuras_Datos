@@ -19,6 +19,10 @@ volver los va sacando de la pila (el último en entrar es el primero en salir),
 así que deshace su camino exacto y nunca intenta atravesar una pared para
 regresar.
 
+Hay varios **tipos** de alien (data/tipos_alien.py): todos usan el mismo
+árbol, pero cada tipo ve, oye y corre distinto. El Ciego, por ejemplo, nunca
+responde "sí" a "¿ve a un jugador?" salvo que lo tenga casi encima.
+
 Todavía no hay sprite del alien: se dibuja una figura provisional con formas.
 """
 
@@ -27,6 +31,7 @@ import math
 import pygame
 
 from fuentes import fuente_de_tamano
+from data.tipos_alien import datos_tipo, TIPO_POR_DEFECTO
 
 
 # Velocidades en píxeles por frame a 60 FPS. Los jugadores caminan a 4: el
@@ -62,16 +67,22 @@ COLOR_CONO = {
     "REVISAR_ESCONDITE": (240, 70, 60),
 }
 
+# Lo que se ve de un alien en la oscuridad: los ojos brillan hasta esta
+# distancia del jugador (ver oscuridad.py).
+DISTANCIA_OJOS = 620
+
 
 def _distancia(a, b):
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
 class Alien:
-    def __init__(self, numero, ruta, arbol):
+    def __init__(self, numero, ruta, arbol, tipo=TIPO_POR_DEFECTO):
         """`ruta` es una lista de puntos (x, y) en píxeles del mundo."""
         self.numero = numero
-        self.nombre = f"Alien {numero}"
+        self.tipo = tipo
+        self.datos = datos_tipo(tipo)
+        self.nombre = f"{self.datos['nombre']} {numero}"
         self.ruta = list(ruta)
         self.arbol = arbol
         self.indice_ruta = 1 % len(self.ruta)
@@ -90,8 +101,11 @@ class Alien:
         self.busqueda_ms = 0
         self.descanso_ms = 0
         self.aturdido = False             # el descanso viene de un hackeo
+        self.alerta = False               # huida final: más rápido y ve más lejos
         self.atascado_ms = 0
         self.tiempo_ms = 0                # reloj propio, para animaciones
+        self.persecucion_ms = 0           # cuánto lleva persiguiendo (el Cazador se cansa)
+        self.cansado = False
 
     # -- Percepción ---------------------------------------------------------------
 
@@ -103,13 +117,26 @@ class Alien:
         """True si `punto` está dentro del cono y no hay una pared en medio."""
         dx, dy = punto[0] - self.centro[0], punto[1] - self.centro[1]
         distancia = math.hypot(dx, dy)
-        if distancia > ALCANCE_VISION:
+        # Tacto: lo que tiene casi encima lo nota aunque no lo vea (el Ciego
+        # solo "ve" así).
+        # Los sellos del Forjador son opacos para ellos: ni ven a través.
+        choca = getattr(mundo, "colisiona_alien", None)
+        if distancia <= self.datos["tacto"]:
+            return mundo.linea_libre(self.centro, punto, colisiona=choca) if choca \
+                else mundo.linea_libre(self.centro, punto)
+        if distancia > self.alcance_vision:
             return False
         if distancia > 1:
             diferencia = (math.atan2(dy, dx) - self.angulo + math.pi) % (2 * math.pi) - math.pi
-            if abs(diferencia) > MEDIO_ANGULO_VISION:
+            if abs(diferencia) > self.datos["medio_angulo"]:
                 return False
+        if choca:
+            return mundo.linea_libre(self.centro, punto, colisiona=choca)
         return mundo.linea_libre(self.centro, punto)
+
+    @property
+    def alcance_vision(self):
+        return self.datos["alcance_vision"] * (1.3 if self.alerta else 1.0)
 
     @staticmethod
     def escondite_disponible(escondite, alien=None):
@@ -136,7 +163,7 @@ class Alien:
             for jugador in jugadores:
                 if not jugador.cazable:
                     continue
-                if _distancia(self.centro, jugador.hitbox.center) > jugador.radio_ruido:
+                if _distancia(self.centro, jugador.hitbox.center) > jugador.radio_ruido * self.datos["oido"]:
                     continue
                 if jugador.escondido:
                     if not self.escondite_disponible(jugador.escondite, self):
@@ -185,13 +212,32 @@ class Alien:
         """
         self.tiempo_ms += dt
         factor = min(3.0, dt / (1000 / 60)) if dt else 1.0
+        if self.alerta:
+            factor *= 1.25
         self.descanso_ms = max(0, self.descanso_ms - dt)
         if self.descanso_ms == 0:
             self.aturdido = False
+            self.cansado = False
 
         condiciones = self.percibir(jugadores, mundo, escondites)
         self.accion, self.camino = self.arbol.decidir(condiciones)
         self._ejecutar(self.accion, dt, factor, mundo, al_atrapar, al_revisar)
+        self._cansarse(dt)
+
+    def _cansarse(self, dt):
+        """El Cazador corre más que nadie, pero solo un rato."""
+        aguante = self.datos["aguante_ms"]
+        if not aguante:
+            return
+        if self.accion == "PERSEGUIR":
+            self.persecucion_ms += dt
+            if self.persecucion_ms >= aguante:
+                self.persecucion_ms = 0
+                self.cansado = True
+                self.descanso_ms = max(self.descanso_ms, self.datos["cansancio_ms"])
+                self.objetivo = None
+        else:
+            self.persecucion_ms = max(0, self.persecucion_ms - dt / 2)
 
     # -- Lo que les hacen las habilidades de los jugadores ----------------------------
 
@@ -273,11 +319,11 @@ class Alien:
 
         if accion == "PERSEGUIR":
             self.busqueda_ms = DURACION_BUSQUEDA_MS
-            self._ir_hacia(self.objetivo.hitbox.center, VEL_PERSEGUIR * factor, dt, mundo)
+            self._ir_hacia(self.objetivo.hitbox.center, self.datos["vel_perseguir"] * factor, dt, mundo)
             return
 
         if accion == "INVESTIGAR":
-            llego = self._ir_hacia(self.punto_ruido, VEL_INVESTIGAR * factor, dt, mundo)
+            llego = self._ir_hacia(self.punto_ruido, self.datos["vel_investigar"] * factor, dt, mundo)
             if llego or self.atascado_ms > TIEMPO_ATASCADO_MS:
                 # Llegó (o no puede llegar): ahora busca alrededor un rato.
                 self.punto_ruido = None
@@ -293,15 +339,21 @@ class Alien:
             return
 
         if accion == "VOLVER":
-            # Deshace el camino sacando puntos de la pila.
-            if self._ir_hacia(self.rastro[-1], VEL_INVESTIGAR * factor, dt, mundo, 6):
+            # Deshace el camino sacando puntos de la pila. Si un sello le
+            # cerró el paso, se salta ese punto.
+            if self._ir_hacia(self.rastro[-1], self.datos["vel_investigar"] * factor, dt, mundo, 6) \
+                    or self.atascado_ms > TIEMPO_ATASCADO_MS:
                 self.rastro.pop()
+                self.atascado_ms = 0
             return
 
-        # PATRULLAR
+        # PATRULLAR. Si no puede llegar a un punto de su ruta (un sello lo
+        # dejó del otro lado), sigue con el siguiente.
         destino = self.ruta[self.indice_ruta]
-        if self._ir_hacia(destino, VEL_PATRULLA * factor, dt, mundo, 6):
+        if self._ir_hacia(destino, self.datos["vel_patrulla"] * factor, dt, mundo, 6) \
+                or self.atascado_ms > TIEMPO_ATASCADO_MS:
             self.indice_ruta = (self.indice_ruta + 1) % len(self.ruta)
+            self.atascado_ms = 0
 
     def _dejar_rastro(self):
         """Apila un punto cada SEPARACION_RASTRO píxeles mientras está fuera."""
@@ -326,10 +378,11 @@ class Alien:
 
         paso = min(velocidad, distancia)
         antes = self.hitbox.center
+        choca = getattr(mundo, "colisiona_alien", mundo.colisiona)
         for eje_x, eje_y in ((dx / distancia * paso, 0), (0, dy / distancia * paso)):
             previo = self.hitbox.copy()
             self._mover(eje_x, eje_y)
-            if mundo.colisiona(self.hitbox):
+            if choca(self.hitbox):
                 self.hitbox = previo
         if self.hitbox.center == antes:
             self.atascado_ms += dt
@@ -351,13 +404,31 @@ class Alien:
     # -- Dibujo -------------------------------------------------------------------
 
     def dibujar_vision(self, screen, offset):
-        """El cono de visión, translúcido, en el piso."""
+        """El cono de visión, translúcido, en el piso.
+
+        El Ciego no tiene cono: se dibuja un anillo tenue del alcance de su
+        tacto, que late como si escuchara.
+        """
         cx, cy = self.centro[0] - offset[0], self.centro[1] - offset[1]
+        color = COLOR_CONO.get(self.accion, (255, 255, 255))
+        if self.datos["alcance_vision"] <= 0:
+            radio = int(self.datos["tacto"] + 6 * math.sin(self.tiempo_ms / 300))
+            caja = pygame.Rect(0, 0, radio * 2 + 4, radio * 2 + 4)
+            caja.center = (int(cx), int(cy))
+            if not caja.colliderect(screen.get_clip()):
+                return
+            capa = pygame.Surface(caja.size, pygame.SRCALPHA)
+            pygame.draw.circle(capa, (*color, 30), (radio + 2, radio + 2), radio)
+            pygame.draw.circle(capa, (*color, 90), (radio + 2, radio + 2), radio, 2)
+            screen.blit(capa, caja.topleft)
+            return
+        alcance = self.alcance_vision
+        medio = self.datos["medio_angulo"]
         puntos = [(cx, cy)]
         pasos = 12
         for i in range(pasos + 1):
-            a = self.angulo - MEDIO_ANGULO_VISION + 2 * MEDIO_ANGULO_VISION * i / pasos
-            puntos.append((cx + math.cos(a) * ALCANCE_VISION, cy + math.sin(a) * ALCANCE_VISION))
+            a = self.angulo - medio + 2 * medio * i / pasos
+            puntos.append((cx + math.cos(a) * alcance, cy + math.sin(a) * alcance))
         # La capa se recorta a lo que ocupa el cono, y solo a la parte que cae
         # en pantalla: antes era un cuadrado de 600x600 nuevo por alien, por
         # viewport y por frame, y eso pesaba.
@@ -370,41 +441,101 @@ class Alien:
             return
         capa = pygame.Surface(visible.size, pygame.SRCALPHA)
         locales = [(x - visible.x, y - visible.y) for x, y in puntos]
-        color = COLOR_CONO.get(self.accion, (255, 255, 255))
         pygame.draw.polygon(capa, (*color, 46), locales)
         pygame.draw.polygon(capa, (*color, 110), locales, 2)
         screen.blit(capa, visible.topleft)
 
-    def dibujar(self, screen, offset):
-        """Figura provisional hasta que llegue el sprite de PixelLab."""
+    def _cuerpo(self, offset):
         pie_x, pie_y = self.hitbox.centerx - offset[0], self.hitbox.bottom - offset[1]
         flote = math.sin(self.tiempo_ms / 260) * 3
+        alto = 74 if self.tipo == "vigia" else 54 if self.tipo == "cazador" else 62
+        ancho = 40 if self.tipo == "vigia" else 50 if self.tipo == "cazador" else 46
+        cuerpo = pygame.Rect(0, 0, ancho, alto)
+        cuerpo.midbottom = (pie_x, pie_y - 4 + flote)
+        return cuerpo, pie_x, pie_y
+
+    def dibujar(self, screen, offset):
+        """Figura provisional hasta que llegue el sprite de PixelLab.
+
+        Cada tipo tiene su silueta para que se reconozca de un vistazo: el
+        Vigía es alto y de un solo ojo, el Ciego lleva una venda sin ojos y el
+        Cazador es bajo, rojizo y con púas.
+        """
+        cuerpo, pie_x, pie_y = self._cuerpo(offset)
+        color, borde = self.datos["color"], self.datos["borde"]
 
         pygame.draw.ellipse(screen, (10, 12, 20), (pie_x - 22, pie_y - 8, 44, 14))
-        cuerpo = pygame.Rect(0, 0, 46, 62)
-        cuerpo.midbottom = (pie_x, pie_y - 4 + flote)
-        pygame.draw.ellipse(screen, (112, 214, 120), cuerpo)
-        pygame.draw.ellipse(screen, (30, 70, 40), cuerpo, 3)
+        if self.tipo == "cazador":
+            for i in range(5):
+                a = math.pi * (1.1 + 0.2 * i)
+                base = (cuerpo.centerx + math.cos(a) * 20, cuerpo.centery + math.sin(a) * 22)
+                punta = (cuerpo.centerx + math.cos(a) * 34, cuerpo.centery + math.sin(a) * 36)
+                pygame.draw.line(screen, borde, base, punta, 4)
+        pygame.draw.ellipse(screen, color, cuerpo)
+        pygame.draw.ellipse(screen, borde, cuerpo, 3)
 
-        # Ojos grandes que miran hacia donde va.
         mira_x = math.cos(self.angulo) * 4
         mira_y = math.sin(self.angulo) * 3
-        for lado in (-1, 1):
-            ojo = pygame.Rect(0, 0, 15, 20)
-            ojo.center = (cuerpo.centerx + lado * 10 + mira_x, cuerpo.y + 22 + mira_y)
-            pygame.draw.ellipse(screen, (12, 12, 20), ojo)
-            pygame.draw.circle(screen, (230, 240, 255), (ojo.centerx - 3, ojo.y + 6), 3)
+        if self.tipo == "ciego":
+            # Una venda: no tiene ojos.
+            venda = pygame.Rect(cuerpo.x + 4, cuerpo.y + 16, cuerpo.width - 8, 12)
+            pygame.draw.rect(screen, (60, 50, 50), venda, border_radius=5)
+            for i in range(3):
+                x = venda.x + 8 + i * (venda.width - 16) // 2
+                pygame.draw.line(screen, (120, 100, 95), (x, venda.y + 2), (x, venda.bottom - 3), 1)
+        elif self.tipo == "vigia":
+            ojo = pygame.Rect(0, 0, 24, 24)
+            ojo.center = (cuerpo.centerx + mira_x * 1.5, cuerpo.y + 22 + mira_y)
+            pygame.draw.ellipse(screen, (240, 240, 210), ojo)
+            pygame.draw.circle(screen, (12, 12, 20), (int(ojo.centerx + mira_x), int(ojo.centery + mira_y)), 6)
+        else:
+            pupila = (255, 60, 50) if self.tipo == "cazador" else (230, 240, 255)
+            for lado in (-1, 1):
+                ojo = pygame.Rect(0, 0, 15, 20 if self.tipo != "cazador" else 12)
+                ojo.center = (cuerpo.centerx + lado * 10 + mira_x, cuerpo.y + 22 + mira_y)
+                pygame.draw.ellipse(screen, (12, 12, 20), ojo)
+                pygame.draw.circle(screen, pupila, (ojo.centerx - 3, ojo.y + 5), 3)
 
-        # Antenas.
+        # Antenas (el Ciego las tiene más largas: con eso "oye").
+        largo = 24 if self.tipo == "ciego" else 14
         for lado in (-1, 1):
             base = (cuerpo.centerx + lado * 8, cuerpo.y + 4)
-            punta = (cuerpo.centerx + lado * 16, cuerpo.y - 14)
-            pygame.draw.line(screen, (30, 70, 40), base, punta, 3)
-            pygame.draw.circle(screen, (255, 120, 200), punta, 5)
+            punta = (cuerpo.centerx + lado * (16 + largo // 3),
+                     cuerpo.y - largo + math.sin(self.tiempo_ms / 200 + lado) * 2)
+            pygame.draw.line(screen, borde, base, punta, 3)
+            pygame.draw.circle(screen, (255, 120, 200), (int(punta[0]), int(punta[1])), 5)
 
-        # "!" si persigue, "?" si investiga o busca.
+    def dibujar_ojos(self, screen, offset):
+        """Lo único que se ve del alien en la oscuridad: el brillo de sus ojos.
+
+        Se dibuja encima de la capa de oscuridad (oscuridad.py). El Ciego no
+        tiene ojos, así que en lo oscuro no se le ve nada: solo se le oye.
+        """
+        if self.tipo == "ciego":
+            return
+        cuerpo, _, _ = self._cuerpo(offset)
+        color = (255, 70, 60) if self.accion in ("PERSEGUIR", "ATRAPAR") else (
+            (255, 214, 64) if self.accion in ("INVESTIGAR", "BUSCAR") else (170, 255, 190))
+        mira_x = math.cos(self.angulo) * 4
+        y = int(cuerpo.y + 22 + math.sin(self.angulo) * 3)
+        if self.tipo == "vigia":
+            centros = [(int(cuerpo.centerx + mira_x * 1.5), y)]
+        else:
+            centros = [(int(cuerpo.centerx + lado * 10 + mira_x), y) for lado in (-1, 1)]
+        brillo = pygame.Surface((24, 24), pygame.SRCALPHA)
+        pygame.draw.circle(brillo, (*color, 70), (12, 12), 11)
+        pygame.draw.circle(brillo, (*color, 255), (12, 12), 3)
+        for c in centros:
+            screen.blit(brillo, (c[0] - 12, c[1] - 12))
+
+    def dibujar_senal(self, screen, offset):
+        """"!" si persigue, "?" si investiga o busca, "zZ" si lo hackearon y
+        "..." si se cansó. Va encima de la oscuridad para que siempre se vea."""
+        cuerpo, _, _ = self._cuerpo(offset)
         signo = {"PERSEGUIR": "!", "ATRAPAR": "!", "REVISAR_ESCONDITE": "!",
                  "INVESTIGAR": "?", "BUSCAR": "?"}.get(self.accion)
+        if self.accion == "DESCANSAR" and self.cansado:
+            signo = "..."
         if self.accion == "DESCANSAR" and self.aturdido:
             signo = "zZ"
             # Chispas: lo apagó un hackeo.
@@ -415,7 +546,8 @@ class Alien:
                 pygame.draw.line(screen, (150, 200, 255), (px - 4, py), (px + 4, py), 2)
                 pygame.draw.line(screen, (150, 200, 255), (px, py - 4), (px, py + 4), 2)
         if signo:
-            color = {"!": (240, 70, 60), "?": (255, 214, 64)}.get(signo, (150, 200, 255))
+            color = {"!": (240, 70, 60), "?": (255, 214, 64),
+                     "...": (200, 200, 210)}.get(signo, (150, 200, 255))
             f = fuente_de_tamano(30)
             texto = f.render(signo, True, color)
             sombra = f.render(signo, True, (12, 11, 23))

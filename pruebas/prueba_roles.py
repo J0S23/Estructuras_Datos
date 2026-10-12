@@ -77,7 +77,7 @@ def rol(jugador, nombre, hija=None):
     jugador.asignar_rol(nombre)
     jugador.recarga_ms = 0; jugador.efectos.clear(); jugador.piezas = 0
     if hija:
-        ok, _, _ = jugador.arbol.desbloquear(hija, 0)
+        ok, _, _ = jugador.arbol.desbloquear(hija, 999)
         assert ok, hija
 
 def aliens_lejos():
@@ -172,7 +172,7 @@ rol(j2, "Forjador", "FABRICACION"); j2.piezas = 1
 poner(j2, (768, 900)); aliens_lejos()
 a2.hitbox.center = (768 + 350, 900 - 300 + 0)
 a2.hitbox.center = (1000, 640)
-g._tecla_en_partida(pygame.K_RCTRL)
+g._tecla_en_partida(pygame.K_MINUS)
 assert len(g.senuelos) == 1 and j2.piezas == 0
 g._actualizar_partida(DT)
 assert a2.punto_ruido == g.senuelos[0]["pos"], (a2.punto_ruido, a2.accion)
@@ -232,7 +232,7 @@ cap("roles_h_sintonia.png")
 print("\nSintonía de señales: flechas hacia los aliens fuera de pantalla (ver captura)")
 
 rol(j2, "Resonante", "INTERCEPCION")
-g._tecla_en_partida(pygame.K_RCTRL)
+g._tecla_en_partida(pygame.K_MINUS)
 assert "intercepcion" in j2.efectos
 a1.hitbox.center = (700, 560)
 cap("roles_i_intercepcion.png")
@@ -242,7 +242,7 @@ rol(j2, "Resonante", "EMISION")
 aliens_lejos()
 a1.hitbox.center = (1000, 640); a1.angulo = 0
 j2.personaje.direccion = "west"
-g._tecla_en_partida(pygame.K_RCTRL)
+g._tecla_en_partida(pygame.K_MINUS)
 assert g.senales and a1.punto_ruido == g.senales[0]["pos"]
 distancia = math.hypot(g.senales[0]["pos"][0] - j2.hitbox.centerx,
                        g.senales[0]["pos"][1] - j2.hitbox.centery)

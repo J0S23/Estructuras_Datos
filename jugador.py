@@ -18,15 +18,18 @@ import pygame
 from Estructuras.arbol_habilidades import construir_arbol
 from data.habilidades import ARBOLES_POR_ROL
 from data.tareas import OBJETIVOS
+from oscuridad import Linterna
+from mandos import tecla_virtual, es_virtual, NOMBRE_BOTON
 
 
 # Teclas de cada PUESTO, no de cada rol: el rol se escoge al empezar la
 # partida, así que ya no se puede repartir el teclado por rol. El puesto 1
 # juega con WASD, el 2 con las flechas.
 #
-# Los puestos 3 y 4 llevan teclas **provisionales**, y solo sirven para la
-# pantalla de selección de rol: en partida no se mueven porque les toca mando y
-# eso todavía no está hecho. Cuando se implemente, se cambia solo este bloque.
+# Los puestos 3 y 4 juegan con mando (mandos.py): cada botón es una "tecla
+# virtual" que va al final de cada tupla. Las letras de teclado que tienen
+# delante (I/K/O, T/G/Y...) siguen sirviendo para escoger rol sin mando; sin
+# mando, en partida no se mueven.
 # "habilidades" abre el panel del árbol; "habilidad" USA la habilidad activa
 # que se haya escogido (ver acciones_rol.py).
 TECLAS_PUESTO_1 = {
@@ -35,6 +38,7 @@ TECLAS_PUESTO_1 = {
     "interactuar": (pygame.K_e,),
     "habilidades": (pygame.K_q,),
     "habilidad": (pygame.K_f,),
+    "sigilo": (pygame.K_LSHIFT,),
 }
 
 TECLAS_PUESTO_2 = {
@@ -42,31 +46,44 @@ TECLAS_PUESTO_2 = {
     "abajo": (pygame.K_DOWN,),
     "interactuar": (pygame.K_RETURN, pygame.K_KP_ENTER),
     "habilidades": (pygame.K_RSHIFT,),
-    "habilidad": (pygame.K_RCTRL,),
+    # La tecla "-" (junto al Shift derecho en los teclados en español; en los
+    # de inglés es "/"). Ctrl derecho queda de respaldo: no todos los portátiles
+    # lo tienen.
+    "habilidad": (pygame.K_MINUS, pygame.K_SLASH, pygame.K_RCTRL),
+    # AltGr en los teclados en español (SDL lo reporta como RALT o MODE), o
+    # el 0 del teclado numérico, que queda junto a las flechas.
+    "sigilo": (pygame.K_RALT, pygame.K_MODE, pygame.K_KP0),
 }
 
-TECLAS_PUESTO_3 = {
+def _con_mando(puesto, teclado):
+    return {accion: tuple(teclas) + (tecla_virtual(puesto, accion),)
+            for accion, teclas in teclado.items()}
+
+
+TECLAS_PUESTO_3 = _con_mando(2, {
     "arriba": (pygame.K_i,),
     "abajo": (pygame.K_k,),
     "interactuar": (pygame.K_o,),
     "habilidades": (pygame.K_u,),
     "habilidad": (pygame.K_p,),
-}
+    "sigilo": (),
+})
 
-TECLAS_PUESTO_4 = {
+TECLAS_PUESTO_4 = _con_mando(3, {
     "arriba": (pygame.K_t,),
     "abajo": (pygame.K_g,),
     "interactuar": (pygame.K_y,),
     "habilidades": (pygame.K_r,),
     "habilidad": (pygame.K_v,),
-}
+    "sigilo": (),
+})
 
 TECLAS_POR_PUESTO = [TECLAS_PUESTO_1, TECLAS_PUESTO_2, TECLAS_PUESTO_3, TECLAS_PUESTO_4]
 
 # Cómo se llama su esquema de control en pantalla.
 NOMBRE_CONTROLES = ["WASD", "Flechas", "Mando 1 (I/K/O)", "Mando 2 (T/G/Y)"]
 
-# Puestos que todavía no se pueden mover.
+# Puestos que solo se mueven si tienen un mando conectado.
 PUESTOS_SIN_MOVIMIENTO = (2, 3)
 
 # Cuánto dura el mensajito de feedback ("+15 puntos") sobre el personaje.
@@ -89,6 +106,13 @@ RADIO_RUIDO_POR_PULSO = 2.6
 # Escondido, el latido se oye menos: el radio de ruido se multiplica por esto.
 FACTOR_RUIDO_ESCONDIDO = 0.55
 
+# Caminar normal hace ruido de pasos además del latido; en sigilo (tecla
+# mantenida) se va a la mitad de velocidad, sin pasos y con el ruido reducido.
+RUIDO_PASOS = 45
+FACTOR_RUIDO_SIGILO = 0.6
+FACTOR_VELOCIDAD_SIGILO = 0.5
+PULSO_EXTRA_SIGILO = 3
+
 # Después de que lo atrapan, un rato en que los aliens no lo persiguen, para
 # que no lo vuelvan a atrapar apenas reaparece.
 INVULNERABLE_MS = 2500
@@ -100,12 +124,14 @@ SIN_TECLAS = defaultdict(bool)
 
 
 class Jugador:
-    def __init__(self, personaje, rol, puesto=0):
+    def __init__(self, personaje, rol, puesto=0, con_mando=False):
         self.personaje = personaje
         self.puesto = puesto
         self.teclas = TECLAS_POR_PUESTO[puesto % len(TECLAS_POR_PUESTO)]
-        self.controles_nombre = NOMBRE_CONTROLES[puesto % len(NOMBRE_CONTROLES)]
-        self.puede_moverse = puesto not in PUESTOS_SIN_MOVIMIENTO
+        self.con_mando = con_mando
+        self.controles_nombre = (f"Mando {puesto - 1}" if con_mando
+                                 else NOMBRE_CONTROLES[puesto % len(NOMBRE_CONTROLES)])
+        self.puede_moverse = puesto not in PUESTOS_SIN_MOVIMIENTO or con_mando
 
         self.puntos = 0
         self.tareas_hechas = 0
@@ -128,6 +154,9 @@ class Jugador:
 
         # Pulso (ver PULSO_* arriba) y la fase de su latido, que solo sirve
         # para animar el corazón del HUD al ritmo del pulso.
+        self.sigilo = False          # mantiene la tecla de sigilo
+        self.linterna = Linterna()   # hacia dónde alumbra (oscuridad.py)
+        self.velocidad_base = personaje.velocidad
         self.pulso = float(PULSO_REPOSO)
         self.fase_latido = 0.0
         self.visto = False
@@ -146,6 +175,17 @@ class Jugador:
         self.efectos = {}
         self.piezas = 0
         self.estacion_cerca = None
+
+        # Misión (mision.py): la celda donde está encerrado (None = libre), los
+        # consumibles que lleva ("decodificador", "kit"), lo que está haciendo
+        # con la tecla mantenida (texto, 0 a 1) y el equipo con el que suma
+        # puntos para las habilidades.
+        self.preso = None
+        self.objetos = set()
+        self.progreso = None
+        self.equipo = None
+        self.pista_mision = None
+        self.susto_ms = 0            # cuánto le queda al susto de ser atrapado
         self.invulnerable_ms = 0
         self.veces_atrapado = 0
 
@@ -177,6 +217,9 @@ class Jugador:
     def nombre_tecla(self, accion):
         """Nombre legible de su tecla, para las pistas en pantalla."""
         teclas = self.teclas.get(accion, ())
+        if getattr(self, "con_mando", False) and any(es_virtual(t) for t in teclas):
+            return NOMBRE_BOTON.get(accion, "?")
+        teclas = [t for t in teclas if not es_virtual(t)]
         if not teclas:
             return "?"
         nombres = {
@@ -187,6 +230,8 @@ class Jugador:
             pygame.K_f: "F", pygame.K_p: "P", pygame.K_v: "V",
             pygame.K_i: "I", pygame.K_k: "K", pygame.K_o: "O", pygame.K_u: "U",
             pygame.K_t: "T", pygame.K_g: "G", pygame.K_y: "Y", pygame.K_r: "R",
+            pygame.K_LSHIFT: "SHIFT IZQ", pygame.K_RALT: "ALT GR",
+            pygame.K_MINUS: "-", pygame.K_SLASH: "/",
         }
         return nombres.get(teclas[0], "?")
 
@@ -199,6 +244,8 @@ class Jugador:
         cuadritos vacíos. Las tildes y la ñ sí están; el problema era solo con
         las flechas.
         """
+        if getattr(self, "con_mando", False):
+            return "Stick"
         if pygame.K_UP in self.teclas.get("arriba", ()):
             return "Flechas"
         return f"{self.nombre_tecla('arriba')}/{self.nombre_tecla('abajo')}"
@@ -210,7 +257,11 @@ class Jugador:
         """Hasta dónde se oye su latido, en píxeles del mundo."""
         radio = RADIO_RUIDO_BASE + self.pulso * RADIO_RUIDO_POR_PULSO
         if self.escondido:
-            radio *= FACTOR_RUIDO_ESCONDIDO
+            return radio * FACTOR_RUIDO_ESCONDIDO
+        if self.sigilo:
+            return radio * FACTOR_RUIDO_SIGILO
+        if self.personaje.moviendose:
+            radio += RUIDO_PASOS
         return radio
 
     @property
@@ -238,7 +289,7 @@ class Jugador:
         Los puestos sin mando todavía no se mueven: si los aliens los cazaran,
         los atraparían una y otra vez sin que el jugador pudiera hacer nada.
         """
-        return self.puede_moverse and self.invulnerable_ms <= 0
+        return self.puede_moverse and self.invulnerable_ms <= 0 and self.preso is None
 
     @property
     def latidos_por_minuto(self):
@@ -263,7 +314,7 @@ class Jugador:
 
         objetivo = PULSO_REPOSO
         if self.personaje.moviendose:
-            objetivo += PULSO_EXTRA_CAMINANDO
+            objetivo += PULSO_EXTRA_SIGILO if self.sigilo else PULSO_EXTRA_CAMINANDO
         if distancia_alien is not None and distancia_alien < DISTANCIA_QUE_ASUSTA:
             objetivo += PULSO_POR_CERCANIA * (1 - distancia_alien / DISTANCIA_QUE_ASUSTA)
         if visto:
@@ -292,6 +343,14 @@ class Jugador:
 
     def sumar_puntos(self, cantidad):
         self.puntos = max(0, self.puntos + int(cantidad))
+        # Lo que gana cada uno también le suma al equipo, que es con lo que se
+        # desbloquean las habilidades.
+        if self.equipo is not None:
+            self.equipo.sumar(int(cantidad))
+
+    @property
+    def puntos_para_habilidades(self):
+        return self.equipo.puntos if self.equipo is not None else self.puntos
 
     def avisar(self, texto, color=(255, 255, 255)):
         self.mensaje = texto
@@ -329,10 +388,15 @@ class Jugador:
     def actualizar(self, teclas, colisiona):
         """Mueve al personaje, salvo que tenga un panel abierto, esté escondido
         o no tenga mando."""
-        if self.ocupado or self.escondido or not self.puede_moverse:
+        if self.ocupado or self.escondido or self.preso or not self.puede_moverse:
+            self.sigilo = False
             self.personaje.actualizar(SIN_TECLAS, colisiona=colisiona)
             return
+        self.sigilo = any(teclas[k] for k in self.teclas.get("sigilo", ()))
+        self.personaje.velocidad = self.velocidad_base * (
+            FACTOR_VELOCIDAD_SIGILO if self.sigilo else 1.0)
         self.personaje.actualizar(teclas, colisiona=colisiona)
+        self.linterna.actualizar(self.personaje.direccion)
 
     def dibujar(self, screen, offset):
         if self.escondido:

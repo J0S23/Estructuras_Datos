@@ -89,6 +89,13 @@ def preparar_estaciones(mundo, objetos=None):
     for datos in lista_p:
         p = dict(datos, tipo="panel", reparado=False)
         p["rect"] = _rect_en(datos["rx"], datos["ry"], TAMANO_ESTACION, mundo)
+        # El sello que levanta este panel al repararlo (si el mapa le puso uno).
+        sello = datos.get("sello")
+        p["sello_rect"] = None
+        if sello:
+            p["sello_rect"] = pygame.Rect(0, 0, max(8, int(sello["ancho"] * mundo.ancho)),
+                                          max(8, int(sello["alto"] * mundo.alto)))
+            p["sello_rect"].center = (int(sello["rx"] * mundo.ancho), int(sello["ry"] * mundo.alto))
         paneles.append(p)
     piezas = [{"rect": _rect_en(rx, ry, TAMANO_PIEZA, mundo), "recogida": False}
               for rx, ry in lista_piezas]
@@ -169,9 +176,24 @@ def _reparar_panel(juego, jugador, panel):
     if jugador.piezas <= 0:
         jugador.avisar("Te falta una pieza para repararlo.", COLOR_MAL)
         return
+    sello = panel.get("sello_rect")
+    if sello is not None and any(a.hitbox.colliderect(sello) for a in juego.aliens):
+        jugador.avisar("Hay un alien en el paso del sello: espera a que se mueva.", COLOR_MAL)
+        return
     jugador.piezas -= 1
     panel["reparado"] = True
     jugador.sumar_puntos(PUNTOS_REPARACION)
+    if sello is not None:
+        # Sellos: la barrera de energía que levanta el panel. Frena a los
+        # aliens (no pasan ni ven a través) y a los jugadores no.
+        juego.mundo.bloqueos_alien.append(sello)
+        jugador.avisar(f"¡Sello activado! Los aliens no pasan por ahí. +{PUNTOS_REPARACION}",
+                       COLOR_BIEN)
+        if hasattr(juego, "sonar"):
+            juego.sonar("puerta", 0.7)
+        if hasattr(juego, "decir"):
+            juego.decir("sello", jugador.rol)
+        return
     hechos = sum(p["reparado"] for p in juego.paneles)
     jugador.avisar(f"Panel reparado ({hechos}/{len(juego.paneles)}). +{PUNTOS_REPARACION}",
                    COLOR_BIEN)
@@ -301,7 +323,10 @@ def actualizar(juego, dt):
                 del jugador.efectos[nombre]
 
         # Ingenio mecánico: el Forjador recoge las piezas al pasar por encima.
-        if jugador.arbol.tiene("INGENIO") and not jugador.escondido:
+        mision = getattr(juego, "mision", None)
+        para_todos = mision is not None and mision.piezas_para_todos
+        if (jugador.arbol.tiene("INGENIO") or para_todos) and not jugador.escondido \
+                and not jugador.preso:
             for pieza in juego.piezas:
                 if not pieza["recogida"] and pieza["rect"].colliderect(jugador.hitbox):
                     pieza["recogida"] = True
