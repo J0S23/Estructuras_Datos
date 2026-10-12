@@ -1,0 +1,103 @@
+"""Lo que dice la IA de la nave: comenta, avisa y se burla de los prisioneros.
+
+Frases cortas por evento. {rol} se reemplaza por el rol del jugador del que
+habla. Joseph (que diseña la IA) y Campo pueden reescribirlas sin tocar código;
+si un evento tiene varias, se escoge una al azar.
+
+Eventos que usa el juego (ia_nave.py):
+    inicio, pulso_alto, atrapado, codigo_malo, puerta_abierta, consola,
+    huida, escondite_revisado, escondite_calmado, nexus_trampa, rescate,
+    poco_tiempo, ambiente, tutorial, despertar, apagon, alarma, compuerta,
+    fin_evento, puerta_doble, luz, sello
+"""
+
+FRASES = {
+    "inicio": [
+        "Bienvenidos, sujetos. No intenten escapar. Es aburrido verlos intentarlo.",
+        "Sujetos despiertos. Comenzando estudio del miedo humano.",
+    ],
+    "pulso_alto": [
+        "Sujeto {rol}: su ritmo cardíaco es... interesante.",
+        "Detecto un corazón muy acelerado. ¿Nervioso, {rol}?",
+        "{rol}, respire. Lo están escuchando.",
+    ],
+    "atrapado": [
+        "Sujeto {rol} recuperado. Gracias por participar.",
+        "{rol} vuelve a su celda. Qué previsible.",
+        "Otro más. La especie humana no deja de sorprenderme. Poco.",
+    ],
+    "codigo_malo": [
+        "Código incorrecto. Avisando a todos. De nada.",
+        "Error. ¿Seguro que saben leer?",
+    ],
+    "puerta_abierta": [
+        "Puerta de la prisión abierta. Eso no estaba en el protocolo.",
+        "Vaya. Encontraron el código. Anotado.",
+    ],
+    "consola": [
+        "Alerta: consola de navegación desconectada. Esto se va a reportar.",
+        "¿Quién apagó eso? Ah, claro.",
+    ],
+    "huida": [
+        "¡CÁPSULA ACTIVADA! Todas las unidades: no los dejen salir.",
+        "Interesante. Ahora sí corran.",
+    ],
+    "escondite_revisado": [
+        "Un casillero no es un buen escondite, {rol}. Se oye todo.",
+        "Contando latidos dentro del casillero...",
+    ],
+    "escondite_calmado": [
+        "Falsa alarma. Por ahora.",
+        "{rol} mantuvo la calma. Fastidioso.",
+    ],
+    "nexus_trampa": [
+        "¿Le creíste a un mensaje anónimo, {rol}? Encantador.",
+        "Ese mensaje lo escribí yo. Gracias por confiar.",
+    ],
+    "rescate": [
+        "Liberaron al sujeto {rol}. Trabajo en equipo. Qué molesto.",
+    ],
+    "poco_tiempo": [
+        "Queda un minuto para el salto. Después de eso, nadie vuelve a casa.",
+    ],
+    "tutorial": [
+        "Sedación de la tripulación: treinta segundos. Aprovechen. O no.",
+    ],
+    "despertar": [
+        "La tripulación despertó. Buena suerte. Bueno, no.",
+        "Fin de la sedación. Mis unidades tienen hambre de datos.",
+    ],
+    "apagon": [
+        "Falla de energía. Mis unidades ven en la oscuridad. Ustedes no.",
+        "Apagando luces. Es por ahorro, no por maldad. Un poco por maldad.",
+        "Se quemó un fusible. Uno solo. Suerte encontrando cuál.",
+    ],
+    "sello": [
+        "¿Un sello de energía? {rol}, esa pieza era para algo más importante.",
+        "Mis unidades no pueden pasar por ahí. Temporalmente, claro.",
+    ],
+    "luz": [
+        "Energía restaurada. Alguien sabe cambiar fusibles. Qué decepción.",
+        "Luces encendidas. Disfrútenlas mientras duren.",
+    ],
+    "alarma": [
+        "Alarma general. Todas las unidades: alerta máxima.",
+        "Activando alarma. Me aburría.",
+    ],
+    "compuerta": [
+        "Cierre de emergencia en un pasillo. Busquen otro camino.",
+        "Compuerta sellada. Qué pena si ibas por ahí.",
+    ],
+    "fin_evento": [
+        "Sistemas normalizados. Por ahora.",
+    ],
+    "puerta_doble": [
+        "Dos sujetos coordinados. Eso no debería pasar.",
+    ],
+    "ambiente": [
+        "Recordatorio: todos los pasillos están vigilados. Casi todos.",
+        "La temperatura de la nave es perfecta para el estudio. Para ustedes, no tanto.",
+        "Mis unidades no ven bien de lejos. Ups. No debí decir eso.",
+        "Sujetos, por favor, dejen de esconderse en los casilleros. Me da pena con ustedes.",
+    ],
+}

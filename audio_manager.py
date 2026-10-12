@@ -1,4 +1,11 @@
-"""Gestor de audio para Alcalde Digital."""
+"""Gestor de audio: música de fondo y efectos.
+
+Los efectos están en Audio/SFX/ (los genera Audio/generar_sonidos.py) y se
+cargan una sola vez: antes cada `play_sfx` volvía a leer el archivo del disco,
+y el latido y los pasos suenan muchas veces por segundo. Si el audio no está
+disponible (sin parlantes, o en las pruebas sin ventana), todo falla en
+silencio y el juego sigue.
+"""
 
 import os
 
@@ -23,6 +30,7 @@ class AudioManager:
         self._base_dir = os.path.dirname(os.path.abspath(__file__))
         self._bgm_dir = os.path.join(self._base_dir, "Audio", "BGM")
         self._sfx_dir = os.path.join(self._base_dir, "Audio", "SFX")
+        self._sonidos = {}   # nombre -> pygame.mixer.Sound (o None si no hay archivo)
 
     def _resolve_audio_path(self, folder, nombre):
         extensiones = [".ogg", ".wav", ".mp3"]
@@ -87,10 +95,12 @@ class AudioManager:
         try:
             if pygame.mixer.get_init() is None:
                 return
-            ruta = self._resolve_audio_path(self._sfx_dir, nombre)
-            if ruta is not None:
-                sonido = pygame.mixer.Sound(ruta)
-                sonido.set_volume(self.sfx_volume * max(0.0, min(2.0, float(volume_scale))))
+            if nombre not in self._sonidos:
+                ruta = self._resolve_audio_path(self._sfx_dir, nombre)
+                self._sonidos[nombre] = pygame.mixer.Sound(ruta) if ruta is not None else None
+            sonido = self._sonidos[nombre]
+            if sonido is not None:
+                sonido.set_volume(self.sfx_volume * max(0.0, min(1.0, float(volume_scale))))
                 sonido.play()
                 return
         except Exception:
