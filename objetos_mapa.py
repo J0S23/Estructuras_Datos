@@ -31,7 +31,18 @@ VERSION = 1
 USAR_ARCHIVOS = True
 
 # Las partes del archivo, en el orden en que las muestra el editor.
-PARTES = ("spawn", "rutas_aliens", "escondites", "terminales", "paneles", "piezas", "zonas")
+#
+# Las de la misión (celdas, puerta, notas, consolas, cápsula, consumibles) y
+# las terminales NEXUS no tienen valores de fábrica: un mapa sin cápsula no
+# tiene misión y se juega como antes, por tiempo (ver mision.py).
+#
+# `tipos_aliens` va de la mano con `rutas_aliens`: el tipo del alien de cada
+# ruta (data/tipos_alien.py). Las `compuertas` las cierra un evento aleatorio
+# (eventos.py) y las `puertas_dobles` se abren con dos jugadores a la vez
+# (puertas.py).
+PARTES = ("spawn", "rutas_aliens", "tipos_aliens", "escondites", "terminales", "paneles",
+          "piezas", "zonas", "celdas", "puerta", "notas", "consolas", "capsula", "consumibles",
+          "nexus", "compuertas", "puertas_dobles", "fusibles")
 
 
 def ruta_archivo(mapa):
@@ -74,11 +85,22 @@ def por_defecto():
         "version": VERSION,
         "spawn": None,     # None = alrededor del centro del mapa
         "rutas_aliens": [[list(p) for p in ruta] for ruta in RUTAS_ALIENS],
+        "tipos_aliens": [],  # vacío = todos rastreadores
         "escondites": puntos(ESCONDITES),
         "terminales": puntos(TERMINALES),
         "paneles": puntos(PANELES),
         "piezas": [list(p) for p in PIEZAS],
         "zonas": {z["clave"]: {"rx": z["rx"], "ry": z["ry"], "radio": z["radio"]} for z in ZONAS},
+        "celdas": [],
+        "puerta": None,      # {"rx", "ry", "ancho", "alto"}: la puerta de la prisión
+        "notas": [],
+        "consolas": [],
+        "capsula": None,     # [rx, ry]
+        "consumibles": [],
+        "nexus": [],
+        "compuertas": [],     # [{"rx", "ry", "ancho", "alto"}]
+        "puertas_dobles": [], # [{"rx", "ry", "ancho", "alto", "paneles": [[rx, ry], [rx, ry]]}]
+        "fusibles": [],       # cajas de fusibles: sin ellas no hay apagones
     }
 
 
@@ -98,11 +120,8 @@ def cargar(mapa=None, ruta=None):
     for parte in PARTES:
         if parte in guardado:
             datos[parte] = guardado[parte]
-    if "zonas" in guardado:
-        # Una zona que el archivo no nombra conserva su posición de siempre.
-        zonas = por_defecto()["zonas"]
-        zonas.update(guardado["zonas"])
-        datos["zonas"] = zonas
+    # Las zonas que el archivo trae son las que hay en ese mapa: un mapa puede
+    # no tener ninguna (la nave no tiene las zonas de las elecciones).
     return normalizar(datos)
 
 
@@ -126,6 +145,32 @@ def normalizar(datos):
         datos["spawn"] = [r(datos["spawn"][0]), r(datos["spawn"][1])]
     datos["rutas_aliens"] = [[[r(x), r(y)] for x, y in ruta] for ruta in datos.get("rutas_aliens", [])]
     datos["piezas"] = [[r(x), r(y)] for x, y in datos.get("piezas", [])]
+    for parte in ("celdas", "notas", "consolas", "consumibles", "nexus", "fusibles"):
+        datos[parte] = [[r(x), r(y)] for x, y in datos.get(parte) or []]
+    if datos.get("capsula"):
+        datos["capsula"] = [r(datos["capsula"][0]), r(datos["capsula"][1])]
+    else:
+        datos["capsula"] = None
+    def rect_normal(puerta):
+        return {"rx": r(puerta["rx"]), "ry": r(puerta["ry"]),
+                "ancho": round(min(0.3, max(0.005, float(puerta.get("ancho", 0.02)))), 4),
+                "alto": round(min(0.3, max(0.005, float(puerta.get("alto", 0.07)))), 4)}
+
+    puerta = datos.get("puerta")
+    datos["puerta"] = rect_normal(puerta) if puerta else None
+    datos["compuertas"] = [rect_normal(c) for c in datos.get("compuertas") or []]
+    dobles = []
+    for doble in datos.get("puertas_dobles") or []:
+        limpia = rect_normal(doble)
+        limpia["paneles"] = [[r(x), r(y)] for x, y in (doble.get("paneles") or [])[:2]]
+        dobles.append(limpia)
+    datos["puertas_dobles"] = dobles
+
+    # Un tipo por ruta: se rellena con "rastreador" o se recorta.
+    from data.tipos_alien import TIPOS_ALIEN, TIPO_POR_DEFECTO
+    tipos = [t if t in TIPOS_ALIEN else TIPO_POR_DEFECTO for t in datos.get("tipos_aliens") or []]
+    n = len(datos["rutas_aliens"])
+    datos["tipos_aliens"] = (tipos + [TIPO_POR_DEFECTO] * n)[:n]
     for parte, prefijo, nombre in (("escondites", "escondite", "Casillero"),
                                    ("terminales", "terminal", "Terminal"),
                                    ("paneles", "panel", "Panel dañado")):
@@ -141,6 +186,13 @@ def normalizar(datos):
                 clave = f"{prefijo}_{n}"
             obj["clave"] = clave
             usadas.add(clave)
+    # Cada panel dañado puede traer su sello: la barrera que levanta al
+    # repararlo (ver acciones_rol._reparar_panel).
+    for panel in datos.get("paneles", []):
+        if panel.get("sello"):
+            panel["sello"] = rect_normal(panel["sello"])
+        else:
+            panel.pop("sello", None)
     for zona in datos.get("zonas", {}).values():
         zona["rx"], zona["ry"] = r(zona["rx"]), r(zona["ry"])
         zona["radio"] = round(min(0.2, max(0.01, float(zona.get("radio", 0.045)))), 4)

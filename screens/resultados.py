@@ -20,15 +20,25 @@ COLOR_BARRA = (96, 188, 118)
 COLOR_BARRA_MALA = (214, 74, 68)
 
 
-def render_resultados(screen, jugadores, state, font=None, small_font=None):
+def render_resultados(screen, jugadores, state, font=None, small_font=None,
+                      mision=None, equipo=None):
     screen.fill(COLOR_FONDO)
     ancho, alto = screen.get_size()
     f = fuente_de_tamano(max(14, min(22, ancho // 62)))
     titulo_f = font or fuente_de_tamano(30)
     paso = f.get_linesize() + 6
 
-    encabezado = titulo_f.render("SE ACABÓ LA RONDA", True, COLOR_TEXTO)
+    titulo, color = "SE ACABÓ LA RONDA", COLOR_TEXTO
+    if mision is not None and mision.activa:
+        if mision.resultado == "victoria":
+            titulo, color = "¡ESCAPARON DE LA NAVE!", COLOR_BARRA
+        else:
+            titulo, color = "NO LOGRARON ESCAPAR", COLOR_BARRA_MALA
+    encabezado = titulo_f.render(titulo, True, color)
     screen.blit(encabezado, encabezado.get_rect(center=(ancho // 2, 56)))
+    if equipo is not None:
+        sub = f.render(f"Puntos del equipo: {equipo.total}", True, COLOR_TITULO)
+        screen.blit(sub, sub.get_rect(center=(ancho // 2, 92)))
 
     columna = ancho // 2
 
@@ -56,7 +66,7 @@ def render_resultados(screen, jugadores, state, font=None, small_font=None):
 
     # -- Ciudad -----------------------------------------------------------------
     y = 130
-    screen.blit(f.render("Cómo quedó Ciudad Nova", True, COLOR_TITULO), (columna + 40, y))
+    screen.blit(f.render("Cómo quedó la tripulación", True, COLOR_TITULO), (columna + 40, y))
     y += paso + 6
 
     for clave in INDICADORES_CIUDAD_INICIALES:

@@ -29,6 +29,16 @@ class Mundo:
         self.imagen = self._cargar_mapa()
         self.ancho, self.alto = self.imagen.get_size()
         self.paredes, self.interactuables = self._cargar_hitboxes()
+        # Las paredes del archivo, sin lo que agrega la partida (la puerta de
+        # la prisión). Al empezar otra ronda en el mismo mapa se vuelve a esto.
+        self.paredes_base = list(self.paredes)
+        # Barreras que solo frenan a los aliens: los sellos que activa el
+        # Forjador al reparar un panel (acciones_rol.py).
+        self.bloqueos_alien = []
+
+    def reiniciar_paredes(self):
+        self.paredes = list(self.paredes_base)
+        self.bloqueos_alien = []
 
     # -- Carga -------------------------------------------------------------------
 
@@ -82,7 +92,11 @@ class Mundo:
             return True
         return rect.collidelist(self.paredes) != -1
 
-    def linea_libre(self, desde, hasta, ancho=4, alto=4, paso=10):
+    def colisiona_alien(self, rect):
+        """Para los aliens: las paredes y además los sellos activos."""
+        return self.colisiona(rect) or rect.collidelist(self.bloqueos_alien) != -1
+
+    def linea_libre(self, desde, hasta, ancho=4, alto=4, paso=10, colisiona=None):
         """True si se puede ir en línea recta de `desde` a `hasta` sin paredes.
 
         Se avanza por la línea en pasitos de `paso` píxeles y en cada uno se
@@ -98,7 +112,7 @@ class Mundo:
             y = desde[1] + dy * i / pasos
             rect = pygame.Rect(0, 0, ancho, alto)
             rect.center = (int(x), int(y))
-            if self.colisiona(rect):
+            if (colisiona or self.colisiona)(rect):
                 return False
         return True
 
@@ -132,7 +146,7 @@ class Mundo:
                     return candidato.x, candidato.y
         return px, py
 
-    def area_alcanzable(self, desde, ancho=48, alto=19, paso=16):
+    def area_alcanzable(self, desde, ancho=48, alto=19, paso=16, colisiona=None):
         """Celdas del mapa a las que se puede llegar caminando desde `desde`.
 
         Un rectángulo puede no chocar con ninguna pared y aun así ser
@@ -153,7 +167,7 @@ class Mundo:
                 if not (0 <= vecino[0] <= self.ancho - ancho
                         and 0 <= vecino[1] <= self.alto - alto):
                     continue
-                if self.colisiona(pygame.Rect(vecino[0], vecino[1], ancho, alto)):
+                if (colisiona or self.colisiona)(pygame.Rect(vecino[0], vecino[1], ancho, alto)):
                     continue
                 vistos.add(vecino)
                 cola.append(vecino)

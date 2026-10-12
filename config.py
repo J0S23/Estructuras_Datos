@@ -32,13 +32,15 @@ INDICADORES_CIUDAD_INICIALES = {
 }
 
 # Nombre bonito de cada indicador, para la interfaz.
+# Las claves vienen del diseño anterior y se conservan para no romper los datos;
+# los nombres que se ven en pantalla ya son los de la tripulación.
 INDICADOR_LABELS = {
     "informacion_verificada": "Información verificada",
-    "confianza_ciudadana": "Confianza ciudadana",
-    "convivencia": "Convivencia",
-    "bienestar_digital": "Bienestar digital",
+    "confianza_ciudadana": "Confianza del equipo",
+    "convivencia": "Unión del equipo",
+    "bienestar_digital": "Calma en NEXUS",
     "desinformacion": "Desinformación",
-    "conflictos": "Conflictos",
+    "conflictos": "Pánico",
 }
 
 # Indicadores donde subir es MALO: la interfaz los pinta al revés.

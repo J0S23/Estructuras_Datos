@@ -21,7 +21,8 @@ import pygame; pygame.init()
 pygame.display.set_mode((1366, 768))
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
-TEMP = os.path.join(OUT, "_objetos_prueba.json")
+import tempfile
+TEMP = os.path.join(tempfile.gettempdir(), "_objetos_prueba_editor.json")
 if os.path.exists(TEMP):
     os.remove(TEMP)
 
@@ -112,7 +113,7 @@ assert os.path.exists(TEMP) and not ed.sucio
 leido = objetos_mapa.cargar(ruta=TEMP)
 assert leido["rutas_aliens"] == ed.datos["rutas_aliens"]
 assert len(leido["escondites"]) == len(ed.datos["escondites"])
-print("guardado y leído igual:", os.path.relpath(TEMP, RAIZ))
+print("guardado y leído igual:", TEMP)
 
 import App
 original = objetos_mapa.cargar
