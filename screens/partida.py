@@ -11,12 +11,18 @@ con cuatro, en cuartos.
 
 import pygame
 
-from fuentes import fuente
+from fuentes import fuente, fuente_de_tamano
+import oscuridad
+import puertas
+from eventos import dibujar_cajas, dibujar_brillo_caja
+from alien import DISTANCIA_OJOS
 from screens.paneles import (render_panel, render_hud, render_mensaje, render_pista_zona,
                              render_pulso, render_tension, render_minijuego,
                              render_escondido)
+from ambiente import temblor, dibujar_susto
 from screens.panel_habilidades import render_panel_habilidades
 from screens import roles as dibujo_roles
+from screens import mision_dibujo
 
 
 COLOR_SEPARADOR = (18, 16, 30)
@@ -101,10 +107,14 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
         render_mensaje(screen, vista, jugador)
         render_pulso(screen, vista, jugador)
         dibujo_roles.render_minimapa(screen, vista, jugador, extras)
+        mision_dibujo.render_progreso(screen, vista, jugador)
         render_minijuego(screen, vista, jugador)
+        render_tutorial(screen, vista, jugador, extras.get("tutorial"))
+        dibujar_susto(screen, vista, jugador)
         screen.set_clip(clip_previo)
 
     _dibujar_separadores(screen, viewports)
+    render_evento(screen, extras.get("eventos"))
     if mostrar_hitboxes:
         _dibujar_leyenda(screen, mundo, jugadores)
     else:
@@ -114,7 +124,7 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
 def _dibujar_pista(screen):
     """Recordatorio de las teclas del prototipo, abajo a la derecha."""
     font = fuente("small")
-    texto = "[H] hitboxes   [B] arbol del alien   [TAB] ver el ABB   [ESC] menu"
+    texto = "[H] hitboxes   [B] arbol del alien   [L] luz   [TAB] ver el ABB   [ESC] menu"
     etiqueta = font.render(texto, True, (200, 210, 235))
     sombra = font.render(texto, True, COLOR_SOMBRA)
     pos = (screen.get_width() - etiqueta.get_width() - 12,
@@ -153,6 +163,8 @@ def _dibujar_leyenda(screen, mundo, jugadores):
 def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitboxes,
                    aliens=(), escondites=(), extras=None):
     camara = mundo.camara(dueño.hitbox.center, vista.width, vista.height)
+    # Si lo acaban de atrapar, su mitad de la pantalla tiembla un instante.
+    camara = camara.move(*temblor(dueño, pygame.time.get_ticks()))
 
     # Recorta el dibujo al viewport para que nada se salga a la mitad vecina.
     clip_previo = screen.get_clip()
@@ -195,7 +207,13 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
             _dibujar_escondite(screen, escondite, offset, dueño)
     tiempo_ms = pygame.time.get_ticks()
     if extras:
+        mision_dibujo.dibujar_piso(screen, offset, camara, dueño, extras.get("mision"), tiempo_ms)
         dibujo_roles.dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms)
+
+    if extras:
+        puertas.dibujar(screen, offset, camara, extras.get("puertas_dobles", ()),
+                        extras.get("compuertas", ()), tiempo_ms)
+        dibujar_cajas(screen, offset, camara, extras.get("eventos"), tiempo_ms)
 
     # Los conos de visión van en el piso, debajo de todos los personajes.
     for alien in aliens:
@@ -214,11 +232,122 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
             pygame.draw.rect(screen, COLOR_COLISION,
                              _a_pantalla(jugador.hitbox, vista, camara), 2)
 
+    # Oscuridad: encima del mundo y de los personajes, debajo de los avisos.
+    # Con [H] se apaga para poder revisar las hitboxes.
+    eventos = (extras or {}).get("eventos")
+    if (extras or {}).get("oscuridad") and not mostrar_hitboxes:
+        oscuridad.dibujar(screen, vista, camara, dueño, jugadores)
+        dibujar_brillo_caja(screen, offset, dueño, eventos, tiempo_ms)
+        centro = dueño.hitbox.center
+        for alien in aliens:
+            if (abs(alien.centro[0] - centro[0]) + abs(alien.centro[1] - centro[1])
+                    <= DISTANCIA_OJOS * 1.4):
+                alien.dibujar_ojos(screen, offset)
+    for alien in aliens:
+        alien.dibujar_senal(screen, offset)
+    _dibujar_ruido(screen, offset, dueño)
+
     if extras:
+        mision_dibujo.dibujar_encima(screen, offset, camara, extras.get("mision"), tiempo_ms)
         dibujo_roles.dibujar_encima(screen, offset, camara, dueño, extras, tiempo_ms)
         dibujo_roles.dibujar_flechas(screen, vista, camara, dueño, extras)
 
     screen.set_clip(clip_previo)
+
+
+def _dibujar_ruido(screen, offset, dueño):
+    """El anillo de ruido del jugador: si un alien queda adentro, lo oye.
+
+    Celeste cuando va en sigilo, para que se note que la tecla sirve.
+    """
+    if (getattr(dueño, "preso", None) is not None or not hasattr(dueño, "radio_ruido")
+            or not getattr(dueño, "puede_moverse", True)):
+        return
+    centro = (dueño.hitbox.centerx - offset[0], dueño.hitbox.centery - offset[1])
+    radio = int(dueño.radio_ruido)
+    sigilo = getattr(dueño, "sigilo", False)
+    if sigilo:
+        color = (110, 220, 255)
+    elif dueño.pulso > 70:
+        color = (240, 90, 80)
+    else:
+        color = (150, 160, 190)
+    pygame.draw.circle(screen, color, centro, radio, 1)
+    if sigilo:
+        pygame.draw.circle(screen, color, centro, max(4, radio - 4), 1)
+
+
+def _envolver(texto, f, ancho):
+    lineas, actual = [], ""
+    for palabra in texto.split():
+        prueba = f"{actual} {palabra}".strip()
+        if f.size(prueba)[0] <= ancho or not actual:
+            actual = prueba
+        else:
+            lineas.append(actual)
+            actual = palabra
+    if actual:
+        lineas.append(actual)
+    return lineas
+
+
+def render_tutorial(screen, vista, jugador, tutorial):
+    """El paso del tutorial de este jugador, abajo del centro de su vista."""
+    if tutorial is None or not tutorial.activo or not getattr(jugador, "puede_moverse", True):
+        return   # los puestos sin mando todavía no se mueven: no hay qué enseñarles
+    datos = tutorial.texto(jugador)
+    if datos is None:
+        return
+    paso, total, texto = datos
+    pequena = vista.height < 500
+    f = fuente_de_tamano(15 if pequena else 18)
+    f_chica = fuente_de_tamano(12 if pequena else 14)
+    ancho = min(vista.width - 40, 600)
+    lineas = _envolver(texto, f, ancho - 32)
+    alto = 40 + len(lineas) * f.get_linesize() + f_chica.get_linesize()
+    caja = pygame.Rect(0, 0, ancho, alto)
+    if pequena:
+        # Con 3 o 4 jugadores abajo no cabe: ahí van el pulso, la pista y la
+        # barra de progreso. Se pone arriba, debajo del HUD y los mensajes; en
+        # la fila de arriba, además, debajo del cartel de la IA (y=100..152).
+        caja.midtop = (vista.centerx, vista.y + (160 if vista.top == 0 else 92))
+    else:
+        caja.midtop = (vista.centerx, vista.centery + vista.height // 7)
+    fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
+    fondo.fill((12, 14, 30, 225))
+    screen.blit(fondo, caja.topleft)
+    pygame.draw.rect(screen, (90, 220, 230), caja, 2, border_radius=6)
+    titulo = f_chica.render(f"TUTORIAL  {paso}/{total}   ·   los aliens despiertan en "
+                            f"{tutorial.segundos} s", True, (90, 220, 230))
+    screen.blit(titulo, (caja.x + 16, caja.y + 10))
+    y = caja.y + 14 + f_chica.get_linesize()
+    for linea in lineas:
+        screen.blit(f.render(linea, True, (240, 242, 255)), (caja.x + 16, y))
+        y += f.get_linesize()
+    pie = f_chica.render(f"[{jugador.nombre_tecla('habilidad')}] saltar", True, (150, 156, 190))
+    screen.blit(pie, (caja.right - pie.get_width() - 14, caja.bottom - pie.get_height() - 8))
+
+
+def render_evento(screen, eventos):
+    """Aviso arriba al centro mientras dura un evento aleatorio."""
+    if eventos is None:
+        return
+    texto = eventos.texto()
+    if texto is None:
+        return
+    color = eventos.color()
+    f = fuente_de_tamano(18)
+    img = f.render(texto, True, color)
+    # Debajo del cartel de la IA (y=100..152): más arriba chocaba con los
+    # mensajes de cada jugador. No coincide con el tutorial (no hay eventos
+    # mientras dura), que con 3 o 4 jugadores usa este mismo lugar.
+    caja = img.get_rect(midtop=(screen.get_width() // 2, 160)).inflate(28, 10)
+    fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
+    fondo.fill((10, 8, 20, 220))
+    screen.blit(fondo, caja.topleft)
+    if (pygame.time.get_ticks() // 400) % 2:
+        pygame.draw.rect(screen, color, caja, 2, border_radius=4)
+    screen.blit(img, img.get_rect(center=caja.center))
 
 
 def _dibujar_escondite(screen, escondite, offset, dueño):

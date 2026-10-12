@@ -192,7 +192,8 @@ def render_hud(screen, vista, jugador, segundos_restantes):
     screen.blit(puntos, (vista.right - puntos.get_width() - 12, y))
 
     y += f.get_linesize()
-    objetivo = partir_lineas(jugador.objetivo, f, vista.width - 120)[0]
+    partes = partir_lineas(jugador.objetivo, f, vista.width - 120)
+    objetivo = partes[0] + ("..." if len(partes) > 1 else "")
     screen.blit(f.render(objetivo, True, COLOR_TENUE), (x, y))
 
     reloj = f.render(_formato_reloj(segundos_restantes), True, COLOR_TEXTO)
@@ -218,7 +219,9 @@ def render_mensaje(screen, vista, jugador):
     etiqueta = f.render(jugador.mensaje, True, jugador.mensaje_color)
     caja = etiqueta.get_rect()
     caja.centerx = vista.centerx
-    caja.y = vista.y + f.get_linesize() * 2 + 24
+    # Debajo de la barra del HUD, que tiene 2 o 3 líneas según el rol.
+    lineas = 3 if jugador.info else 2
+    caja.y = vista.y + f.get_linesize() * lineas + 20
 
     fondo = pygame.Surface((caja.width + 20, caja.height + 10), pygame.SRCALPHA)
     fondo.fill((14, 15, 28, 215))
@@ -231,8 +234,12 @@ def render_pista_zona(screen, vista, jugador):
     if jugador.ocupado or getattr(jugador, "minijuego", None) is not None:
         return
     tecla = jugador.nombre_tecla('interactuar')
-    if getattr(jugador, "escondido", False):
+    if getattr(jugador, "preso", None) is not None:
+        texto = "Encerrado: espera a que te saquen"
+    elif getattr(jugador, "escondido", False):
         texto = f"[{tecla}] Salir del escondite"
+    elif getattr(jugador, "pista_mision", None):
+        texto = f"[{tecla}] {jugador.pista_mision}"
     elif jugador.zona_cerca is not None:
         texto = f"[{tecla}] {jugador.zona_cerca['nombre']}"
     elif getattr(jugador, "estacion_cerca", None) is not None:
