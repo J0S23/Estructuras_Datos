@@ -56,6 +56,19 @@ _VECTORES = {
 }
 
 
+def _sonar(juego, nombre, volumen=1.0):
+    if hasattr(juego, "sonar"):
+        juego.sonar(nombre, volumen)
+
+
+def sin_luz(juego):
+    """En un apagón no funciona nada eléctrico (ver Game.sin_luz)."""
+    return bool(getattr(juego, "sin_luz", False))
+
+
+SIN_ENERGIA = "Sin energía: enciendan la caja de fusibles."
+
+
 def _distancia(a, b):
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
@@ -144,6 +157,9 @@ def usar_estacion(juego, jugador, estacion):
 
 
 def _usar_terminal(juego, jugador, terminal):
+    if sin_luz(juego):
+        jugador.avisar("La terminal está apagada. " + SIN_ENERGIA, COLOR_MAL)
+        return
     if terminal["recarga_ms"] > 0:
         jugador.avisar(f"La terminal se reinicia: {math.ceil(terminal['recarga_ms'] / 1000)} s",
                        COLOR_MAL)
@@ -163,6 +179,7 @@ def _usar_terminal(juego, jugador, terminal):
     if apagados:
         from logros import logro
         logro(juego, "apagado", jugador)
+        _sonar(juego, "hackeo", 0.8)
         jugador.sumar_puntos(PUNTOS_HACKEO)
         jugador.avisar(f"Hackeo: {len(apagados)} alien(s) apagados. +{PUNTOS_HACKEO}", COLOR_BIEN)
     else:
@@ -193,15 +210,22 @@ def _reparar_panel(juego, jugador, panel):
     jugador.recarga_ms = int(getattr(nodo, "recarga_s", 0) * 1000)
     if sello is not None:
         # Sellos: la barrera de energía que levanta el panel. Frena a los
-        # aliens (no pasan ni ven a través) y a los jugadores no.
-        juego.mundo.bloqueos_alien.append(sello)
+        # aliens (no pasan ni ven a través) y a los jugadores no. Es de
+        # energía: en un apagón se cae y vuelve con la luz (_actualizar_sellos).
+        if sin_luz(juego):
+            jugador.avisar(f"Panel reparado: el sello se levanta cuando vuelva la luz. "
+                           f"+{PUNTOS_REPARACION}", COLOR_AVISO)
+            _sonar(juego, "encajar", 0.6)
+            return
+        panel["sello_on"] = True
+        _actualizar_sellos(juego)
         jugador.avisar(f"¡Sello activado! Los aliens no pasan por ahí. +{PUNTOS_REPARACION}",
                        COLOR_BIEN)
-        if hasattr(juego, "sonar"):
-            juego.sonar("puerta", 0.7)
+        _sonar(juego, "sello", 0.8)
         if hasattr(juego, "decir"):
             juego.decir("sello", jugador.rol)
         return
+    _sonar(juego, "encajar", 0.6)
     hechos = sum(p["reparado"] for p in juego.paneles)
     jugador.avisar(f"Panel reparado ({hechos}/{len(juego.paneles)}). +{PUNTOS_REPARACION}",
                    COLOR_BIEN)
@@ -243,6 +267,9 @@ def usar_habilidad(juego, jugador):
 
 
 def _escaneo(juego, jugador):
+    if sin_luz(juego):
+        jugador.avisar("Escaneo: no hay sistemas que escanear sin luz.", COLOR_MAL)
+        return False   # no gasta la recarga
     jugador.efectos["mapa"] = DURACION_ESCANEO_MS
     jugador.efectos["escaneo"] = DURACION_ESCANEO_MS
     jugador.avisar("Escaneo: aliens y sus conos en el mapa.", COLOR_AVISO)
@@ -257,6 +284,7 @@ def _fabricar_senuelo(juego, jugador):
     juego.senuelos.append({"pos": jugador.hitbox.center, "ms": DURACION_SENUELO_MS,
                            "duracion": DURACION_SENUELO_MS})
     jugador.avisar("Señuelo armado: los aliens vendrán por el ruido.", COLOR_BIEN)
+    _sonar(juego, "senal", 0.7)
     return True
 
 
@@ -272,6 +300,7 @@ def _regeneracion(juego, jugador):
         if curados:
             from logros import logro
             logro(juego, "medico", jugador)
+            _sonar(juego, "curar", 0.7)
             jugador.curacion_ms = RECARGA_CURACION_MS
             jugador.sumar_puntos(PUNTOS_AYUDA * 2 * len(curados))
             if hasattr(juego, "decir"):
@@ -316,6 +345,7 @@ def _impulso(juego, jugador):
         otro.avisar("Impulso: tu habilidad está lista otra vez.", COLOR_BIEN)
     for terminal in terminales:
         terminal["recarga_ms"] = 0
+    _sonar(juego, "impulso", 0.7)
     ayudas = len(recargados) + (1 if terminales else 0)
     jugador.sumar_puntos(PUNTOS_AYUDA * ayudas)
     partes = []
@@ -368,6 +398,7 @@ def poner_emision(juego, jugador, punto=None):
     atraidos = [a for a in juego.aliens
                 if _distancia(a.centro, punto) <= RADIO_EMISION and a.oir(punto)]
     juego.senales.append({"pos": punto, "ms": DURACION_SENAL_MS, "duracion": DURACION_SENAL_MS})
+    _sonar(juego, "senal", 0.7)
     if atraidos:
         from logros import logro
         logro(juego, "titiritero", jugador)
@@ -380,14 +411,42 @@ def poner_emision(juego, jugador, punto=None):
 
 # -- Cada frame -----------------------------------------------------------------------------
 
+def _actualizar_sellos(juego):
+    """Qué sellos frenan a los aliens ahora: los de paneles reparados, si hay
+    luz. Al volver la luz, un sello no se levanta encima de un alien (lo
+    dejaría encerrado): espera a que se mueva."""
+    mundo = getattr(juego, "mundo", None)
+    if mundo is None:
+        return
+    apagado = sin_luz(juego)
+    activos = []
+    for panel in getattr(juego, "paneles", ()):
+        sello = panel.get("sello_rect")
+        if sello is None or not panel["reparado"]:
+            continue
+        if apagado:
+            panel["sello_on"] = False
+        elif not panel.get("sello_on") and not any(a.hitbox.colliderect(sello)
+                                                   for a in getattr(juego, "aliens", ())):
+            panel["sello_on"] = True
+        if panel.get("sello_on"):
+            activos.append(sello)
+    mundo.bloqueos_alien[:] = activos
+
+
 def actualizar(juego, dt):
     """Recargas, efectos, piezas, señuelos y la línea de estado del HUD."""
+    _actualizar_sellos(juego)
     for terminal in juego.terminales:
         terminal["recarga_ms"] = max(0, terminal["recarga_ms"] - dt)
 
     for jugador in juego.jugadores:
         jugador.recarga_ms = max(0, jugador.recarga_ms - dt)
         jugador.curacion_ms = max(0, getattr(jugador, "curacion_ms", 0) - dt)
+        if sin_luz(juego):
+            # Se fue la luz: se apagan las pantallas (mapa de la terminal y escaneo).
+            jugador.efectos.pop("mapa", None)
+            jugador.efectos.pop("escaneo", None)
         for nombre in list(jugador.efectos):
             jugador.efectos[nombre] -= dt
             if jugador.efectos[nombre] <= 0:
@@ -401,6 +460,7 @@ def actualizar(juego, dt):
             for pieza in juego.piezas:
                 if not pieza["recogida"] and pieza["rect"].colliderect(jugador.hitbox):
                     pieza["recogida"] = True
+                    _sonar(juego, "recoger", 0.6)
                     jugador.piezas += 1
                     jugador.avisar(f"Pieza recogida ({jugador.piezas})", COLOR_BIEN)
 

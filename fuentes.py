@@ -14,7 +14,6 @@ CARPETA_FUENTES = os.path.join(os.path.dirname(__file__), "Fuentes")
 
 ARCHIVOS_FUENTE = (
     "DeterminationMonoWebRegular-Z5oq.ttf",
-    "DeterminationMonoWeb.ttf",
 )
 
 # Tamaño de cada estilo de texto del juego.

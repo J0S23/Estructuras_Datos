@@ -138,6 +138,7 @@ class Alien:
         self.cansado = False
         self.moviendose = False           # para escoger la animación de caminar
         self.ruta_ruido = []              # camino (navegacion.py) hacia el ruido
+        self._ruta_parcial = False        # el camino no llega al ruido, solo lo más cerca posible
         self._destino_ruta = None
         self._recalcular_ms = 0
 
@@ -422,16 +423,20 @@ class Alien:
             self._recalcular_ms = 400
             if nav.libre_entre(self.centro, destino):
                 self.ruta_ruido = [destino]
+                self._ruta_parcial = False
             else:
-                camino = nav.camino(self.centro, destino)
-                if camino is None:
+                camino = nav.camino(self.centro, destino, parcial=True)
+                if not camino:
                     self.ruta_ruido = []
-                    return True          # no se puede llegar: que se rinda
+                    return True          # no se puede llegar ni acercarse: que se rinda
                 self.ruta_ruido = camino
+                self._ruta_parcial = nav.ultimo_parcial
         if not self.ruta_ruido:
             return self._ir_hacia(destino, velocidad, dt, mundo)
-        # El último punto del camino sigue al ruido aunque se mueva un poco.
-        self.ruta_ruido[-1] = destino
+        # El último punto del camino sigue al ruido aunque se mueva un poco
+        # (salvo en un camino parcial: ahí el último es lo más cerca que llega).
+        if not self._ruta_parcial:
+            self.ruta_ruido[-1] = destino
         # Si ya ve el siguiente punto del camino, se salta el actual.
         while len(self.ruta_ruido) > 1 and nav.libre_entre(self.centro, self.ruta_ruido[1]):
             self.ruta_ruido.pop(0)

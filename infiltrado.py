@@ -129,6 +129,7 @@ class CasoInfiltrado:
             return False
         prueba["tomada"] = True
         jugador.objetos.add(prueba["tipo"])
+        self._sonar("recoger", 0.7)
         primera = not self.iniciado
         self.iniciado = True
         logro(self.juego, "algo_no_cuadra", jugador)
@@ -213,6 +214,7 @@ class CasoInfiltrado:
         puntos = PUNTOS_SUBIR_PRUEBA * len(mias)
         jugador.sumar_puntos(puntos)
         logro(self.juego, "evidencia", jugador)
+        self._sonar("senal", 0.7)
         descartados = antes - len(self.restantes())
         texto = (f"Subiste {len(mias)} prueba{'s' if len(mias) > 1 else ''}. La red descartó a "
                  f"{descartados} sospechoso{'s' if descartados != 1 else ''}.")
@@ -247,6 +249,7 @@ class CasoInfiltrado:
         jugador.sumar_puntos(PUNTOS_EXPONER)
         for alien in getattr(self.juego, "aliens", ()):
             alien.confundir(CONFUSION_MS)
+        self._sonar("expuesto", 0.9)
         for otro in self.juego.jugadores:
             otro.avisar(f"¡Infiltrado expuesto! Aliens confundidos {CONFUSION_MS // 1000} s",
                         COLOR_BIEN)
@@ -259,6 +262,7 @@ class CasoInfiltrado:
         jugador.sumar_puntos(PUNTOS_ACUSACION_FALSA)
         for alien in getattr(self.juego, "aliens", ()):
             alien.oir(jugador.hitbox.center)
+        self._sonar("alarma", 0.8)
         for otro in self.juego.jugadores:
             if otro is not jugador:
                 otro.avisar(f"{jugador.rol} acusó a un inocente", COLOR_MAL)
@@ -300,6 +304,10 @@ class CasoInfiltrado:
         if self.estado == "fallido":
             return f"Infiltrado: acusaron a {self.acusado['nombre']}; era {nombre}"
         return f"Infiltrado: no lo descubrieron (era {nombre}, {len(self.subidas)}/3 pruebas)"
+
+    def _sonar(self, nombre, volumen=1.0):
+        if hasattr(self.juego, "sonar"):
+            self.juego.sonar(nombre, volumen)
 
     def _decir(self, evento, rol=None):
         if hasattr(self.juego, "decir"):

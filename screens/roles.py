@@ -50,7 +50,7 @@ def _dibujar_sello(screen, offset, camara, panel, tiempo_ms):
     if sello is None or not sello.inflate(200, 200).colliderect(camara):
         return
     r = sello.move(-offset[0], -offset[1])
-    if panel["reparado"]:
+    if panel.get("sello_on"):
         capa = pygame.Surface(r.size, pygame.SRCALPHA)
         alfa = int(110 + 50 * math.sin(tiempo_ms / 160))
         capa.fill((90, 200, 255, alfa))
@@ -93,7 +93,10 @@ def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
         pygame.draw.rect(screen, (30, 30, 52), caja, border_radius=4)
         pantalla = caja.inflate(-12, -24).move(0, -6)
         brillo = 0.6 + 0.4 * math.sin(tiempo_ms / 300)
-        color = COLOR_TERMINAL if t["recarga_ms"] <= 0 else (90, 90, 110)
+        apagada = t["recarga_ms"] > 0 or extras.get("sin_luz")
+        color = (90, 90, 110) if apagada else COLOR_TERMINAL
+        if extras.get("sin_luz"):
+            brillo = 0.35
         pygame.draw.rect(screen, tuple(int(c * brillo) for c in color), pantalla)
         pygame.draw.rect(screen, (255, 214, 64) if cerca is t else color, caja, 2, border_radius=4)
 

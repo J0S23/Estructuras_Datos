@@ -64,7 +64,7 @@ cosa por si algun mando sale con los numeros cambiados (se ajusta en `mandos.py`
 mitad de velocidad y casi sin ruido.
 
 Teclas globales: **[B]** dibuja el arbol de comportamiento del alien, **[H]** las hitboxes,
-**[L]** apaga la oscuridad, **[F11]** alterna ventana, **[ESC]** (o START en
+**[L]** apaga el campo de vision y la oscuridad, **[F11]** alterna ventana, **[ESC]** (o START en
 el mando) abre el menu de pausa: continuar, opciones, logros y terminar partida. La mision dura siete minutos y termina en una pantalla de resultados.
 
 Ademas hay editores para preparar los assets:
@@ -90,17 +90,22 @@ Lo que lleva cada uno se ve en el inventario, abajo a la derecha. Las consolas y
 **manteniendo** la tecla de interactuar. La habilidad escogida se usa con **F**
 (jugador 1) o **-** (jugador 2, la tecla junto al Shift derecho) y se paga con puntos del equipo.
 
-La nave esta iluminada, pero si sale el evento de **apagon** todo queda a
-oscuras (cada uno ve lo que alumbra su linterna; de los aliens no se ven ni
-los ojos ni su rango de vision, y sus señales quedan a oscuras como ellos) hasta que alguien encuentre la caja de fusibles que
-parpadea en rojo y la encienda manteniendo la tecla. Hay cuatro tipos de alien
+Cada jugador tiene un **campo de vision**, como en Among Us: no ve a traves de
+las paredes ni de las compuertas bajadas; lo que queda detras se ve en penumbra
+y los aliens que esten ahi no se dibujan. Si sale el evento de **apagon** todo
+queda a oscuras (cada uno ve lo que alumbra su linterna, que tampoco atraviesa
+paredes; de los aliens no se ven ni los ojos ni su rango de vision, y sus
+señales quedan a oscuras como ellos) y no funciona nada electrico: terminales,
+NEXUS, escaneo, teclados, consolas, puertas para dos y los sellos del Forjador.
+Dura hasta que alguien encuentre la caja de fusibles que parpadea en rojo y la
+encienda manteniendo la tecla. Hay cuatro tipos de alien
 (Rastreador, Vigia, Ciego y Cazador) con el mismo arbol de comportamiento y
 distintos sentidos. Cada minuto, mas o menos, la nave lanza un evento al azar
 (apagon, alarma o cierre de una compuerta; solo puede haber un apagon a la vez), y la puerta a la sala de control se
 abre solo con dos jugadores, cada uno en un panel. La partida empieza con un
 tutorial sin tiempo: cada jugador pasa los pasos con su tecla de habilidad, y los
 aliens despiertan (y la puerta de la prision deja meter el codigo) solo cuando
-todos terminaron. **[L]** apaga la oscuridad.
+todos terminaron. **[L]** apaga el campo de vision y la oscuridad (para probar).
 
 Mision secundaria (opcional), idea de Joseph: **el infiltrado**. Uno de los que
 escriben en NEXUS es un alien cambiaformas. Por la nave hay tres pruebas (audio,
@@ -112,8 +117,10 @@ se cierra y la nave delata al que acuso.
 ```bash
 python pruebas/prueba_mision.py    # juega la mision completa sin ventana
 python pruebas/prueba_sorpresas.py # oscuridad, aliens, sigilo, eventos, puertas, tutorial
+python pruebas/prueba_vision.py    # campo de vision: las paredes tapan
 python pruebas/prueba_infiltrado.py # mision secundaria del infiltrado de NEXUS
 python pruebas/prueba_logros.py    # arbol de logros y cuando se consigue cada uno
+python pruebas/prueba_sonidos.py   # que todo sonido pedido exista y suene donde va
 python pruebas/simulador.py 8      # bots que juegan 8 partidas: bugs y balance
 python pruebas/prueba_hud.py       # capturas del HUD con 2, 3 y 4 jugadores
 ```

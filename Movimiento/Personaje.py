@@ -1,7 +1,7 @@
 """Carga y control de personajes con sprites de 8 direcciones (formato PixelLab).
 
 Cada personaje vive en su propia carpeta dentro de Imagenes/Personajes/
-(por ejemplo P1, P2) con hojas de sprites así:
+(una por rol: Tecnomante, Forjador...) con hojas de sprites así:
 
     <prefijo>Idle_<direccion>.png        1 frame
     <prefijo>Breathing_<direccion>.png   varios frames (idle animado)
@@ -11,7 +11,7 @@ donde <direccion> es una de las 8: north, north-east, east, south-east,
 south, south-west, west, north-west.
 
 El `<prefijo>` es opcional y las mayúsculas no importan: tanto
-`Walking_south.png` como `Joseph_walking_south.png` o
+`Walking_south.png` como `Tecnomante_walking_south.png` o
 `walking_south-west.png` se reconocen igual. Eso es a propósito, porque los
 sprites vienen exportados con nombres inconsistentes.
 
@@ -253,16 +253,13 @@ class Personaje:
     def _load_config(self, root_dir, ruta_pack=None):
         """Busca el config de hitbox de este personaje.
 
-        Editores/personaje_editor.py guarda el archivo con el nombre del
-        SPRITE que estaba abierto (por ejemplo Idle_east_config.json, o
-        Joseph_Idle_east_config.json), no con el nombre de la carpeta del
-        personaje. Por eso se buscan, en orden:
+        Se buscan, en orden:
 
-        1. Hitboxes/<carpeta>_config.json          (Anny_config.json)
+        1. Hitboxes/<carpeta>_config.json          (Tecnomante_config.json)
         2. Hitboxes/<sprite>_config.json           para cualquier sprite que
            esté dentro de la carpeta del personaje
-        3. Hitboxes/personaje_config.json          config compartido
-        4. personaje_config.json en la raíz
+
+        Si no hay ninguno, valores por defecto.
         """
         carpeta_hitboxes = os.path.join(root_dir, "Hitboxes")
         candidatos = []
@@ -281,16 +278,11 @@ class Personaje:
                     base = os.path.splitext(archivo)[0]
                     candidatos.append(os.path.join(carpeta_hitboxes, f"{base}_config.json"))
 
-        candidatos += [
-            os.path.join(carpeta_hitboxes, "personaje_config.json"),
-            os.path.join(root_dir, "personaje_config.json"),
-        ]
-
         for ruta in candidatos:
             try:
                 with open(ruta, "r", encoding="utf-8") as fh:
                     datos = json.load(fh)
-                self.ruta_config = ruta
+                self.ruta_config = ruta     # lo muestra Editores/visor_personajes.py
                 return datos
             except (OSError, json.JSONDecodeError):
                 continue
