@@ -1,4 +1,4 @@
-"""Vista en vivo del árbol de comportamiento de un alien ([B] en partida).
+"""Vista en vivo del árbol de comportamiento de un alien (Pausa > Opciones > Árbol del alien).
 
 Dibuja el árbol completo encima de la partida y resalta el camino que el
 alien recorrió en este frame, de la raíz a la hoja. Como el alien vuelve a
@@ -70,7 +70,7 @@ def render_arbol_alien(screen, alien, arbol, numero=1, total=1):
     estado = f_titulo.render(f"Ahora: {accion}", True, COLOR_ACTIVO)
     screen.blit(estado, (panel.right - estado.get_width() - 18, panel.y + 12))
 
-    pista = f_pista.render("[B] cerrar   [N] siguiente alien   amarillo = la rama que está tomando",
+    pista = f_pista.render("Pausa > Opciones > Árbol del alien: cambiar o cerrar   amarillo = la rama que está tomando",
                            True, COLOR_TENUE)
     screen.blit(pista, (panel.x + 18, panel.bottom - pista.get_height() - 10))
 

@@ -294,14 +294,15 @@ for _ in range(30):
     g._dibujar()
 con = (time.perf_counter() - inicio) / 30 * 1000
 g.oscuridad = False
-assert not g._extras_dibujo()["oscuridad"], "[L] la apaga aunque haya apagón"
+assert not g._extras_dibujo()["oscuridad"], "la opción de la pausa la apaga aunque haya apagón"
 inicio = time.perf_counter()
 for _ in range(30):
     g._dibujar()
 sin = (time.perf_counter() - inicio) / 30 * 1000
 print(f"dibujar a 1080p: {con:.1f} ms con oscuridad, {sin:.1f} ms sin ella")
 g._manejar_tecla(pygame.K_l)
-assert g.oscuridad
+assert not g.oscuridad, "la L ya no es atajo: va en Pausa > Opciones"
+g.oscuridad = True
 ev.restaurar_luz()
 
 # ================= La puerta de la prisión en la segunda ronda =================

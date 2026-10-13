@@ -19,7 +19,7 @@ pantalla, partida en una vista por jugador.
 
 | Estructura | Donde | Para que |
 |---|---|---|
-| Arbol binario de comportamiento | `Estructuras/arbol_comportamiento.py` | La "IA" de cada alien: cada frame baja de la raiz a una hoja respondiendo preguntas (¿ve a alguien?, ¿oye un ruido?) y la hoja dice que hace. Se ve en vivo con [B]. |
+| Arbol binario de comportamiento | `Estructuras/arbol_comportamiento.py` | La "IA" de cada alien: cada frame baja de la raiz a una hoja respondiendo preguntas (¿ve a alguien?, ¿oye un ruido?) y la hoja dice que hace. Se ve en vivo en Pausa > Opciones > Arbol del alien. |
 | Arbol binario de habilidades | `Estructuras/arbol_habilidades.py` | Progresion de cada rol durante la ronda. Al subir se escoge **una de dos** ramas y la otra se cierra, asi que lo desbloqueado cambia las opciones que el jugador ve. Recorrido por niveles (BFS) para dibujarlo y preorden para descartar la rama perdida. |
 | Arbol N-ario de logros | `Estructuras/arbol_logros.py` | Los logros de la partida, como los de Minecraft: cada uno abre otros. Indice clave -> nodo, subir por los padres hasta la raiz al conseguir uno, BFS por niveles, preorden para moverse por la vista y postorden para ubicar cada nodo al dibujarlo. Pausa > Logros. |
 | Grafo de la nave (BFS) | `navegacion.py` | Los aliens buscan camino por una cuadricula del mapa (cada celda es un nodo) para llegar a un ruido rodeando paredes. |
@@ -63,9 +63,10 @@ flechas y Enter. `python pruebas/probar_mando.py` muestra que boton manda cada
 cosa por si algun mando sale con los numeros cambiados (se ajusta en `mandos.py`). No hay tecla de correr; la de sigilo hace caminar a la
 mitad de velocidad y casi sin ruido.
 
-Teclas globales: **[B]** dibuja el arbol de comportamiento del alien, **[H]** las hitboxes,
-**[L]** apaga el campo de vision y la oscuridad, **[F11]** alterna ventana, **[ESC]** (o START en
-el mando) abre el menu de pausa: continuar, opciones, logros y terminar partida. La mision dura siete minutos y termina en una pantalla de resultados.
+Teclas globales: **[F11]** alterna ventana y **[ESC]** (o START en el mando) abre el
+menu de pausa: continuar, opciones, logros y terminar partida. En Opciones, ademas del
+sonido y la pantalla completa, estan las vistas para probar: apagar el campo de vision y
+la oscuridad, ver las hitboxes y ver el arbol de comportamiento de cada alien en vivo. La mision dura siete minutos y termina en una pantalla de resultados.
 
 Ademas hay editores para preparar los assets:
 
@@ -105,7 +106,7 @@ distintos sentidos. Cada minuto, mas o menos, la nave lanza un evento al azar
 abre solo con dos jugadores, cada uno en un panel. La partida empieza con un
 tutorial sin tiempo: cada jugador pasa los pasos con su tecla de habilidad, y los
 aliens despiertan (y la puerta de la prision deja meter el codigo) solo cuando
-todos terminaron. **[L]** apaga el campo de vision y la oscuridad (para probar).
+todos terminaron.
 
 Mision secundaria (opcional), idea de Joseph: **el infiltrado**. Uno de los que
 escriben en NEXUS es un alien cambiaformas. Por la nave hay tres pruebas (audio,

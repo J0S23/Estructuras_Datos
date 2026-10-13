@@ -6,7 +6,8 @@ detienen (todo avanza con `dt`, no con el reloj de pygame).
 
 Tiene cuatro vistas:
     "menu"       Continuar / Opciones / Logros / Terminar partida
-    "opciones"   volumen del sonido, campo de visión y oscuridad, pantalla completa
+    "opciones"   volumen del sonido, campo de visión y oscuridad, pantalla completa,
+                 y las vistas de prueba: hitboxes y árbol del alien
     "logros"     el árbol de logros de la partida (screens/logros.py)
     "confirmar"  ¿seguro que quieres terminar la partida?
 
@@ -69,11 +70,32 @@ class MenuPausa:
                 ("Campo de visión y oscuridad: " + ("Sí" if self.juego.oscuridad else "No"), "oscuridad"),
                 ("Pantalla completa: " + ("Sí" if self.juego.pantalla_completa else "No"),
                  "pantalla_completa"),
+                ("Ver hitboxes: " + ("Sí" if self.juego.mostrar_hitboxes else "No"), "hitboxes"),
+                (f"Árbol del alien: < {self._texto_arbol()} >", "arbol"),
                 ("Volver", "volver"),
             ]
         if self.vista == "confirmar":
             return OPCIONES_CONFIRMAR
         return OPCIONES_PAUSA
+
+    def _texto_arbol(self):
+        if not self.juego.mostrar_arbol_alien or not self.juego.aliens:
+            return "No"
+        return f"{self.juego.alien_en_vista + 1} de {len(self.juego.aliens)}"
+
+    def _cambiar_arbol(self, signo):
+        """Ciclo No -> alien 1 -> alien 2 -> ... -> No (o al revés)."""
+        juego = self.juego
+        total = len(juego.aliens)
+        if total == 0:
+            juego.mostrar_arbol_alien = False
+            return
+        # 0 = apagado, 1..total = qué alien se ve.
+        actual = juego.alien_en_vista + 1 if juego.mostrar_arbol_alien else 0
+        nuevo = (actual + signo) % (total + 1)
+        juego.mostrar_arbol_alien = nuevo > 0
+        if nuevo > 0:
+            juego.alien_en_vista = nuevo - 1
 
     def titulo(self):
         return {"opciones": "Opciones", "confirmar": "¿Terminar la partida?"}.get(self.vista, "Pausa")
@@ -165,7 +187,9 @@ class MenuPausa:
         if accion == "efectos":
             nuevo = _limitar(round(audio_manager.sfx_volume * 100) + signo * PASO_VOLUMEN)
             audio_manager.apply_sfx_volume(nuevo)
-        elif accion in ("oscuridad", "pantalla_completa"):
+        elif accion == "arbol":
+            self._cambiar_arbol(signo)
+        elif accion in ("oscuridad", "pantalla_completa", "hitboxes"):
             return self.activar(self.seleccion)
         return None
 
@@ -199,6 +223,10 @@ class MenuPausa:
             self.juego.oscuridad = not self.juego.oscuridad
         elif accion == "pantalla_completa":
             return "pantalla_completa"
+        elif accion == "hitboxes":
+            self.juego.mostrar_hitboxes = not self.juego.mostrar_hitboxes
+        elif accion == "arbol":
+            self._cambiar_arbol(1)
         elif accion == "volver":
             self._ir_a("menu")
             self.seleccion = 1

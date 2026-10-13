@@ -11,7 +11,7 @@ Cada alien hace dos cosas por frame:
 El árbol es el mismo para todos los aliens (es contenido, vive en
 data/comportamiento_alien.py); lo que cambia es la ruta de cada uno y lo que
 percibe. Cada alien guarda el último camino que recorrió en el árbol para que
-la vista del árbol ([B] en partida) lo resalte en vivo.
+la vista del árbol (Pausa > Opciones) lo resalte en vivo.
 
 Para volver a su ruta después de perseguir a alguien, el alien deja un
 **rastro**: una pila de puntos por donde pasó desde que salió de la ruta. Al

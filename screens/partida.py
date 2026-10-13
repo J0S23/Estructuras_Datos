@@ -35,7 +35,7 @@ COLOR_ETIQUETA = (255, 255, 255)
 COLOR_SOMBRA = (12, 11, 23)
 GROSOR_SEPARADOR = 4
 
-# Colores de la vista de hitboxes ([H]). Son los mismos que usan los editores
+# Colores de la vista de hitboxes (Pausa > Opciones). Son los mismos que usan los editores
 # de Editores/, para que lo que se dibuja ahí se reconozca aquí.
 COLOR_PARED = (90, 180, 255)
 COLOR_ZONA = (255, 140, 70)
@@ -126,24 +126,10 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
     render_evento(screen, extras.get("eventos"))
     if mostrar_hitboxes:
         _dibujar_leyenda(screen, mundo, jugadores)
-    else:
-        _dibujar_pista(screen)
-
-
-def _dibujar_pista(screen):
-    """Recordatorio de las teclas del prototipo, abajo a la derecha."""
-    font = fuente("small")
-    texto = "[H] hitboxes   [B] arbol del alien   [L] luz   [ESC] pausa"
-    etiqueta = font.render(texto, True, (200, 210, 235))
-    sombra = font.render(texto, True, COLOR_SOMBRA)
-    pos = (screen.get_width() - etiqueta.get_width() - 12,
-           screen.get_height() - etiqueta.get_height() - 8)
-    screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
-    screen.blit(etiqueta, pos)
 
 
 def _dibujar_leyenda(screen, mundo, jugadores):
-    """Franja inferior que explica de qué es cada color, al activar [H]."""
+    """Franja inferior que explica de qué es cada color (Pausa > Opciones > Ver hitboxes)."""
     entradas = [
         (COLOR_PARED, f"paredes ({len(mundo.paredes)})"),
         (COLOR_ZONA, f"zonas ({len(mundo.interactuables)})"),
@@ -165,8 +151,6 @@ def _dibujar_leyenda(screen, mundo, jugadores):
         screen.blit(etiqueta, (x + 20, y + 4))
         x += 20 + etiqueta.get_width() + 22
 
-    pista = font.render("[H] ocultar", True, (170, 180, 205))
-    screen.blit(pista, (screen.get_width() - pista.get_width() - 12, y + 4))
 
 
 def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitboxes,

@@ -101,14 +101,14 @@ poner(alien, der)
 dibujados.clear(); g._dibujar()
 assert dibujados.count(alien) == 0, "se dibujó el alien que está tras la pared"
 pygame.image.save(g.screen, os.path.join(OUT, "vision_a_pared.png"))
-g._manejar_tecla(pygame.K_l)
-assert not g._extras_dibujo()["vision"], "[L] apaga el campo de visión (para probar)"
+g.oscuridad = False      # Pausa > Opciones > Campo de visión y oscuridad
+assert not g._extras_dibujo()["vision"], "la opción apaga el campo de visión (para probar)"
 dibujados.clear(); g._dibujar()
 assert dibujados.count(alien) >= 1, "sin campo de visión se dibuja en la vista que lo alcance"
-g._manejar_tecla(pygame.K_l)
+g.oscuridad = True
 assert g._extras_dibujo()["vision"]
 type(alien).dibujar = original
-print("Dibujo: el alien tras la pared no se dibuja; con [L] sí")
+print("Dibujo: el alien tras la pared no se dibuja; con la opción apagada sí")
 
 # Una compuerta bajada también tapa la vista.
 probada = False
