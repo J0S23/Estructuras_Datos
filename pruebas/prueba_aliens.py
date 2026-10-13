@@ -300,6 +300,18 @@ for _ in range(60 * 20):
 assert juego.resultado == "atrapado", juego.resultado
 print("apretar sin parar pierde:", juego.aciertos, "aciertos,", juego.fallos, "fallos")
 
+# El pulso sube poco a poco junto con la barra del alien, sin presionar nada.
+class _Pulso:
+    pulso = 40.0
+quieto = _Pulso()
+juego = MinijuegoLatidos(quieto.pulso)
+ancho_antes = juego.ancho_zona
+for _ in range(60 * 2):
+    juego.actualizar(DT, quieto)
+assert 45 < quieto.pulso < 50, quieto.pulso
+assert juego.ancho_zona < ancho_antes, "con el pulso más alto la franja se angosta"
+print(f"sin presionar, el pulso sube con la amenaza: 40 -> {quieto.pulso:.1f} en 2 s")
+
 # Visto entrar: si el alien lo ve meterse, va directo a revisar (el Vigía,
 # que sí ve).
 j1.invulnerable_ms = 0

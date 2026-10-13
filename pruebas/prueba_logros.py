@@ -209,6 +209,31 @@ g.current_screen = "resultados"
 cap("logros_d_resultados.png")
 print(f"escapar: 'Libertad', 'Todos a bordo' y 'Nadie me vio' -> {L.arbol.obtenidos()}/{L.arbol.total()}")
 
+# Resultados: botón "Ver logros" abre el árbol; se recorre igual que en la pausa.
+assert g.resultados_vista == "resumen" and g.resultados_sel == 0
+g._manejar_tecla(pygame.K_RETURN)
+assert g.resultados_vista == "logros" and g.resultados_nodo is L.arbol.raiz
+g._manejar_tecla(pygame.K_RIGHT)
+assert g.resultados_nodo is L.arbol.raiz.hijos[0]
+g._manejar_tecla(pygame.K_LEFT)
+assert g.resultados_nodo is L.arbol.raiz
+g._manejar_tecla(pygame.K_DOWN)
+assert g.resultados_nodo is L.arbol.preorden()[1]
+cap("logros_e_resultados_arbol.png")
+g._manejar_tecla(pygame.K_ESCAPE)
+assert g.resultados_vista == "resumen" and g.current_screen == "resultados"
+# Con el mouse: clic en "Ver logros" y vuelve con Esc; con el mando, A y B.
+g._dibujar()
+g._manejar_click(g.resultados_rects[0].center)
+assert g.resultados_vista == "logros"
+g._tecla_mando(2, "volver")
+assert g.resultados_vista == "resumen"
+g._tecla_mando(2, "derecha")
+assert g.resultados_sel == 1
+g._manejar_tecla(pygame.K_RETURN)
+assert g.transitions.active or g.current_screen == "menu", "Volver al menú"
+print("resultados: 'Ver logros' muestra el árbol (teclado, mouse y mando) y 'Volver al menú' sale")
+
 # Otra partida: el árbol empieza de cero.
 g2 = nueva_partida()
 assert g2.logros.arbol.obtenidos() == 0

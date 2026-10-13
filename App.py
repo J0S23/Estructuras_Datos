@@ -46,7 +46,7 @@ from ambiente import Ambiente
 from ia_nave import Narrador
 from mandos import Mandos, tecla_virtual, PUESTOS_CON_MANDO
 from tutorial import Tutorial
-from pausa import MenuPausa
+from pausa import MenuPausa, mover_en_logros
 from audio_manager import audio_manager
 from infiltrado import CasoInfiltrado
 from logros import GestorLogros
@@ -63,11 +63,11 @@ from screens.partida import render_partida, calcular_viewports
 from screens.seleccion import render_cantidad, render_roles, OPCIONES
 from screens.arbol_alien import render_arbol_alien
 from screens.panel_habilidades import precargar_iconos
-from screens.resultados import render_resultados
+from screens.resultados import render_resultados, opciones_resultados
 from screens.ayuda import render_ayuda
 from screens.creditos import render_creditos, reiniciar_scroll
 from screens.pausa import render_pausa
-from screens.logros import render_aviso_logro
+from screens.logros import render_aviso_logro, render_arbol_logros
 
 
 ANCHO_VENTANA, ALTO_VENTANA = 960, 600
@@ -153,6 +153,7 @@ class Game:
         self.logros = None      # árbol de logros de la partida (logros.py)
         self.puertas_dobles, self.compuertas = [], []   # puertas.py
         self.pausa = None     # MenuPausa mientras está abierto (Esc en la partida)
+        self._reiniciar_resultados()
         self.oscuridad = True # Pausa > Opciones la apaga (para probar o para quien la necesite)
         self.mandos = Mandos()  # controles de Xbox para los jugadores 3 y 4
         self.equipo = Equipo()
@@ -471,7 +472,7 @@ class Game:
                 jugador.minijuego = None
                 jugador.avisar("El alien se fue de tu escondite.", (96, 200, 120))
                 continue
-            juego.actualizar(dt)
+            juego.actualizar(dt, jugador)
             if not juego.terminado:
                 continue
             if juego.resultado == "calmado":
@@ -692,6 +693,7 @@ class Game:
             self.sonar("victoria" if self.mision.resultado == "victoria" else "derrota", 0.8)
         for jugador in self.jugadores:
             jugador.cerrar_panel()
+        self._reiniciar_resultados()
         self.transitions.request(self, "resultados")
 
     # -- Abrir zonas ------------------------------------------------------------
@@ -983,7 +985,8 @@ class Game:
     def _tecla_mando(self, puesto, accion):
         """Un botón del mando: en partida y en la selección de rol es la tecla
         virtual de ese jugador; en los menús hace de flechas, Enter y Esc."""
-        if self.current_screen == "partida" and (self.pausa is not None or accion == "pausa"):
+        if (self.current_screen == "partida" and (self.pausa is not None or accion == "pausa")
+                or self.current_screen == "resultados"):
             # START abre la pausa; con la pausa abierta el mando la maneja
             # como en los menús (cruceta, A para aceptar, B o START para volver).
             tecla = {"arriba": pygame.K_UP, "abajo": pygame.K_DOWN,
@@ -1027,7 +1030,7 @@ class Game:
             return
         if self.transitions.active:
             return
-        if self.current_screen in ("menu", "cantidad", "roles") or (
+        if self.current_screen in ("menu", "cantidad", "roles", "resultados") or (
                 self.current_screen == "partida" and self.pausa is not None):
             if key in TECLAS_MOVER_MENU:
                 self.sonar("menu_mover", 0.5)
@@ -1072,12 +1075,56 @@ class Game:
                 self._tecla_en_partida(key)
 
         elif self.current_screen == "resultados":
-            if key in (pygame.K_RETURN, pygame.K_ESCAPE):
-                self.transitions.request(self, "menu")
+            self._tecla_resultados(key)
 
         elif self.current_screen in ("ayuda", "creditos"):
             if key in (pygame.K_RETURN, pygame.K_BACKSPACE, pygame.K_ESCAPE):
                 self.transitions.request(self, self.pantalla_anterior)
+
+    # -- Pantalla de resultados ------------------------------------------------------
+
+    def _reiniciar_resultados(self):
+        self.resultados_vista = "resumen"     # o "logros": el árbol completo
+        self.resultados_sel = 0
+        self.resultados_nodo = None
+        self.resultados_rects = []
+        self.resultados_rects_logros = {}
+
+    def _tecla_resultados(self, key):
+        if self.resultados_vista == "logros":
+            if key in (pygame.K_ESCAPE, pygame.K_BACKSPACE, pygame.K_RETURN, pygame.K_KP_ENTER):
+                self.resultados_vista = "resumen"
+            else:
+                self.resultados_nodo = mover_en_logros(self.logros.arbol, self.resultados_nodo, key)
+            return
+        opciones = opciones_resultados(self.logros)
+        if key in (pygame.K_LEFT, pygame.K_UP, pygame.K_a, pygame.K_w):
+            self.resultados_sel = (self.resultados_sel - 1) % len(opciones)
+        elif key in (pygame.K_RIGHT, pygame.K_DOWN, pygame.K_d, pygame.K_s):
+            self.resultados_sel = (self.resultados_sel + 1) % len(opciones)
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self._activar_resultados(opciones[self.resultados_sel % len(opciones)][1])
+        elif key == pygame.K_ESCAPE:
+            self._activar_resultados("menu")
+
+    def _activar_resultados(self, accion):
+        if accion == "logros" and self.logros is not None:
+            self.resultados_vista = "logros"
+            self.resultados_nodo = self.logros.arbol.raiz
+        elif accion == "menu":
+            self.transitions.request(self, "menu")
+
+    def _click_resultados(self, pos):
+        if self.resultados_vista == "logros":
+            for nodo, rect in self.resultados_rects_logros.items():
+                if rect.collidepoint(pos):
+                    self.resultados_nodo = nodo
+            return
+        for i, rect in enumerate(self.resultados_rects):
+            if rect.collidepoint(pos):
+                self.resultados_sel = i
+                self._activar_resultados(opciones_resultados(self.logros)[i][1])
+                return
 
     def _accion_pausa(self, accion):
         """Lo que pidió el menú de pausa (pausa.py)."""
@@ -1117,6 +1164,9 @@ class Game:
             jugador, punto = self._jugador_con_mapa_en(pos)
             if jugador is not None:
                 acciones_rol.poner_emision(self, jugador, punto)
+            return
+        if self.current_screen == "resultados" and not self.transitions.active:
+            self._click_resultados(pos)
             return
         if self.current_screen != "menu" or self.transitions.active:
             return
@@ -1163,9 +1213,13 @@ class Game:
             else:
                 render_pausa(self.screen, self.pausa)
         elif self.current_screen == "resultados":
-            render_resultados(self.screen, self.jugadores,
-                              self.font, self.small_font, self.mision, self.equipo,
-                              self.infiltrado, self.logros)
+            if self.resultados_vista == "logros" and self.logros is not None:
+                self.resultados_rects_logros = render_arbol_logros(
+                    self.screen, self.logros.arbol, self.resultados_nodo)
+            else:
+                self.resultados_rects = render_resultados(
+                    self.screen, self.jugadores, self.font, self.small_font, self.mision,
+                    self.equipo, self.infiltrado, self.logros, self.resultados_sel)
         elif self.current_screen == "ayuda":
             render_ayuda(self.screen, self.small_font)
         elif self.current_screen == "creditos":
