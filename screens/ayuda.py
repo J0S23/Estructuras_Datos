@@ -16,7 +16,7 @@ ARBOLES = [
     ("Árbol de comportamiento de los aliens", [
         "Cada frame el alien baja de la raíz a una hoja respondiendo",
         "preguntas (¿ve a alguien?, ¿oye un ruido?) y la hoja dice",
-        "qué hace: patrullar, perseguir, revisar... Se ve con [B].",
+        "qué hace: patrullar, perseguir, revisar... Se ve en Pausa > Opciones.",
     ]),
     ("Árbol binario de habilidades", [
         "Cada rol escoge una de dos ramas; la otra se cierra para",

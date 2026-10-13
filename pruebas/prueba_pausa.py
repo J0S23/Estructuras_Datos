@@ -84,10 +84,30 @@ g._manejar_tecla(pygame.K_RIGHT)
 g.pausa.seleccion = 1; g._manejar_tecla(pygame.K_RETURN)
 assert g.oscuridad is False
 g._manejar_tecla(pygame.K_RETURN); assert g.oscuridad is True
+# Las vistas de prueba: hitboxes y árbol del alien (ya no hay atajos H/B/N/L).
+acciones = [a for _, a in g.pausa.opciones()]
+assert acciones == ["efectos", "oscuridad", "pantalla_completa", "hitboxes", "arbol", "volver"]
+g.pausa.seleccion = 3; g._manejar_tecla(pygame.K_RETURN)
+assert g.mostrar_hitboxes is True
+g._manejar_tecla(pygame.K_RETURN); assert g.mostrar_hitboxes is False
+g.pausa.seleccion = 4
+assert not g.mostrar_arbol_alien
+g._manejar_tecla(pygame.K_RIGHT)
+assert g.mostrar_arbol_alien and g.alien_en_vista == 0 and "1 de" in g.pausa.opciones()[4][0]
+g._manejar_tecla(pygame.K_RETURN)
+assert g.mostrar_arbol_alien and g.alien_en_vista == 1
+for _ in range(len(g.aliens) - 1):
+    g._manejar_tecla(pygame.K_RIGHT)
+assert not g.mostrar_arbol_alien, "después del último alien vuelve a No"
+g._manejar_tecla(pygame.K_LEFT)
+assert g.mostrar_arbol_alien and g.alien_en_vista == len(g.aliens) - 1
 g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "pausa_opciones.png"))
+for _ in range(len(g.aliens)):
+    g._manejar_tecla(pygame.K_LEFT)
+assert not g.mostrar_arbol_alien
 g._manejar_tecla(pygame.K_ESCAPE)
 assert g.pausa.vista == "menu"
-print("Opciones: volumen y oscuridad cambian; Esc vuelve")
+print("Opciones: volumen, oscuridad, hitboxes y árbol del alien; Esc vuelve")
 
 # Continuar.
 g.pausa.seleccion = 0; g._manejar_tecla(pygame.K_RETURN)

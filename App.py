@@ -153,7 +153,7 @@ class Game:
         self.logros = None      # árbol de logros de la partida (logros.py)
         self.puertas_dobles, self.compuertas = [], []   # puertas.py
         self.pausa = None     # MenuPausa mientras está abierto (Esc en la partida)
-        self.oscuridad = True # [L] la apaga (para probar o para quien la necesite)
+        self.oscuridad = True # Pausa > Opciones la apaga (para probar o para quien la necesite)
         self.mandos = Mandos()  # controles de Xbox para los jugadores 3 y 4
         self.equipo = Equipo()
         self._nuevo_ambiente()
@@ -1064,15 +1064,8 @@ class Game:
             self._accion_pausa(self.pausa.tecla(key))
 
         elif self.current_screen == "partida":
-            if key == pygame.K_h:
-                self.mostrar_hitboxes = not self.mostrar_hitboxes
-            elif key == pygame.K_b:
-                self.mostrar_arbol_alien = not self.mostrar_arbol_alien
-            elif key == pygame.K_l:
-                self.oscuridad = not self.oscuridad
-            elif key == pygame.K_n and self.aliens:
-                self.alien_en_vista = (self.alien_en_vista + 1) % len(self.aliens)
-            elif key == pygame.K_ESCAPE:
+            # Hitboxes, árbol del alien y campo de visión van en Pausa > Opciones.
+            if key == pygame.K_ESCAPE:
                 self.pausa = MenuPausa(self)
                 self.sonar("pausa", 0.6)
             else:
