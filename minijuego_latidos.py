@@ -12,8 +12,10 @@ Hay dos barras:
 
 Un fallo sube la amenaza un poco: si no, apretar la tecla sin parar ganaría
 siempre. El pulso del jugador también entra: entre más alto, más angosta la
-franja y más rápida la aguja; cada acierto lo baja y cada fallo lo sube. Por
-eso "calmar los latidos" es literalmente lo que te salva.
+franja y más rápida la aguja. El pulso sube poco a poco junto con la amenaza
+(el alien está cada vez más cerca de abrir), cada acierto lo baja y cada fallo
+lo sube de golpe. Por eso "calmar los latidos" es literalmente lo que te salva:
+si tardas en acertar, el corazón se acelera y cada vez es más difícil.
 
 Esta clase solo tiene la lógica (nada de pygame), así que se prueba sin
 ventana. La dibuja screens/paneles.render_minijuego.
@@ -34,6 +36,9 @@ AMENAZA_POR_FALLO = 7.0
 
 PULSO_POR_ACIERTO = 12.0
 PULSO_POR_FALLO = 6.0
+# Cuánto sube el pulso por cada punto que sube sola la amenaza: con la amenaza
+# subiendo 7 por segundo, el pulso sube 3.5 por segundo (la barra de pulso va de 0 a 100).
+PULSO_POR_AMENAZA = 0.5
 
 ANCHO_ZONA_CALMADO = 0.28     # ancho de la franja verde con el pulso en 0
 ANCHO_ZONA_PANICO = 0.12      # ...y con el pulso en 100
@@ -92,7 +97,7 @@ class MinijuegoLatidos:
 
     # -- Frame ----------------------------------------------------------------------
 
-    def actualizar(self, dt):
+    def actualizar(self, dt, jugador=None):
         if self.terminado:
             return
         segundos = dt / 1000
@@ -105,7 +110,12 @@ class MinijuegoLatidos:
         elif self.aguja <= 0:
             self.aguja, self.sentido = -self.aguja, 1
 
+        antes = self.amenaza
         self.amenaza = min(100.0, self.amenaza + AMENAZA_SUBE_POR_S * segundos)
+        # El corazón se acelera a la par de la barra del alien.
+        if jugador is not None:
+            jugador.pulso = min(100.0, jugador.pulso + (self.amenaza - antes) * PULSO_POR_AMENAZA)
+            self.ajustar_al_pulso(jugador.pulso)
         if self.amenaza >= 100:
             self.resultado = "atrapado"
 

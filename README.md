@@ -66,7 +66,7 @@ mitad de velocidad y casi sin ruido.
 Teclas globales: **[F11]** alterna ventana y **[ESC]** (o START en el mando) abre el
 menu de pausa: continuar, opciones, logros y terminar partida. En Opciones, ademas del
 sonido y la pantalla completa, estan las vistas para probar: apagar el campo de vision y
-la oscuridad, ver las hitboxes y ver el arbol de comportamiento de cada alien en vivo. La mision dura siete minutos y termina en una pantalla de resultados.
+la oscuridad, ver las hitboxes y ver el arbol de comportamiento de cada alien en vivo. La mision dura siete minutos y termina en una pantalla de resultados, desde donde se puede ver el arbol de logros de la partida.
 
 Ademas hay editores para preparar los assets:
 

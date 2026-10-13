@@ -328,9 +328,10 @@ class Jugador:
         No salta de golpe: sube y baja a una velocidad fija, así que pasar
         rápido junto a un alien es menos peligroso que quedarse cerca.
 
-        Mientras dura el minijuego del escondite el pulso solo lo mueven los
-        aciertos y fallos (ver minijuego_latidos.py): aquí únicamente avanza
-        la animación del latido.
+        Mientras dura el minijuego del escondite el pulso lo mueve el
+        minijuego (sube con la barra del alien, baja con los aciertos y sube
+        con los fallos; ver minijuego_latidos.py): aquí únicamente avanza la
+        animación del latido.
         """
         self.visto = visto
         self.invulnerable_ms = max(0, self.invulnerable_ms - dt)

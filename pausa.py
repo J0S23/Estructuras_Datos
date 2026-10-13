@@ -46,6 +46,26 @@ DERECHA = (pygame.K_RIGHT, pygame.K_d)
 ACEPTAR = (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE)
 
 
+def mover_en_logros(arbol, nodo, key):
+    """Mueve el cursor por el árbol de logros con una tecla y devuelve el nodo.
+
+    Arriba/abajo siguen el preorden (pasan por todos, rama por rama),
+    izquierda sube al padre y derecha baja al primer hijo. Lo usan la pausa y
+    la pantalla de resultados.
+    """
+    orden = arbol.preorden()
+    nodo = nodo if nodo in orden else orden[0]
+    if key in ARRIBA:
+        nodo = orden[(orden.index(nodo) - 1) % len(orden)]
+    elif key in ABAJO:
+        nodo = orden[(orden.index(nodo) + 1) % len(orden)]
+    elif key in IZQUIERDA and nodo.padre is not None:
+        nodo = nodo.padre
+    elif key in DERECHA and nodo.hijos:
+        nodo = nodo.hijos[0]
+    return nodo
+
+
 class MenuPausa:
     def __init__(self, juego):
         self.juego = juego
@@ -125,17 +145,7 @@ class MenuPausa:
             self._ir_a("menu")
             self.seleccion = 2
             return
-        orden = self.arbol.preorden()
-        nodo = self.nodo if self.nodo in orden else orden[0]
-        if key in ARRIBA:
-            nodo = orden[(orden.index(nodo) - 1) % len(orden)]
-        elif key in ABAJO:
-            nodo = orden[(orden.index(nodo) + 1) % len(orden)]
-        elif key in IZQUIERDA and nodo.padre is not None:
-            nodo = nodo.padre
-        elif key in DERECHA and nodo.hijos:
-            nodo = nodo.hijos[0]
-        self.nodo = nodo
+        self.nodo = mover_en_logros(self.arbol, self.nodo, key)
 
     def tecla(self, key):
         """Procesa una tecla. Devuelve la acción para App.py, o None."""

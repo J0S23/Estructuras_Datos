@@ -2,11 +2,15 @@
 
 A la izquierda, cómo le fue a cada jugador; a la derecha, hasta dónde llegó la
 misión, cómo terminó el caso del infiltrado y cuántos logros consiguieron.
+Abajo, dos botones: "Ver logros" (el árbol completo, screens/logros.py) y
+"Volver al menú". La lógica de la pantalla está en App._tecla_resultados.
 """
+
+import pygame
 
 
 from fuentes import fuente_de_tamano
-from ui_components import dibujar_texto_ajustado
+from ui_components import Button, dibujar_texto_ajustado
 
 
 COLOR_FONDO = (26, 28, 48)
@@ -17,8 +21,18 @@ COLOR_BARRA = (96, 188, 118)
 COLOR_BARRA_MALA = (214, 74, 68)
 
 
+def opciones_resultados(logros):
+    """(texto, acción) de los botones de abajo."""
+    opciones = []
+    if logros is not None:
+        opciones.append((f"Ver logros  {logros.arbol.obtenidos()}/{logros.arbol.total()}", "logros"))
+    opciones.append(("Volver al menú", "menu"))
+    return opciones
+
+
 def render_resultados(screen, jugadores, font=None, small_font=None,
-                      mision=None, equipo=None, infiltrado=None, logros=None):
+                      mision=None, equipo=None, infiltrado=None, logros=None, seleccion=0):
+    """Dibuja el resumen. Devuelve los rects de los botones (para el mouse)."""
     screen.fill(COLOR_FONDO)
     ancho, alto = screen.get_size()
     f = fuente_de_tamano(max(14, min(22, ancho // 62)))
@@ -91,5 +105,21 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
         texto = f"Logros: {logros.arbol.obtenidos()}/{logros.arbol.total()}"
         screen.blit(f.render(texto, True, COLOR_TITULO), (columna + 40, y + 6))
 
-    pie = f.render("[ENTER] volver al menú", True, (194, 216, 248))
-    screen.blit(pie, pie.get_rect(center=(ancho // 2, alto - 40)))
+    # -- Botones ------------------------------------------------------------------
+    opciones = opciones_resultados(logros)
+    alto_boton = 52 if alto >= 600 else 40
+    ancho_boton = min(360, (ancho - 80) // len(opciones) - 20)
+    separacion = 28
+    total = len(opciones) * ancho_boton + (len(opciones) - 1) * separacion
+    x = ancho // 2 - total // 2
+    y_botones = alto - alto_boton - 46
+    mouse = pygame.mouse.get_pos()
+    rects = []
+    for i, (texto, accion) in enumerate(opciones):
+        rect = pygame.Rect(x, y_botones, ancho_boton, alto_boton)
+        Button(rect, texto, accion).draw(screen, hover=(i == seleccion or rect.collidepoint(mouse)))
+        rects.append(rect)
+        x += ancho_boton + separacion
+    pista = fuente_de_tamano(15).render("Flechas + Enter  ·  Mando: cruceta y A", True, COLOR_TENUE)
+    screen.blit(pista, pista.get_rect(midtop=(ancho // 2, y_botones + alto_boton + 12)))
+    return rects
