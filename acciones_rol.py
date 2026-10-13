@@ -32,12 +32,13 @@ DURACION_SENUELO_MS = 7000            # Fabricación improvisada
 RADIO_SENUELO = 600
 RADIO_AYUDA = 230                     # Regeneración e Impulso: hasta dónde llegan
 CALMA_REGENERACION = 35
+RECARGA_CURACION_MS = 40000           # Regeneración: cada cuánto puede devolver vidas
 AMENAZA_REGENERACION = 30
 DURACION_INTERCEPCION_MS = 8000       # Interceptación básica
-DISTANCIA_EMISION = 320               # Emisión modulada: qué tan lejos cae la señal
-RADIO_EMISION = 750
+DISTANCIA_EMISION = 320               # Emisión modulada: dónde empieza el cursor
+RADIO_EMISION = 750                   # los aliens a esta distancia de la señal la oyen
+VELOCIDAD_CURSOR_EMISION = 16         # px del mundo por frame, moviendo el cursor con teclas
 DURACION_SENAL_MS = 2500
-ALCANCE_SINTONIA = 1000               # Sintonía de señales (flechas)
 
 PUNTOS_HACKEO = 10
 PUNTOS_REPARACION = 15
@@ -71,14 +72,12 @@ def preparar_estaciones(mundo, objetos=None):
     """Terminales, paneles y piezas en píxeles.
 
     Salen de los objetos del mapa (objetos_mapa.py, lo que se pone con el
-    editor); sin ellos, de data/estaciones.py.
+    editor).
     """
-    from data import estaciones
     from data.estaciones import TAMANO_ESTACION, TAMANO_PIEZA
-    if objetos is not None:
-        lista_t, lista_p, lista_piezas = objetos["terminales"], objetos["paneles"], objetos["piezas"]
-    else:
-        lista_t, lista_p, lista_piezas = estaciones.TERMINALES, estaciones.PANELES, estaciones.PIEZAS
+    if objetos is None:
+        return [], [], []
+    lista_t, lista_p, lista_piezas = objetos["terminales"], objetos["paneles"], objetos["piezas"]
 
     terminales = []
     for datos in lista_t:
@@ -162,6 +161,8 @@ def _usar_terminal(juego, jugador, terminal):
         alien.aturdir(DURACION_HACKEO_MS)
     terminal["recarga_ms"] = RECARGA_HACKEO_MS
     if apagados:
+        from logros import logro
+        logro(juego, "apagado", jugador)
         jugador.sumar_puntos(PUNTOS_HACKEO)
         jugador.avisar(f"Hackeo: {len(apagados)} alien(s) apagados. +{PUNTOS_HACKEO}", COLOR_BIEN)
     else:
@@ -173,6 +174,9 @@ def _reparar_panel(juego, jugador, panel):
         jugador.avisar(f"Necesitas Reparación básica ([{jugador.nombre_tecla('habilidades')}])",
                        COLOR_MAL)
         return
+    if jugador.recarga_ms > 0:
+        jugador.avisar(f"Reparación: {math.ceil(jugador.recarga_ms / 1000)} s", COLOR_MAL)
+        return
     if jugador.piezas <= 0:
         jugador.avisar("Te falta una pieza para repararlo.", COLOR_MAL)
         return
@@ -183,6 +187,10 @@ def _reparar_panel(juego, jugador, panel):
     jugador.piezas -= 1
     panel["reparado"] = True
     jugador.sumar_puntos(PUNTOS_REPARACION)
+    # La Reparación usa la misma recarga que las habilidades con tecla (el
+    # Forjador que la escoge no tiene otra), así el Impulso también la llena.
+    nodo = next((n for n in jugador.arbol.desbloqueadas() if n.clave == "REPARACION"), None)
+    jugador.recarga_ms = int(getattr(nodo, "recarga_s", 0) * 1000)
     if sello is not None:
         # Sellos: la barrera de energía que levanta el panel. Frena a los
         # aliens (no pasan ni ven a través) y a los jugadores no.
@@ -215,13 +223,18 @@ def usar_habilidad(juego, jugador):
         jugador.avisar(f"{nodo.nombre}: {math.ceil(jugador.recarga_ms / 1000)} s", COLOR_MAL)
         return False
 
+    if nodo.clave == "EMISION":
+        # No se gasta todavía: abre el mapa para escoger dónde cae la señal.
+        # La recarga empieza al ponerla (poner_emision).
+        abrir_emision(juego, jugador)
+        return True
+
     usar = {
         "ESCANEO": _escaneo,
         "FABRICACION": _fabricar_senuelo,
         "REGENERACION": _regeneracion,
         "IMPULSO": _impulso,
         "INTERCEPCION": _intercepcion,
-        "EMISION": _emision,
     }.get(nodo.clave)
     if usar is None or not usar(juego, jugador):
         return False
@@ -248,6 +261,21 @@ def _fabricar_senuelo(juego, jugador):
 
 
 def _regeneracion(juego, jugador):
+    """Calma el pulso de los que están cerca y, si la curación está lista, le
+    devuelve una vida a cada compañero cercano al que le falte alguna."""
+    curados = []
+    if jugador.curacion_ms <= 0:
+        for otro in companeros_cerca(juego, jugador):
+            if otro.preso is None and otro.curar(1):
+                curados.append(otro)
+                otro.avisar("La Biomante te devolvió una vida.", COLOR_BIEN)
+        if curados:
+            from logros import logro
+            logro(juego, "medico", jugador)
+            jugador.curacion_ms = RECARGA_CURACION_MS
+            jugador.sumar_puntos(PUNTOS_AYUDA * 2 * len(curados))
+            if hasattr(juego, "decir"):
+                juego.decir("curacion", jugador.rol)
     ayudados = 0
     for otro in companeros_cerca(juego, jugador, incluirse=True):
         otro.pulso = max(0.0, otro.pulso - CALMA_REGENERACION)
@@ -263,21 +291,39 @@ def _regeneracion(juego, jugador):
             ayudados += 1
     if ayudados:
         jugador.sumar_puntos(PUNTOS_AYUDA * ayudados)
-    jugador.avisar(f"Regeneración: {ayudados} compañero(s) más tranquilos.", COLOR_BIEN)
+    if curados:
+        jugador.avisar(f"Regeneración: +1 vida a {len(curados)} compañero(s).", COLOR_BIEN)
+    elif jugador.curacion_ms > 0:
+        jugador.avisar(f"Pulso calmado. Curar vidas: {math.ceil(jugador.curacion_ms / 1000)} s",
+                       COLOR_AVISO)
+    else:
+        jugador.avisar(f"Regeneración: {ayudados} compañero(s) más tranquilos.", COLOR_BIEN)
     return True
 
 
 def _impulso(juego, jugador):
-    recargados = [o for o in companeros_cerca(juego, jugador) if o.recarga_ms > 0]
-    if not recargados:
-        jugador.avisar("Nadie cerca necesita energía.", COLOR_AVISO)
-        return False
+    """Impulso energético: recarga lo que tengan en espera los compañeros
+    cercanos (su habilidad o la Reparación del Forjador) y reinicia todas las
+    terminales, para que el Tecnomante pueda volver a hackear enseguida."""
+    recargados = [o for o in companeros_cerca(juego, jugador)
+                  if o.recarga_ms > 0 and not getattr(o, "eliminado", False)]
+    terminales = [t for t in getattr(juego, "terminales", []) if t["recarga_ms"] > 0]
+    if not recargados and not terminales:
+        jugador.avisar("Nada necesita energía ahora.", COLOR_AVISO)
+        return False   # no gasta la recarga
     for otro in recargados:
         otro.recarga_ms = 0
         otro.avisar("Impulso: tu habilidad está lista otra vez.", COLOR_BIEN)
-    jugador.sumar_puntos(PUNTOS_AYUDA * len(recargados))
-    jugador.avisar(f"Impulso a {len(recargados)} compañero(s). +{PUNTOS_AYUDA * len(recargados)}",
-                   COLOR_BIEN)
+    for terminal in terminales:
+        terminal["recarga_ms"] = 0
+    ayudas = len(recargados) + (1 if terminales else 0)
+    jugador.sumar_puntos(PUNTOS_AYUDA * ayudas)
+    partes = []
+    if recargados:
+        partes.append(f"{len(recargados)} compañero(s)")
+    if terminales:
+        partes.append(f"{len(terminales)} terminal(es)")
+    jugador.avisar(f"Impulso: {' y '.join(partes)} listos. +{PUNTOS_AYUDA * ayudas}", COLOR_BIEN)
     return True
 
 
@@ -287,25 +333,49 @@ def _intercepcion(juego, jugador):
     return True
 
 
-def _emision(juego, jugador):
-    """La señal cae delante del jugador, lejos de él, para alejar a los aliens."""
+def abrir_emision(juego, jugador):
+    """Emisión modulada: abre el mapa de la nave en la vista del Resonante.
+
+    Ahí solo se ve él (no sus compañeros ni los aliens) y un cursor que se
+    mueve con el mouse o con sus teclas de movimiento; con clic o con su tecla
+    de interactuar la señal cae donde está el cursor.
+    """
     dx, dy = _VECTORES.get(jugador.personaje.direccion, (0, 1))
-    origen = jugador.hitbox.center
-    punto = origen
-    # Avanza hasta DISTANCIA_EMISION o hasta la primera pared.
-    for paso in range(16, DISTANCIA_EMISION + 1, 16):
-        candidato = (origen[0] + dx * paso, origen[1] + dy * paso)
-        if not juego.mundo.linea_libre(origen, candidato):
-            break
-        punto = candidato
+    x, y = jugador.hitbox.center
+    jugador.abrir_panel({"tipo": "emision",
+                         "cursor_mapa": [x + dx * DISTANCIA_EMISION, y + dy * DISTANCIA_EMISION]})
+
+
+def mover_cursor_emision(juego, jugador, dx, dy, dt=16):
+    panel = jugador.panel
+    if panel is None or panel.get("tipo") != "emision":
+        return
+    paso = VELOCIDAD_CURSOR_EMISION * dt / 16
+    mundo = juego.mundo
+    panel["cursor_mapa"][0] = min(mundo.ancho - 1, max(0, panel["cursor_mapa"][0] + dx * paso))
+    panel["cursor_mapa"][1] = min(mundo.alto - 1, max(0, panel["cursor_mapa"][1] + dy * paso))
+
+
+def poner_emision(juego, jugador, punto=None):
+    """Pone la señal (en `punto`, o donde está el cursor) y empieza la recarga."""
+    panel = jugador.panel or {}
+    if punto is None:
+        punto = panel.get("cursor_mapa", jugador.hitbox.center)
+    # Que caiga en el piso, no dentro de una pared.
+    x, y = juego.mundo.punto_libre((int(punto[0]) - 17, int(punto[1]) - 10), 34, 20)
+    punto = (int(x + 17), int(y + 10))
+    jugador.cerrar_panel()
     atraidos = [a for a in juego.aliens
                 if _distancia(a.centro, punto) <= RADIO_EMISION and a.oir(punto)]
-    juego.senales.append({"pos": (int(punto[0]), int(punto[1])), "ms": DURACION_SENAL_MS,
-                          "duracion": DURACION_SENAL_MS})
+    juego.senales.append({"pos": punto, "ms": DURACION_SENAL_MS, "duracion": DURACION_SENAL_MS})
     if atraidos:
+        from logros import logro
+        logro(juego, "titiritero", jugador)
         jugador.sumar_puntos(PUNTOS_AYUDA)
     jugador.avisar(f"Señal falsa: {len(atraidos)} alien(s) van a revisarla.", COLOR_AVISO)
-    return True
+    nodo = habilidad_activa(jugador)
+    jugador.recarga_ms = int(getattr(nodo, "recarga_s", 0) * 1000)
+    return punto
 
 
 # -- Cada frame -----------------------------------------------------------------------------
@@ -317,6 +387,7 @@ def actualizar(juego, dt):
 
     for jugador in juego.jugadores:
         jugador.recarga_ms = max(0, jugador.recarga_ms - dt)
+        jugador.curacion_ms = max(0, getattr(jugador, "curacion_ms", 0) - dt)
         for nombre in list(jugador.efectos):
             jugador.efectos[nombre] -= dt
             if jugador.efectos[nombre] <= 0:
@@ -350,9 +421,7 @@ def actualizar(juego, dt):
 
 def linea_de_estado(jugador):
     """Lo que dice la tercera línea del HUD: la habilidad y si está lista."""
-    partes = []
-    if jugador.arbol.tiene("INGENIO"):
-        partes.append(f"Piezas: {jugador.piezas}")
+    partes = []   # las piezas ya se ven en el inventario (paneles.render_inventario)
     nodo = habilidad_activa(jugador)
     tecla = jugador.nombre_tecla("habilidad")
     if nodo is not None:
@@ -360,6 +429,8 @@ def linea_de_estado(jugador):
             partes.append(f"{nodo.nombre}: {math.ceil(jugador.recarga_ms / 1000)} s")
         else:
             partes.append(f"[{tecla}] {nodo.nombre} lista")
+    elif jugador.recarga_ms > 0:
+        partes.append(f"{jugador.arbol.actual.nombre}: {math.ceil(jugador.recarga_ms / 1000)} s")
     elif len(jugador.arbol.desbloqueadas()) <= 1:
         partes.append(f"[{jugador.nombre_tecla('habilidades')}] escoge tu habilidad")
     else:

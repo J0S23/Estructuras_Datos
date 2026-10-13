@@ -1,15 +1,12 @@
 """Pantalla de resultados al terminar la ronda.
 
-Muestra cómo le fue a cada jugador y cómo quedó Ciudad Nova. Los puntos son
-de cada rol (cada uno persigue su propio objetivo), pero los indicadores son
-compartidos: es una sola ciudad y las decisiones de todos la movieron.
+A la izquierda, cómo le fue a cada jugador; a la derecha, hasta dónde llegó la
+misión, cómo terminó el caso del infiltrado y cuántos logros consiguieron.
 """
 
-import pygame
 
-from config import (INDICADORES_CIUDAD_INICIALES, INDICADORES_INVERSOS,
-                    INDICADOR_LABELS)
 from fuentes import fuente_de_tamano
+from ui_components import dibujar_texto_ajustado
 
 
 COLOR_FONDO = (26, 28, 48)
@@ -20,8 +17,8 @@ COLOR_BARRA = (96, 188, 118)
 COLOR_BARRA_MALA = (214, 74, 68)
 
 
-def render_resultados(screen, jugadores, state, font=None, small_font=None,
-                      mision=None, equipo=None):
+def render_resultados(screen, jugadores, font=None, small_font=None,
+                      mision=None, equipo=None, infiltrado=None, logros=None):
     screen.fill(COLOR_FONDO)
     ancho, alto = screen.get_size()
     f = fuente_de_tamano(max(14, min(22, ancho // 62)))
@@ -64,29 +61,35 @@ def render_resultados(screen, jugadores, state, font=None, small_font=None,
             screen.blit(f.render("sin árbol de habilidades definido", True, COLOR_TENUE), (110, y))
         y += paso + 14
 
-    # -- Ciudad -----------------------------------------------------------------
+    # -- La misión ----------------------------------------------------------------
     y = 130
-    screen.blit(f.render("Cómo quedó la tripulación", True, COLOR_TITULO), (columna + 40, y))
+    screen.blit(f.render("La misión", True, COLOR_TITULO), (columna + 40, y))
     y += paso + 6
+    if mision is not None and mision.activa:
+        from mision import PIEZAS_NECESARIAS
+        fases = {"prision": "seguían en la prisión", "sabotaje": "apagando las consolas",
+                 "capsula": "llevando piezas a la cápsula", "reparar": "reparando la cápsula",
+                 "huida": "corriendo a la cápsula"}
+        lineas = ["Escaparon de la nave." if mision.resultado == "victoria"
+                  else f"Se quedaron {fases.get(mision.fase, mision.fase)}.",
+                  f"Piezas en la cápsula: {mision.piezas_entregadas}/{PIEZAS_NECESARIAS}"]
+        if logros is not None:
+            lineas.append(f"Veces que los atraparon: {logros.capturas_total}")
+        eliminados = [j.rol for j in jugadores if getattr(j, "eliminado", False)]
+        lineas.append("Eliminados: " + (", ".join(eliminados) if eliminados else "nadie"))
+        for linea in lineas:
+            dibujar_texto_ajustado(screen, linea, f, columna + 60, y, ancho - columna - 80, COLOR_TEXTO)
+            y += paso
 
-    for clave in INDICADORES_CIUDAD_INICIALES:
-        valor = state.indicadores.get(clave, 0)
-        inicial = INDICADORES_CIUDAD_INICIALES[clave]
-        delta = valor - inicial
-        nombre = INDICADOR_LABELS.get(clave, clave)
-
-        etiqueta = f"{nombre}: {valor}"
-        if delta:
-            etiqueta += f"  ({'+' if delta > 0 else ''}{delta})"
-        screen.blit(f.render(etiqueta, True, COLOR_TEXTO), (columna + 60, y))
-
-        bueno = (delta <= 0) if clave in INDICADORES_INVERSOS else (delta >= 0)
-        barra = pygame.Rect(columna + 60, y + f.get_linesize() + 2, 300, 12)
-        pygame.draw.rect(screen, (20, 22, 34), barra)
-        relleno = int((barra.width - 4) * max(0, min(100, valor)) / 100)
-        pygame.draw.rect(screen, COLOR_BARRA if bueno else COLOR_BARRA_MALA,
-                         (barra.x + 2, barra.y + 2, relleno, barra.height - 4))
-        y += paso + 18
+    # Misión secundaria del infiltrado (infiltrado.py): cómo terminó.
+    resumen = infiltrado.resumen() if infiltrado is not None else None
+    if resumen:
+        color = COLOR_BARRA if infiltrado.estado == "expuesto" else COLOR_TENUE
+        dibujar_texto_ajustado(screen, resumen, f, columna + 40, y + 6, ancho - columna - 60, color)
+        y += paso
+    if logros is not None:
+        texto = f"Logros: {logros.arbol.obtenidos()}/{logros.arbol.total()}"
+        screen.blit(f.render(texto, True, COLOR_TITULO), (columna + 40, y + 6))
 
     pie = f.render("[ENTER] volver al menú", True, (194, 216, 248))
     screen.blit(pie, pie.get_rect(center=(ancho // 2, alto - 40)))

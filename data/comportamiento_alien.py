@@ -1,4 +1,4 @@
-"""Lo que hacen los aliens: su árbol de comportamiento y sus rutas de patrulla.
+"""Lo que hacen los aliens: su árbol de comportamiento.
 
 El árbol se lee de arriba hacia abajo y de izquierda a derecha: las preguntas
 más cerca de la raíz son las más urgentes. Para cambiar cómo se comporta un
@@ -6,10 +6,8 @@ alien se cambia este diccionario, no alien.py. Cada `condicion` tiene que
 existir en `Alien.percibir()`, y cada `accion` en `Alien._ejecutar()`; la
 prueba pruebas/prueba_aliens.py lo comprueba.
 
-Las rutas usan coordenadas de 0 a 1 sobre el tamaño del mapa, como las zonas
-de data/tareas.py. El alien va de un punto al siguiente en línea recta, así
-que entre dos puntos seguidos no puede haber paredes: `Mundo` lo revisa al
-empezar la partida y avisa por consola si una ruta atraviesa una pared.
+Las rutas de patrulla son del mapa (Hitboxes/<mapa>_objetos.json, con el
+editor de mapa), igual que el tipo de alien de cada ruta.
 """
 
 ARBOL_ALIEN = {
@@ -49,12 +47,3 @@ ARBOL_ALIEN = {
         },
     },
 }
-
-# Una ruta por alien. Salieron del mapa del Colegio (1536x1536 a ESCALA_MAPA 3)
-# revisando a ojo dónde se puede caminar.
-RUTAS_ALIENS = [
-    # Vuelta grande alrededor del patio central.
-    [(0.345, 0.268), (0.664, 0.268), (0.664, 0.680), (0.345, 0.680)],
-    # Ida y vuelta por el corredor de arriba, frente a los salones.
-    [(0.065, 0.246), (0.931, 0.246)],
-]

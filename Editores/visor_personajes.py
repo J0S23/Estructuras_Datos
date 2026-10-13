@@ -68,7 +68,7 @@ def main():
     indice = personajes.index(pedido) if pedido in personajes else 0
 
     pygame.init()
-    pygame.display.set_caption("Visor de personajes - Alcalde Digital")
+    pygame.display.set_caption("Visor de personajes - NEXUS")
     screen = pygame.display.set_mode((ANCHO, ALTO))
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("arial", 18)

@@ -1,12 +1,12 @@
 """Paneles que se dibujan DENTRO del viewport de un jugador.
 
 La partida es local y en pantalla dividida, así que una tarea no puede abrirse
-como una pantalla que tape todo: mientras el ciudadano lee una publicación, el
-candidato tiene que poder seguir caminando por su mitad. Por eso estos paneles
+como una pantalla que tape todo: mientras uno lee una nota o usa una terminal,
+los demás tienen que poder seguir caminando por su parte. Por eso estos paneles
 se dibujan recortados al viewport de su dueño y nada más.
 
-Un panel es un diccionario, no una clase: lo arma `App.py` (que es quien sabe
-del ABB y de los árboles) y aquí solo se dibuja. Campos que entiende:
+Un panel es un diccionario, no una clase: lo arma la lógica (App.py, mision.py,
+infiltrado.py...) y aquí solo se dibuja. Campos que entiende:
 
     tipo      "opciones" | "resultado" | "habilidades" | "aviso"
     titulo    encabezado del panel
@@ -14,6 +14,8 @@ del ABB y de los árboles) y aquí solo se dibuja. Campos que entiende:
     opciones  lista de dicts con "texto" y opcionalmente "detalle"/"bloqueada"
     pie       línea de ayuda de teclas
 """
+
+import math
 
 import pygame
 
@@ -199,8 +201,8 @@ def render_hud(screen, vista, jugador, segundos_restantes):
     reloj = f.render(_formato_reloj(segundos_restantes), True, COLOR_TEXTO)
     screen.blit(reloj, (vista.right - reloj.get_width() - 12, y))
 
-    # Línea propia del rol (el ciudadano ve aquí cuántas cadenas dudosas
-    # siguen circulando, según la búsqueda por rango del ABB).
+    # Línea propia del rol: la recarga de su habilidad y cosas así
+    # (acciones_rol.linea_de_estado).
     if jugador.info:
         y += f.get_linesize()
         screen.blit(f.render(jugador.info, True, COLOR_INFO), (x, y))
@@ -222,6 +224,26 @@ def render_mensaje(screen, vista, jugador):
     # Debajo de la barra del HUD, que tiene 2 o 3 líneas según el rol.
     lineas = 3 if jugador.info else 2
     caja.y = vista.y + f.get_linesize() * lineas + 20
+    # Esa fila la comparte con los corazones (render_vidas): el mensaje se
+    # corre a la derecha de ellos, y si así no cabe, se achica la letra. Solo
+    # si ni así cabe va debajo (en la fila de arriba ahí lo tapa el cartel de
+    # la IA de la nave, por eso es el último recurso).
+    if getattr(jugador, "vidas", None) is not None:
+        from jugador import VIDAS_INICIALES
+        tam = max(16, min(26, vista.width // 34))
+        fin_corazones = vista.x + 14 + VIDAS_INICIALES * (tam + 6) + 10
+        if caja.left - 10 < fin_corazones + 8:
+            disponible = vista.right - 18 - (fin_corazones + 18)
+            for px in range(f.get_height() - 1, 10, -1):
+                if etiqueta.get_width() <= disponible:
+                    break
+                etiqueta = fuente_de_tamano(px).render(jugador.mensaje, True, jugador.mensaje_color)
+            alto_fila = caja.height
+            caja = etiqueta.get_rect(left=fin_corazones + 18,
+                                     centery=caja.y + alto_fila // 2)
+            if caja.right + 10 > vista.right - 8:
+                caja.centerx = vista.centerx
+                caja.y = vista.y + f.get_linesize() * lineas + 14 + tam + 12 + 14
 
     fondo = pygame.Surface((caja.width + 20, caja.height + 10), pygame.SRCALPHA)
     fondo.fill((14, 15, 28, 215))
@@ -453,3 +475,161 @@ def render_minijuego(screen, vista, jugador):
     pygame.draw.rect(screen, COLOR_AMENAZA, lleno)
     pygame.draw.rect(screen, COLOR_BORDE, lateral, 2)
     screen.blit(etiqueta, (lateral.centerx - etiqueta.get_width() // 2, lateral.bottom + 6))
+
+
+# -- Vidas -------------------------------------------------------------------------
+
+COLOR_VIDA = (236, 64, 82)
+COLOR_VIDA_VACIA = (60, 40, 52)
+
+
+def dibujar_corazon(screen, centro, tam, lleno, color=COLOR_VIDA):
+    """Un corazón de `tam` px de ancho: dos círculos y un triángulo."""
+    cx, cy = centro
+    r = max(2, tam // 4)
+    relleno = color if lleno else COLOR_VIDA_VACIA
+    for dx in (-r, r):
+        pygame.draw.circle(screen, relleno, (cx + dx, cy - r // 2), r)
+    pygame.draw.polygon(screen, relleno, [(cx - 2 * r, cy - r // 3), (cx + 2 * r, cy - r // 3),
+                                          (cx, cy + int(r * 1.9))])
+    borde = (255, 230, 235) if lleno else (120, 90, 100)
+    # Contorno: los dos lóbulos y la punta.
+    pygame.draw.arc(screen, borde, (cx - 2 * r, cy - r // 2 - r, 2 * r, 2 * r), 0.3, 3.4, 1)
+    pygame.draw.arc(screen, borde, (cx, cy - r // 2 - r, 2 * r, 2 * r), -0.3, 2.85, 1)
+    pygame.draw.line(screen, borde, (cx - 2 * r, cy - r // 3), (cx, cy + int(r * 1.9)), 1)
+    pygame.draw.line(screen, borde, (cx + 2 * r, cy - r // 3), (cx, cy + int(r * 1.9)), 1)
+    if lleno:
+        pygame.draw.circle(screen, (255, 200, 210), (cx - r, cy - r), max(1, r // 3))
+
+
+def render_vidas(screen, vista, jugador):
+    """Las vidas del jugador: tres corazones arriba a la izquierda, debajo del
+    HUD. El que se acaba de perder (o de recuperar) parpadea un momento."""
+    from jugador import VIDAS_INICIALES
+    vidas = getattr(jugador, "vidas", None)
+    if vidas is None:
+        return
+    f = _fuente_para(vista)
+    lineas = 3 if jugador.info else 2
+    tam = max(16, min(26, vista.width // 34))
+    x = vista.x + 14 + tam // 2
+    y = vista.y + f.get_linesize() * lineas + 14 + tam // 2 + 6
+    fondo = pygame.Surface((VIDAS_INICIALES * (tam + 6) + 10, tam + 12), pygame.SRCALPHA)
+    fondo.fill((14, 15, 28, 170))
+    screen.blit(fondo, (x - tam // 2 - 6, y - tam // 2 - 6))
+    parpadeo = getattr(jugador, "vida_cambio_ms", 0) > 0 and (pygame.time.get_ticks() // 120) % 2
+    for i in range(VIDAS_INICIALES):
+        lleno = i < vidas
+        if parpadeo and i == vidas:      # el que se acaba de perder
+            dibujar_corazon(screen, (x + i * (tam + 6), y), tam, True, (255, 240, 240))
+            continue
+        dibujar_corazon(screen, (x + i * (tam + 6), y), tam, lleno)
+
+
+def render_eliminado(screen, vista, jugador):
+    """Si el jugador ya no tiene vidas, su mitad de la pantalla lo dice."""
+    if not getattr(jugador, "eliminado", False):
+        return
+    capa = pygame.Surface(vista.size, pygame.SRCALPHA)
+    capa.fill((20, 6, 10, 170))
+    screen.blit(capa, vista.topleft)
+    f = _fuente_para(vista)
+    from fuentes import fuente_de_tamano
+    grande = fuente_de_tamano(max(24, min(48, vista.width // 14)))
+    titulo = grande.render("ELIMINADO", True, COLOR_VIDA)
+    screen.blit(titulo, titulo.get_rect(center=(vista.centerx, vista.centery - grande.get_linesize())))
+    for i, (texto, color) in enumerate((("Te atraparon 3 veces.", COLOR_TEXTO),
+                                         ("Tus compañeros siguen: ¡ánimo desde afuera!", COLOR_TENUE))):
+        img = f.render(texto, True, color)
+        screen.blit(img, img.get_rect(center=(vista.centerx, vista.centery + i * (f.get_linesize() + 6))))
+
+
+# -- Inventario ------------------------------------------------------------------------
+
+def _icono_objeto(screen, tipo, centro, tam):
+    """Dibujitos de los objetos: pieza (engranaje), decodificador (chip) y kit
+    (llave inglesa)."""
+    from screens.mision_dibujo import COLOR_CONSUMIBLE
+    cx, cy = centro
+    if tipo == "pieza":
+        color = (255, 170, 50)
+        for i in range(6):
+            a = i * math.pi / 3
+            pygame.draw.circle(screen, color, (int(cx + math.cos(a) * tam * 0.32),
+                                               int(cy + math.sin(a) * tam * 0.32)), max(2, tam // 7))
+        pygame.draw.circle(screen, color, (cx, cy), int(tam * 0.3))
+        pygame.draw.circle(screen, (40, 30, 10), (cx, cy), max(2, tam // 8))
+    elif tipo == "decodificador":
+        color = COLOR_CONSUMIBLE["decodificador"]
+        chip = pygame.Rect(0, 0, int(tam * 0.6), int(tam * 0.6))
+        chip.center = centro
+        for i in range(3):
+            x = chip.x + 3 + i * (chip.width - 6) // 2
+            pygame.draw.line(screen, color, (x, chip.y - 4), (x, chip.bottom + 3), 2)
+            y = chip.y + 3 + i * (chip.height - 6) // 2
+            pygame.draw.line(screen, color, (chip.x - 4, y), (chip.right + 3, y), 2)
+        pygame.draw.rect(screen, (24, 30, 50), chip)
+        pygame.draw.rect(screen, color, chip, 2)
+    elif tipo == "kit":
+        color = COLOR_CONSUMIBLE["kit"]
+        caja = pygame.Rect(0, 0, int(tam * 0.8), int(tam * 0.55))
+        caja.midbottom = (cx, cy + tam // 3)
+        pygame.draw.rect(screen, color, caja, border_radius=3)
+        asa = pygame.Rect(0, 0, int(tam * 0.36), int(tam * 0.3))
+        asa.midbottom = (cx, caja.y + 2)
+        pygame.draw.rect(screen, color, asa, 2, border_radius=3)
+        pygame.draw.line(screen, (30, 60, 40), (caja.x + 3, caja.centery), (caja.right - 4, caja.centery), 2)
+    elif tipo.startswith("prueba_"):
+        from screens.infiltrado_dibujo import icono_prueba
+        icono_prueba(screen, tipo, centro, tam)
+
+
+NOMBRE_OBJETO = {"pieza": ("Pieza", "Piezas"),
+                 "decodificador": ("Decodificador", "Decodificadores"),
+                 "kit": ("Kit de herramientas", "Kits de herramientas"),
+                 # Las pruebas del infiltrado (data/infiltrado.py).
+                 "prueba_audio": ("Audio interceptado", "Audios interceptados"),
+                 "prueba_expediente": ("Expediente", "Expedientes"),
+                 "prueba_captura": ("Captura de cámara", "Capturas de cámara")}
+
+
+def render_inventario(screen, vista, jugador):
+    """Lo que lleva el jugador, en un cuadrito abajo a la derecha de su vista:
+    una fila por objeto, con su dibujito y "x3 Piezas"."""
+    if getattr(jugador, "eliminado", False):
+        return
+    objetos = []
+    if getattr(jugador, "piezas", 0) > 0:
+        objetos.append(("pieza", jugador.piezas))
+    inventario = getattr(jugador, "objetos", {})
+    for tipo in ("decodificador", "kit", "prueba_audio", "prueba_expediente", "prueba_captura"):
+        cantidad = inventario.get(tipo, 0) if hasattr(inventario, "get") else int(tipo in inventario)
+        if cantidad > 0:
+            objetos.append((tipo, cantidad))
+    f = fuente_de_tamano(max(11, min(15, vista.width // 60)))
+    tam = max(18, min(26, vista.width // 40))
+    titulo = f.render("Inventario", True, COLOR_TENUE)
+    textos = [f.render(f"x{n} {NOMBRE_OBJETO[t][n > 1]}", True, COLOR_TEXTO) for t, n in objetos]
+    ancho = max([titulo.get_width()] + [tam + 8 + t.get_width() for t in textos] + [80]) + 16
+    fila = max(tam, f.get_linesize()) + 4
+    alto = titulo.get_height() + 10 + max(1, len(objetos)) * fila
+    caja = pygame.Rect(0, 0, ancho, alto)
+    margen_abajo = 12
+    if vista.bottom >= screen.get_height() - 2:
+        margen_abajo = 40        # deja libre la línea de teclas de abajo
+    caja.bottomright = (vista.right - 12, vista.bottom - margen_abajo)
+    fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
+    fondo.fill((14, 15, 28, 205))
+    screen.blit(fondo, caja.topleft)
+    pygame.draw.rect(screen, (70, 76, 110), caja, 1, border_radius=4)
+    screen.blit(titulo, (caja.x + 8, caja.y + 4))
+    y = caja.y + titulo.get_height() + 8
+    if not objetos:
+        vacio = f.render("vacío", True, (110, 116, 150))
+        screen.blit(vacio, (caja.x + 8, y))
+        return
+    for (tipo, _), texto in zip(objetos, textos):
+        centro = (caja.x + 8 + tam // 2, y + fila // 2)
+        _icono_objeto(screen, tipo, centro, tam)
+        screen.blit(texto, (caja.x + 8 + tam + 8, y + (fila - texto.get_height()) // 2))
+        y += fila

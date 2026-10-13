@@ -25,7 +25,6 @@ import random
 
 import pygame
 
-from fuentes import fuente
 
 
 INTERVALO_MIN_S, INTERVALO_MAX_S = 50, 80
@@ -209,6 +208,7 @@ class GestorEventos:
 
     def restaurar_luz(self, jugador=None):
         self.apagon = False
+        self.restauro = jugador          # para el logro (logros.py)
         if self.caja is not None:
             self.caja["progreso"] = 0.0
         self.caja = None

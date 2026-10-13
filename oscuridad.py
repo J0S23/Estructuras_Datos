@@ -9,8 +9,9 @@ Sobre cada viewport se pone una capa negra casi opaca y se le "abren huecos":
 - el cono de su linterna, hacia donde camina,
 - un halo chico alrededor de cada compañero (se ven entre ellos).
 
-Los aliens fuera de la luz no se ven: solo el brillo de sus ojos
-(Alien.dibujar_ojos), y el Ciego, que no tiene ojos, ni eso.
+De los aliens solo se ve el cuerpo, y solo donde llega la luz: durante el
+apagón no se dibujan sus conos, el anillo del Ciego ni sus ojos, y sus señales
+(!, ?, zZ) quedan debajo de la oscuridad, igual de oscuras que el alien. La única forma de volver a verlos es prender la caja de fusibles.
 
 Cómo se hace sin que pese: un "mapa de luz" en grises, una sola superficie por
 tamaño de viewport que se reutiliza cada frame. El cono se pinta directo con
@@ -114,7 +115,7 @@ def dibujar(screen, vista, camara, dueño, jugadores, apagon=False):
 
     # Halos: el del dueño y uno chico por compañero. Con MAX gana el más claro.
     for jugador in jugadores:
-        if jugador is not dueño and jugador.escondido:
+        if jugador is not dueño and (jugador.escondido or getattr(jugador, "eliminado", False)):
             continue
         radio = (RADIO_HALO if jugador is dueño else RADIO_HALO_COMPANERO) * factor
         halo = _halo(radio)
@@ -123,18 +124,3 @@ def dibujar(screen, vista, camara, dueño, jugadores, apagon=False):
                  special_flags=pygame.BLEND_RGB_MAX)
 
     screen.blit(luz, vista.topleft, special_flags=pygame.BLEND_RGB_MULT)
-
-
-def alumbrado(punto, dueño, apagon=False):
-    """True si `punto` (del mundo) cae dentro de la luz del dueño."""
-    factor = FACTOR_APAGON if apagon else 1.0
-    centro = dueño.hitbox.center
-    dx, dy = punto[0] - centro[0], punto[1] - centro[1]
-    distancia = math.hypot(dx, dy)
-    if distancia <= RADIO_HALO * factor * 0.7:
-        return True
-    if distancia > ALCANCE_LINTERNA * factor:
-        return False
-    angulo = getattr(getattr(dueño, "linterna", None), "angulo", math.pi / 2)
-    diferencia = (math.atan2(dy, dx) - angulo + math.pi) % (2 * math.pi) - math.pi
-    return abs(diferencia) <= MEDIO_ANGULO_LINTERNA

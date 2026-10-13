@@ -13,30 +13,23 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 os.chdir(RAIZ)
 
-from Estructuras.arbol_decision import ArbolDecision
-from Estructuras.abb_publicaciones import ArbolPublicaciones
-from data.publicaciones_ejemplo import PUBLICACIONES_EJEMPLO
+from data.comportamiento_alien import ARBOL_ALIEN
+from data.logros import ARBOL_LOGROS
+from Estructuras.arbol_comportamiento import ArbolComportamiento
+from Estructuras.arbol_logros import ArbolLogros
 
 
 if __name__ == "__main__":
-    print("Inicializando Alcalde Digital...")
+    print("Inicializando NEXUS...")
 
-    arbol_publicaciones = ArbolPublicaciones()
-    for idx, item in enumerate(PUBLICACIONES_EJEMPLO, start=1):
-        arbol_publicaciones.insertar(idx * 10, item["texto"], "rumor")
+    alien = ArbolComportamiento(ARBOL_ALIEN)
+    accion, camino = alien.decidir({"ve_jugador": True, "jugador_al_alcance": False})
+    print("Árbol del alien: si ve a alguien ->", accion)
 
-    root_data = PUBLICACIONES_EJEMPLO[0]
-    arbol = ArbolDecision(root_data)
-    root_node = arbol.construir_desde_dict(root_data)
-    print("Raíz:", root_node.texto)
-    print("Recorrido de prueba:", root_node.hijos[0].texto, root_node.hijos[0].hijos[0].texto)
-
-    print("ABB inorden:")
-    for pub in arbol_publicaciones.recorrido_inorden():
-        print(pub)
-
-    print("Búsqueda por veracidad:")
-    for ver in [10, 20, 30]:
-        print(ver, arbol_publicaciones.buscar(ver))
+    logros = ArbolLogros(ARBOL_LOGROS)
+    print("Árbol de logros:", logros.total(), "logros en", len(logros.por_niveles()), "niveles")
+    nuevos = logros.conseguir("libertad")
+    print("Conseguir 'Libertad' marca:", [n.nombre for n in nuevos])
+    assert nuevos[0] is logros.raiz and logros.buscar("chatarrero").obtenido
 
     print("Fin de la prueba de lógica de estructuras.")

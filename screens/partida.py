@@ -9,16 +9,20 @@ vertical (izquierda y derecha); con tres, dos arriba y uno abajo a lo ancho;
 con cuatro, en cuartos.
 """
 
+import math
+import os
+
 import pygame
 
 from fuentes import fuente, fuente_de_tamano
 import oscuridad
+from screens.infiltrado_dibujo import dibujar_pruebas
 import puertas
 from eventos import dibujar_cajas, dibujar_brillo_caja
-from alien import DISTANCIA_OJOS
 from screens.paneles import (render_panel, render_hud, render_mensaje, render_pista_zona,
                              render_pulso, render_tension, render_minijuego,
-                             render_escondido)
+                             render_escondido, render_vidas, render_eliminado,
+                             render_inventario)
 from ambiente import temblor, dibujar_susto
 from screens.panel_habilidades import render_panel_habilidades
 from screens import roles as dibujo_roles
@@ -45,7 +49,7 @@ def calcular_viewports(ancho, alto, cantidad):
 
     mitad_x = ancho // 2
     if cantidad == 2:
-        # Ciudadano izquierda, Candidato derecha.
+        # Jugador 1 a la izquierda, jugador 2 a la derecha.
         return [
             pygame.Rect(0, 0, mitad_x, alto),
             pygame.Rect(mitad_x, 0, ancho - mitad_x, alto),
@@ -62,8 +66,7 @@ def calcular_viewports(ancho, alto, cantidad):
             pygame.Rect(0, mitad_y, ancho, alto - mitad_y),
         ]
 
-    # Cuatro: ciudadano arriba-izq, candidato arriba-der,
-    # influencer abajo-izq, periodista abajo-der.
+    # Cuatro: 1 arriba-izq, 2 arriba-der, 3 abajo-izq, 4 abajo-der.
     return [
         pygame.Rect(0, 0, mitad_x, mitad_y),
         pygame.Rect(mitad_x, 0, ancho - mitad_x, mitad_y),
@@ -92,25 +95,30 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
                        aliens, escondites, extras)
 
         # Lo de la interfaz va después del mundo pero sigue recortado al
-        # viewport: si el ciudadano abre una tarea, el candidato no la ve ni se
-        # le congela su mitad.
+        # viewport: si un jugador abre un panel, los demás no lo ven ni se les
+        # congela su parte.
         clip_previo = screen.get_clip()
         screen.set_clip(vista)
         render_escondido(screen, vista, jugador)
         render_tension(screen, vista, jugador)
         render_hud(screen, vista, jugador, segundos_restantes)
+        render_vidas(screen, vista, jugador)
         render_pista_zona(screen, vista, jugador)
         if jugador.panel is not None and jugador.panel.get("tipo") == "habilidades":
             render_panel_habilidades(screen, vista, jugador)
+        elif jugador.panel is not None and jugador.panel.get("tipo") == "emision":
+            render_mapa_emision(screen, vista, jugador, mundo)
         else:
             render_panel(screen, vista, jugador)
         render_mensaje(screen, vista, jugador)
         render_pulso(screen, vista, jugador)
+        render_inventario(screen, vista, jugador)
         dibujo_roles.render_minimapa(screen, vista, jugador, extras)
         mision_dibujo.render_progreso(screen, vista, jugador)
         render_minijuego(screen, vista, jugador)
         render_tutorial(screen, vista, jugador, extras.get("tutorial"))
         dibujar_susto(screen, vista, jugador)
+        render_eliminado(screen, vista, jugador)
         screen.set_clip(clip_previo)
 
     _dibujar_separadores(screen, viewports)
@@ -124,7 +132,7 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
 def _dibujar_pista(screen):
     """Recordatorio de las teclas del prototipo, abajo a la derecha."""
     font = fuente("small")
-    texto = "[H] hitboxes   [B] arbol del alien   [L] luz   [TAB] ver el ABB   [ESC] menu"
+    texto = "[H] hitboxes   [B] arbol del alien   [L] luz   [ESC] pausa"
     etiqueta = font.render(texto, True, (200, 210, 235))
     sombra = font.render(texto, True, COLOR_SOMBRA)
     pos = (screen.get_width() - etiqueta.get_width() - 12,
@@ -195,7 +203,7 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         if zona["roles"] and getattr(dueño, "rol", None) not in zona["roles"]:
             continue
         rect = zona["rect"]
-        if not rect.colliderect(camara):
+        if not rect.inflate(0, 160).colliderect(camara):   # el sprite sobresale hacia arriba
             continue
         en_pantalla = _a_pantalla(rect, vista, camara)
         _dibujar_zona(screen, en_pantalla, zona, dueño)
@@ -214,10 +222,17 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         puertas.dibujar(screen, offset, camara, extras.get("puertas_dobles", ()),
                         extras.get("compuertas", ()), tiempo_ms)
         dibujar_cajas(screen, offset, camara, extras.get("eventos"), tiempo_ms)
+        dibujar_pruebas(screen, offset, camara, extras.get("infiltrado"), tiempo_ms)
+
+    # Durante un apagón de los aliens solo se ve su cuerpo (y su señal),
+    # oscurecidos como todo lo demás: ni conos, ni el anillo del Ciego, ni
+    # ojos. Así no queda otra que ir a prender la caja de fusibles.
+    a_oscuras = bool((extras or {}).get("oscuridad")) and not mostrar_hitboxes
 
     # Los conos de visión van en el piso, debajo de todos los personajes.
-    for alien in aliens:
-        alien.dibujar_vision(screen, offset)
+    if not a_oscuras:
+        for alien in aliens:
+            alien.dibujar_vision(screen, offset)
 
     # Jugadores y aliens juntos, ordenados por Y para que el de adelante tape
     # al de atrás.
@@ -235,16 +250,14 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
     # Oscuridad: encima del mundo y de los personajes, debajo de los avisos.
     # Con [H] se apaga para poder revisar las hitboxes.
     eventos = (extras or {}).get("eventos")
-    if (extras or {}).get("oscuridad") and not mostrar_hitboxes:
-        oscuridad.dibujar(screen, vista, camara, dueño, jugadores)
-        dibujar_brillo_caja(screen, offset, dueño, eventos, tiempo_ms)
-        centro = dueño.hitbox.center
-        for alien in aliens:
-            if (abs(alien.centro[0] - centro[0]) + abs(alien.centro[1] - centro[1])
-                    <= DISTANCIA_OJOS * 1.4):
-                alien.dibujar_ojos(screen, offset)
+    # Las señales (!, ?, zZ, ...) se dibujan ANTES de la oscuridad: en un
+    # apagón quedan tan oscuras como el resto del alien y solo se leen bien
+    # donde llega la linterna.
     for alien in aliens:
         alien.dibujar_senal(screen, offset)
+    if a_oscuras:
+        oscuridad.dibujar(screen, vista, camara, dueño, jugadores)
+        dibujar_brillo_caja(screen, offset, dueño, eventos, tiempo_ms)
     _dibujar_ruido(screen, offset, dueño)
 
     if extras:
@@ -253,6 +266,76 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         dibujo_roles.dibujar_flechas(screen, vista, camara, dueño, extras)
 
     screen.set_clip(clip_previo)
+
+
+_mapas_emision = {}
+
+
+def render_mapa_emision(screen, vista, jugador, mundo):
+    """El mapa de la nave para escoger dónde cae la señal de la Emisión.
+
+    Solo se ve el Resonante (para no mandar los aliens encima de alguien por
+    error, hay que saber dónde está uno mismo) y el cursor, con el círculo de
+    hasta dónde se oye la señal. Guarda en el panel el rect y la escala del
+    mapa para que el clic del mouse se pueda pasar a coordenadas del mundo.
+    """
+    from acciones_rol import RADIO_EMISION
+    panel = jugador.panel
+    margen = 24
+    alto_pie = 28
+    disponible = vista.inflate(-margen * 2, -margen * 2 - alto_pie)
+    escala = min(disponible.width / mundo.ancho, disponible.height / mundo.alto)
+    tam = (max(1, int(mundo.ancho * escala)), max(1, int(mundo.alto * escala)))
+    clave = (id(mundo.imagen), tam)
+    if clave not in _mapas_emision:
+        mini = pygame.transform.smoothscale(mundo.imagen, tam)
+        mini.fill((150, 150, 175), special_flags=pygame.BLEND_RGB_MULT)
+        _mapas_emision[clave] = mini
+    rect = pygame.Rect(0, 0, *tam)
+    rect.centerx = vista.centerx
+    rect.y = disponible.y + (disponible.height - tam[1]) // 2
+    panel["rect_mapa"], panel["escala_mapa"] = rect, escala
+
+    fondo = pygame.Surface(vista.size, pygame.SRCALPHA)
+    fondo.fill((8, 8, 18, 200))
+    screen.blit(fondo, vista.topleft)
+    screen.blit(_mapas_emision[clave], rect.topleft)
+    pygame.draw.rect(screen, (233, 120, 200), rect, 2)
+
+    def a_mapa(p):
+        return int(rect.x + p[0] * escala), int(rect.y + p[1] * escala)
+
+    t = pygame.time.get_ticks()
+    # Él mismo.
+    yo = a_mapa(jugador.hitbox.center)
+    pygame.draw.circle(screen, (255, 255, 255), yo, 7 + int(2 * math.sin(t / 200)), 2)
+    pygame.draw.circle(screen, (233, 120, 200), yo, 4)
+    # El cursor y hasta dónde llega la señal.
+    cx, cy = a_mapa(panel["cursor_mapa"])
+    radio = max(4, int(RADIO_EMISION * escala))
+    capa = pygame.Surface((radio * 2 + 4, radio * 2 + 4), pygame.SRCALPHA)
+    pygame.draw.circle(capa, (255, 214, 64, 40), (radio + 2, radio + 2), radio)
+    pygame.draw.circle(capa, (255, 214, 64, 150), (radio + 2, radio + 2), radio, 1)
+    clip_previo = screen.get_clip()
+    screen.set_clip(rect.clip(clip_previo))       # el círculo no se sale del mapa
+    screen.blit(capa, (cx - radio - 2, cy - radio - 2))
+    screen.set_clip(clip_previo)
+    for d in (-1, 1):
+        pygame.draw.line(screen, (255, 214, 64), (cx + d * 4, cy), (cx + d * 12, cy), 2)
+        pygame.draw.line(screen, (255, 214, 64), (cx, cy + d * 4), (cx, cy + d * 12), 2)
+    pygame.draw.circle(screen, (255, 214, 64), (cx, cy), 3)
+
+    texto_pie = (f"[clic] o [mover + {jugador.nombre_tecla('interactuar')}] poner señal   "
+                 f"[{jugador.nombre_tecla('habilidad')}] cancelar")
+    # La letra más grande que quepa en el ancho de la vista.
+    for tam in (18, 16, 14, 13, 12, 11):
+        f = fuente_de_tamano(tam)
+        if f.size(texto_pie)[0] <= vista.width - 24:
+            break
+    titulo = f.render("Emisión modulada: ¿dónde cae la señal?", True, (233, 120, 200))
+    screen.blit(titulo, (rect.x, rect.y - titulo.get_height() - 4))
+    pie = f.render(texto_pie, True, (200, 210, 235))
+    screen.blit(pie, (vista.centerx - pie.get_width() // 2, rect.bottom + 8))
 
 
 def _dibujar_ruido(screen, offset, dueño):
@@ -310,21 +393,29 @@ def render_tutorial(screen, vista, jugador, tutorial):
         # Con 3 o 4 jugadores abajo no cabe: ahí van el pulso, la pista y la
         # barra de progreso. Se pone arriba, debajo del HUD y los mensajes; en
         # la fila de arriba, además, debajo del cartel de la IA (y=100..152).
-        caja.midtop = (vista.centerx, vista.y + (160 if vista.top == 0 else 92))
+        caja.midtop = (vista.centerx, vista.y + (160 if vista.top == 0 else 108))
     else:
         caja.midtop = (vista.centerx, vista.centery + vista.height // 7)
     fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
     fondo.fill((12, 14, 30, 225))
     screen.blit(fondo, caja.topleft)
     pygame.draw.rect(screen, (90, 220, 230), caja, 2, border_radius=6)
-    titulo = f_chica.render(f"TUTORIAL  {paso}/{total}   ·   los aliens despiertan en "
-                            f"{tutorial.segundos} s", True, (90, 220, 230))
+    hechos, necesarios = tutorial.listos()
+    titulo = f_chica.render(f"TUTORIAL  {paso}/{total}   ·   los aliens despiertan cuando "
+                            f"todos terminen ({hechos}/{necesarios})", True, (90, 220, 230))
+    if titulo.get_width() > caja.width - 32:
+        titulo = f_chica.render(f"TUTORIAL  {paso}/{total}   ·   listos {hechos}/{necesarios}",
+                                True, (90, 220, 230))
     screen.blit(titulo, (caja.x + 16, caja.y + 10))
     y = caja.y + 14 + f_chica.get_linesize()
     for linea in lineas:
         screen.blit(f.render(linea, True, (240, 242, 255)), (caja.x + 16, y))
         y += f.get_linesize()
-    pie = f_chica.render(f"[{jugador.nombre_tecla('habilidad')}] saltar", True, (150, 156, 190))
+    if tutorial.esta_listo(jugador):
+        return
+    ultimo = paso == total
+    pie = f_chica.render(f"[{jugador.nombre_tecla('habilidad')}] "
+                         + ("terminar" if ultimo else "siguiente"), True, (150, 156, 190))
     screen.blit(pie, (caja.right - pie.get_width() - 14, caja.bottom - pie.get_height() - 8))
 
 
@@ -378,10 +469,52 @@ def _dibujar_escondite(screen, escondite, offset, dueño):
         screen.blit(etiqueta, pos)
 
 
+# Sprite de las terminales NEXUS (de Anny). Si no está, se marcan con un
+# círculo en el piso como las demás zonas.
+RUTA_SPRITE_NEXUS = os.path.join("Imagenes", "Objetos", "terminal.png")
+ESCALA_NEXUS = 1.5
+_sprite_nexus = []
+
+
+def sprite_nexus():
+    if not _sprite_nexus:
+        try:
+            base = pygame.image.load(RUTA_SPRITE_NEXUS).convert_alpha()
+            _sprite_nexus.append(pygame.transform.scale(
+                base, (int(base.get_width() * ESCALA_NEXUS), int(base.get_height() * ESCALA_NEXUS))))
+        except (pygame.error, FileNotFoundError):
+            _sprite_nexus.append(None)
+    return _sprite_nexus[0]
+
+
+def _dibujar_terminal_nexus(screen, rect, zona, encima, sprite):
+    """La terminal parada al fondo de su zona: el jugador la usa parándose
+    enfrente. Con borde amarillo si está encima."""
+    color = zona.get("color", COLOR_ZONA)
+    # La base queda un poco arriba del centro: quien la usa se para enfrente
+    # (se dibuja encima de ella), no adentro.
+    caja = sprite.get_rect(midbottom=(rect.centerx, rect.centery - 24))
+    if encima:
+        brillo = pygame.Surface(caja.inflate(24, 24).size, pygame.SRCALPHA)
+        pygame.draw.ellipse(brillo, (*color, 60), brillo.get_rect())
+        screen.blit(brillo, caja.inflate(24, 24).topleft)
+    screen.blit(sprite, caja)
+    if encima:
+        pygame.draw.rect(screen, (255, 214, 64), caja.inflate(6, 6), 2, border_radius=6)
+    etiqueta = fuente("small").render(zona["nombre"], True, color)
+    sombra = fuente("small").render(zona["nombre"], True, COLOR_SOMBRA)
+    pos = (caja.centerx - etiqueta.get_width() // 2, caja.top - etiqueta.get_height() - 4)
+    screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
+    screen.blit(etiqueta, pos)
+
+
 def _dibujar_zona(screen, rect, zona, dueño):
     """Marca una zona en el piso, más brillante si el jugador está encima."""
     encima = getattr(dueño, "zona_cerca", None) is zona
     color = zona.get("color", COLOR_ZONA)
+    if str(zona.get("clave", "")).startswith("nexus") and sprite_nexus() is not None:
+        _dibujar_terminal_nexus(screen, rect, zona, encima, sprite_nexus())
+        return
     grosor = 4 if encima else 2
 
     marca = pygame.Surface(rect.size, pygame.SRCALPHA)
@@ -403,15 +536,6 @@ def _a_pantalla(rect, vista, camara):
         rect.y - camara.y + vista.y,
         rect.width, rect.height,
     )
-
-
-def _dibujar_etiqueta(screen, vista, jugador):
-    texto = f"{getattr(jugador, 'rol', 'Jugador')}  ·  {getattr(jugador, 'controles_nombre', '')}"
-    etiqueta = fuente("small").render(texto.strip(" ·"), True, COLOR_ETIQUETA)
-    sombra = fuente("small").render(texto.strip(" ·"), True, COLOR_SOMBRA)
-    pos = (vista.x + 14, vista.y + 10)
-    screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
-    screen.blit(etiqueta, pos)
 
 
 def _dibujar_separadores(screen, viewports, color=COLOR_SEPARADOR,

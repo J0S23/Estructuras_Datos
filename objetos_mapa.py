@@ -1,12 +1,11 @@
 """Lo que hay puesto en el mapa: dónde aparecen los jugadores, por dónde
-patrullan los aliens y dónde están los escondites, terminales, paneles, piezas
-y zonas.
+patrullan los aliens y dónde están los escondites, terminales, paneles, piezas,
+terminales NEXUS y todo lo de la misión.
 
 Todo eso vive en `Hitboxes/<mapa>_objetos.json`, que se arma con el editor
 visual (`python Editores/editor_mapa.py`), así que cambiar el mapa no requiere
-tocar código. Si el archivo no existe, o le falta alguna parte, se usan los
-valores de siempre de data/ (escondites.py, estaciones.py,
-comportamiento_alien.py y tareas.py): el juego nunca se queda sin nada.
+tocar código. Si el archivo no existe, o le falta alguna parte, esa parte queda
+vacía (un mapa sin cápsula no tiene misión, sin rutas no tiene aliens...).
 
 Qué mapa usa el juego lo dice `Hitboxes/mapa_activo.json`, que también se
 cambia desde el editor (tecla M).
@@ -23,11 +22,11 @@ import os
 RAIZ = os.path.dirname(os.path.abspath(__file__))
 CARPETA = os.path.join(RAIZ, "Hitboxes")
 ARCHIVO_MAPA_ACTIVO = os.path.join(CARPETA, "mapa_activo.json")
-MAPA_POR_DEFECTO = "Colegio"
+MAPA_POR_DEFECTO = "Nave"
 VERSION = 1
 
-# Las pruebas lo ponen en False para jugar siempre con los valores de data/ y
-# no depender de lo que alguien haya guardado con el editor.
+# En False no se lee ningún archivo: el mapa queda vacío (sin aliens ni misión).
+# Sirve para probar algo sin depender de lo que alguien guardó con el editor.
 USAR_ARCHIVOS = True
 
 # Las partes del archivo, en el orden en que las muestra el editor.
@@ -41,8 +40,8 @@ USAR_ARCHIVOS = True
 # (eventos.py) y las `puertas_dobles` se abren con dos jugadores a la vez
 # (puertas.py).
 PARTES = ("spawn", "rutas_aliens", "tipos_aliens", "escondites", "terminales", "paneles",
-          "piezas", "zonas", "celdas", "puerta", "notas", "consolas", "capsula", "consumibles",
-          "nexus", "compuertas", "puertas_dobles", "fusibles")
+          "piezas", "celdas", "puerta", "notas", "consolas", "capsula", "consumibles",
+          "nexus", "compuertas", "puertas_dobles", "fusibles", "pruebas")
 
 
 def ruta_archivo(mapa):
@@ -69,28 +68,18 @@ def fijar_mapa_activo(mapa):
         json.dump({"mapa": mapa}, fh, indent=2, ensure_ascii=False)
 
 
-# -- Valores por defecto (los de data/) -----------------------------------------------------
+# -- Valores por defecto: un mapa vacío ---------------------------------------------------
 
 def por_defecto():
-    from data.comportamiento_alien import RUTAS_ALIENS
-    from data.escondites import ESCONDITES
-    from data.estaciones import TERMINALES, PANELES, PIEZAS
-    from data.tareas import ZONAS
-
-    def puntos(lista):
-        return [{"clave": d["clave"], "nombre": d["nombre"], "rx": d["rx"], "ry": d["ry"]}
-                for d in lista]
-
     return {
         "version": VERSION,
         "spawn": None,     # None = alrededor del centro del mapa
-        "rutas_aliens": [[list(p) for p in ruta] for ruta in RUTAS_ALIENS],
+        "rutas_aliens": [],
         "tipos_aliens": [],  # vacío = todos rastreadores
-        "escondites": puntos(ESCONDITES),
-        "terminales": puntos(TERMINALES),
-        "paneles": puntos(PANELES),
-        "piezas": [list(p) for p in PIEZAS],
-        "zonas": {z["clave"]: {"rx": z["rx"], "ry": z["ry"], "radio": z["radio"]} for z in ZONAS},
+        "escondites": [],
+        "terminales": [],
+        "paneles": [],
+        "piezas": [],
         "celdas": [],
         "puerta": None,      # {"rx", "ry", "ancho", "alto"}: la puerta de la prisión
         "notas": [],
@@ -101,6 +90,7 @@ def por_defecto():
         "compuertas": [],     # [{"rx", "ry", "ancho", "alto"}]
         "puertas_dobles": [], # [{"rx", "ry", "ancho", "alto", "paneles": [[rx, ry], [rx, ry]]}]
         "fusibles": [],       # cajas de fusibles: sin ellas no hay apagones
+        "pruebas": [],        # dónde pueden caer las pruebas del infiltrado (se usan 3)
     }
 
 
@@ -120,8 +110,6 @@ def cargar(mapa=None, ruta=None):
     for parte in PARTES:
         if parte in guardado:
             datos[parte] = guardado[parte]
-    # Las zonas que el archivo trae son las que hay en ese mapa: un mapa puede
-    # no tener ninguna (la nave no tiene las zonas de las elecciones).
     return normalizar(datos)
 
 
@@ -145,7 +133,7 @@ def normalizar(datos):
         datos["spawn"] = [r(datos["spawn"][0]), r(datos["spawn"][1])]
     datos["rutas_aliens"] = [[[r(x), r(y)] for x, y in ruta] for ruta in datos.get("rutas_aliens", [])]
     datos["piezas"] = [[r(x), r(y)] for x, y in datos.get("piezas", [])]
-    for parte in ("celdas", "notas", "consolas", "consumibles", "nexus", "fusibles"):
+    for parte in ("celdas", "notas", "consolas", "consumibles", "nexus", "fusibles", "pruebas"):
         datos[parte] = [[r(x), r(y)] for x, y in datos.get(parte) or []]
     if datos.get("capsula"):
         datos["capsula"] = [r(datos["capsula"][0]), r(datos["capsula"][1])]
@@ -193,7 +181,4 @@ def normalizar(datos):
             panel["sello"] = rect_normal(panel["sello"])
         else:
             panel.pop("sello", None)
-    for zona in datos.get("zonas", {}).values():
-        zona["rx"], zona["ry"] = r(zona["rx"]), r(zona["ry"])
-        zona["radio"] = round(min(0.2, max(0.01, float(zona.get("radio", 0.045)))), 4)
     return datos

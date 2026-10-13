@@ -23,7 +23,7 @@ ESCALA_MAPA = 3
 
 
 class Mundo:
-    def __init__(self, nombre_mapa="Colegio", escala=ESCALA_MAPA):
+    def __init__(self, nombre_mapa="Nave", escala=ESCALA_MAPA):
         self.nombre_mapa = nombre_mapa
         self.escala = escala
         self.imagen = self._cargar_mapa()
@@ -130,11 +130,6 @@ class Mundo:
                 malos.append((i, (i + 1) % len(ruta)))
         return malos
 
-    def interactuable_en(self, rect):
-        """Devuelve el rect interactuable que toca, o None."""
-        indice = rect.collidelist(self.interactuables)
-        return self.interactuables[indice] if indice != -1 else None
-
     def punto_libre(self, preferido, ancho=40, alto=24):
         """Busca una posición sin paredes cerca de `preferido` (x, y del mundo)."""
         px, py = preferido
@@ -177,8 +172,8 @@ class Mundo:
         """Zonas que el jugador no podría alcanzar desde `desde`.
 
         Se llama al empezar la partida. Si devuelve algo, es que alguien puso
-        una zona dentro de un cuarto cerrado y hay que mover sus coordenadas en
-        data/tareas.py. Vale el costo: encontrar esto jugando es mucho más caro
+        una Terminal NEXUS dentro de un cuarto cerrado y hay que moverla con el
+        editor de mapa. Vale el costo: encontrar esto jugando es mucho más caro
         que un recorrido al arrancar.
         """
         alcanzable = self.area_alcanzable(desde, ancho, alto, paso)

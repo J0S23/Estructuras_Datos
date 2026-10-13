@@ -78,7 +78,7 @@ def fuente_de_tamano(px):
     """Fuente del juego en un tamaño arbitrario, cacheada.
 
     La usan las pantallas que tienen que encoger el texto para que quepa en
-    ventanas pequeñas (la ayuda y el panel del ABB), en vez de asumir que la
+    ventanas pequeñas (la ayuda, los paneles), en vez de asumir que la
     pantalla siempre es grande.
     """
     px = max(10, int(px))

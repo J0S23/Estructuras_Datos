@@ -24,10 +24,23 @@ from Movimiento.Personaje import Personaje, CONTROLES_FLECHAS
 from screens.panel_habilidades import render_panel_habilidades, precargar_iconos
 from screens.paneles import render_panel
 from screens.partida import calcular_viewports
-from data.tareas import ACUSACIONES, opciones_acusacion
 
 precargar_iconos(["Forjador"])
-p = Personaje(0, 0, os.path.join("Imagenes","Personajes","Joseph"), controles=CONTROLES_FLECHAS)
+p = Personaje(0, 0, os.path.join("Imagenes","Personajes","Forjador"), controles=CONTROLES_FLECHAS)
+
+# El panel más cargado del juego: la Terminal NEXUS con el caso del infiltrado.
+CASO = {"tipo": "opciones", "titulo": "NEXUS · El infiltrado",
+        "cuerpo": ["Alguien en NEXUS es un alien cambiaformas haciéndose pasar por "
+                   "un prisionero. Busquen las 3 pruebas por la nave y súbanlas aquí.",
+                   "Pruebas subidas: 1/3", "", "Sospechosos:",
+                   "  - Lía, la piloto: Laboratorio, de día, con lentes",
+                   "  x Dra. Vega: descartado",
+                   "  - Mecánico Ruiz: Laboratorio, de noche, sin lentes",
+                   "  x Cabo Duarte: descartado",
+                   "  - Nadia (cocina): Laboratorio, de noche, con lentes"],
+        "opciones": [{"texto": "Subir pruebas (2)"}, {"texto": "Acusar a alguien"},
+                     {"texto": "Salir"}],
+        "pie": "[Flechas] elegir   [ENTER] confirmar"}
 
 RESOLUCIONES = [(1920,1080), (1366,768), (1280,720)]
 JUGADORES = [2, 4]
@@ -44,14 +57,9 @@ for ancho, alto in RESOLUCIONES:
         render_panel_habilidades(sup, vista, j)
         pygame.image.save(sup.subsurface(vista).copy(), f"{OUT}/hab_{ancho}x{alto}_{n}j.png")
 
-        # --- panel de opciones mas cargado: acusacion con todas las habilidades ---
-        j2 = Jugador(p, "Forjador", puesto=1); j2.puntos = 300
-        j2.arbol.desbloquear("FABRICACION", 300)
-        ev = ACUSACIONES[0]; ops = opciones_acusacion(ev, j2.arbol)
-        j2.abrir_panel({"tipo":"opciones","titulo":"Plaza central",
-                        "cuerpo":[ev["texto"], "", ev["pista"]],
-                        "opciones":[{"texto":o["texto"]} for o in ops],
-                        "pie":"[Flechas] elegir   [ENTER] confirmar"})
+        # --- panel de opciones mas cargado: el caso del infiltrado ---
+        j2 = Jugador(p, "Forjador", puesto=1)
+        j2.abrir_panel(dict(CASO))
         sup2 = pygame.Surface((ancho, alto)); sup2.fill((40,44,60))
         render_panel(sup2, vista, j2)
         pygame.image.save(sup2.subsurface(vista).copy(), f"{OUT}/op_{ancho}x{alto}_{n}j.png")

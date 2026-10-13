@@ -40,6 +40,10 @@ def nueva_partida(roles):
     g.seleccion_roles[0]["cursor"] = nombres.index(roles[0]); g._manejar_tecla(pygame.K_e)
     g.seleccion_roles[1]["cursor"] = nombres.index(roles[1]); g._manejar_tecla(pygame.K_RETURN)
     avanzar(); g.current_screen = "partida"
+    # El tutorial ya no se acaba solo: aquí se da por terminado (con el
+    # tutorial abierto la puerta de la prisión no abre).
+    if g.tutorial is not None:
+        g.tutorial.activo = False; g._terminar_tutorial()
     return g
 
 
@@ -151,20 +155,14 @@ g._tecla_en_partida(pygame.K_RETURN)
 assert tec.preso is None and not g.mundo.colisiona(tec.hitbox)
 print("rescate: el Forjador sacó al Tecnomante de la celda")
 
-# NEXUS: el mensaje más dudoso es una trampa; confiar atrae a los aliens.
-for a in g.aliens:
-    a.descanso_ms = 0; a.objetivo = None; a.accion = "PATRULLAR"
+# NEXUS: la terminal abre el caso del infiltrado (lo único que hay en NEXUS).
 nexus = [z for z in g.zonas if z["clave"].startswith("nexus")][0]
 poner(tec, nexus["rect"].center)
 tec.zona_cerca = g.zona_bajo(tec)
 g.interactuar(tec)
-print("NEXUS:", tec.panel["cuerpo"][0])
-assert "Anónimo" in tec.panel["cuerpo"][0] and tec.panel["accion"] == "decision"
+assert tec.panel["accion"] == "infiltrado_menu" and "Sospechosos:" in tec.panel["cuerpo"]
+print("NEXUS:", tec.panel["titulo"], "|", len(g.infiltrado.sospechosos), "sospechosos")
 cap(g, "mision_d_nexus.png")
-tec.cursor = 0          # Confiar
-g.confirmar(tec)
-assert any(a.punto_ruido == tec.hitbox.center for a in g.aliens), "confiar en la trampa debía alertar"
-print("  confiar en la trampa:", tec.panel["cuerpo"][0])
 tec.cerrar_panel()
 
 # Huida: todos en la cápsula = victoria.

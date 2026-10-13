@@ -10,8 +10,6 @@ al terminar vuelve a empezar solo. `reiniciar_scroll()` da el valor inicial, y
 App.py lo llama cada vez que se entra a la pantalla.
 """
 
-import pygame
-
 from fuentes import fuente_de_tamano
 
 
@@ -24,7 +22,8 @@ VELOCIDAD = 0.6  # píxeles por frame
 
 # (texto, estilo). "espacio" deja un hueco.
 LINEAS = [
-    ("ALCALDE DIGITAL", "titulo"),
+    ("NEXUS", "titulo"),
+    ("En el vacío, nada está realmente solo", "tenue"),
     ("", "espacio"),
     ("Estructura de Datos II", "tenue"),
     ("Universidad del Norte", "tenue"),

@@ -1,7 +1,7 @@
 """Nodo del árbol de habilidades (árbol binario).
 
-A diferencia del ABB, aquí la posición de un nodo no depende de una clave que
-se compare: la forma del árbol la decide el diseño del juego. Lo que importa es
+A diferencia de un árbol de búsqueda, aquí la posición de un nodo no depende de
+una clave que se compare: la forma del árbol la decide el diseño del juego. Lo que importa es
 que cada nodo tiene a lo sumo dos hijos, porque al llegar a él el jugador
 escoge una de dos ramas y pierde la otra para el resto de la ronda.
 """

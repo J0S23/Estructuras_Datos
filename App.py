@@ -1,4 +1,4 @@
-"""Alcalde Digital: el juego. Mundo, personajes y estructuras de datos, juntos.
+"""NEXUS: el juego. Mundo, personajes y estructuras de datos, juntos.
 
 Se corre con `python main.py`.
 
@@ -7,12 +7,10 @@ partida conviven:
 
 - el **mapa** con sus colisiones y una cámara por jugador (mundo.py,
   screens/partida.py),
-- el **ABB de publicaciones** (Estructuras/abb_publicaciones.py), que decide
-  qué publicación aparece en el tablón y alimenta el aviso de cuántas cadenas
-  dudosas están circulando,
-- los **árboles de decisión** (Estructuras/arbol_decision.py) de cada
-  publicación y de los eventos del candidato,
-- los **árboles de diálogo** (Estructuras/arbol_dialogo.py) con los vecinos,
+- la **misión** de la nave (mision.py) con su tutorial, eventos y puertas,
+- el **árbol de comportamiento** de los aliens (Estructuras/arbol_comportamiento.py),
+- la red social **NEXUS** y su misión del infiltrado (infiltrado.py),
+- el **árbol de logros** de la partida (logros.py),
 - y el **árbol binario de habilidades** de cada rol
   (Estructuras/arbol_habilidades.py), que es lo que hace que subir de nivel
   cambie las opciones que el jugador ve, no solo un número.
@@ -24,13 +22,11 @@ de navegar paneles: la partida es local y los dos comparten teclado.
 
 import math
 import os
-import random
 import sys
 
 import pygame
 
 from config import DEFAULT_FPS
-from game_state import GameState
 from transition_manager import TransitionManager
 
 from fuentes import construir_fuentes
@@ -38,12 +34,8 @@ from ui_components import construir_botones
 
 from mundo import Mundo
 from jugador import Jugador, TECLAS_POR_PUESTO, NOMBRE_CONTROLES
-from Movimiento.Personaje import (Personaje, CONTROLES_WASD, CONTROLES_FLECHAS,
-                                  CONTROLES_NINGUNO)
+from Movimiento.Personaje import Personaje, CONTROLES_WASD, CONTROLES_FLECHAS
 
-from Estructuras.abb_publicaciones import ArbolPublicaciones
-from Estructuras.arbol_decision import ArbolDecision
-from Estructuras.arbol_dialogo import ArbolDialogo
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 
 from alien import Alien
@@ -54,15 +46,13 @@ from ambiente import Ambiente
 from ia_nave import Narrador
 from mandos import Mandos, tecla_virtual, PUESTOS_CON_MANDO
 from tutorial import Tutorial
+from pausa import MenuPausa
+from infiltrado import CasoInfiltrado
+from logros import GestorLogros
 from eventos import GestorEventos, crear_cajas
 import puertas
 
-from data.publicaciones_ejemplo import PUBLICACIONES_EJEMPLO
-from data.nexus import MENSAJES_NEXUS
-from data.dialogos_ejemplo import DIALOGOS_EJEMPLO
-from data.tareas import (ZONAS, ACUSACIONES, PROPUESTAS,
-                         opciones_acusacion, opciones_propuesta)
-from data.roles import ROLES, PERSONAJE_POR_PUESTO, MINIMO_JUGADORES
+from data.roles import ROLES, MINIMO_JUGADORES
 from data.comportamiento_alien import ARBOL_ALIEN
 from data.escondites import ANCHO_ENTRADA, ALTO_ENTRADA
 import objetos_mapa
@@ -70,12 +60,13 @@ import objetos_mapa
 from screens.menu import render_menu, OPCIONES_MENU
 from screens.partida import render_partida, calcular_viewports
 from screens.seleccion import render_cantidad, render_roles, OPCIONES
-from screens.arbol_abb import render_arbol_abb
 from screens.arbol_alien import render_arbol_alien
 from screens.panel_habilidades import precargar_iconos
 from screens.resultados import render_resultados
 from screens.ayuda import render_ayuda
 from screens.creditos import render_creditos, reiniciar_scroll
+from screens.pausa import render_pausa
+from screens.logros import render_aviso_logro
 
 
 ANCHO_VENTANA, ALTO_VENTANA = 960, 600
@@ -87,14 +78,8 @@ DURACION_RONDA_S = 300  # cinco minutos, como pide el diseño
 # Tutorial de 30 s al empezar (tutorial.py). Solo en mapas con misión.
 TUTORIAL_ACTIVO = True
 
-# Debajo de esta veracidad una publicación cuenta como dudosa.
-UMBRAL_DUDOSA = 40
-
 # Lo que cuesta que te atrape un alien.
 PUNTOS_POR_SER_ATRAPADO = 10
-
-# Máximo que puede ganar o perder un jugador en una sola tarea.
-TOPE_PUNTOS_TAREA = 20
 
 # Controles de movimiento de cada puesto. Los puestos 3 y 4 van sin controles a
 # propósito: se dibujan en el mapa y se animan, pero no caminan, porque les toca
@@ -105,6 +90,14 @@ def _controles_mando(puesto):
 
 CONTROLES_POR_PUESTO = [CONTROLES_WASD, CONTROLES_FLECHAS,
                         _controles_mando(2), _controles_mando(3)]
+
+
+def botones_menu(ancho, alto):
+    """Los botones del menú van a la derecha, debajo del título NEXUS del
+    fondo, para no tapar a los cuatro personajes ni el planeta."""
+    return construir_botones(OPCIONES_MENU, ancho, alto,
+                             centro_x=ancho * 0.765, centro_y=alto * 0.56,
+                             ancho=min(380, int(ancho * 0.26)), alto=46, separacion=12)
 
 
 def _nombre(tecla):
@@ -121,7 +114,7 @@ def _nombre(tecla):
 class Game:
     def __init__(self):
         pygame.init()
-        pygame.display.set_caption("Alcalde Digital")
+        pygame.display.set_caption("NEXUS")
         self.pantalla_completa = True
         self.screen = self._crear_ventana()
         self.ancho, self.alto = self.screen.get_size()
@@ -131,10 +124,9 @@ class Game:
         self.font = self.fuentes["subtitle"]
         self.small_font = self.fuentes["small"]
 
-        self.state = GameState()
         self.transitions = TransitionManager()
         self.current_screen = "menu"
-        self.menu_buttons = construir_botones(OPCIONES_MENU, self.ancho, self.alto)
+        self.menu_buttons = botones_menu(self.ancho, self.alto)
         self.menu_selected = 0
         self.pantalla_anterior = "partida"
 
@@ -152,7 +144,10 @@ class Game:
         self.mision = None    # fases, celdas y consumibles (mision.py)
         self.tutorial = None  # los primeros 30 s (tutorial.py)
         self.eventos = None   # apagón, alarma, compuertas (eventos.py)
+        self.infiltrado = None  # misión secundaria del infiltrado de NEXUS (infiltrado.py)
+        self.logros = None      # árbol de logros de la partida (logros.py)
         self.puertas_dobles, self.compuertas = [], []   # puertas.py
+        self.pausa = None     # MenuPausa mientras está abierto (Esc en la partida)
         self.oscuridad = True # [L] la apaga (para probar o para quien la necesite)
         self.mandos = Mandos()  # controles de Xbox para los jugadores 3 y 4
         self.equipo = Equipo()
@@ -165,9 +160,6 @@ class Game:
         self.alien_en_vista = 0      # cuál alien muestra la vista del árbol
         self.credit_scroll = reiniciar_scroll()
 
-        self.arbol_publicaciones = None
-        self._arboles_decision = {}
-        self._arboles_dialogo = []
         self.tiempo_restante_ms = DURACION_RONDA_S * 1000
 
         self.running = True
@@ -198,7 +190,7 @@ class Game:
 
     def _aplicar_tamano(self):
         self.ancho, self.alto = self.screen.get_size()
-        self.menu_buttons = construir_botones(OPCIONES_MENU, self.ancho, self.alto)
+        self.menu_buttons = botones_menu(self.ancho, self.alto)
         self.menu_selected = min(self.menu_selected, len(self.menu_buttons) - 1)
 
     def alternar_pantalla_completa(self):
@@ -207,57 +199,6 @@ class Game:
         self._aplicar_tamano()
 
     # -- Estructuras de datos ---------------------------------------------------
-
-    def _construir_arboles(self):
-        """Arma el ABB de publicaciones y un árbol de decisión por cada una."""
-        self.arbol_publicaciones = ArbolPublicaciones()
-        self._arboles_decision = {}
-
-        # En un mapa con terminales NEXUS, el ABB guarda los mensajes de NEXUS
-        # (la red social de la misión); en el Colegio, las publicaciones de antes.
-        fuente = MENSAJES_NEXUS if self.objetos and self.objetos.get("nexus") else PUBLICACIONES_EJEMPLO
-        for item in fuente:
-            veracidad = self._veracidad_de(item)
-            # El ABB no admite claves repetidas: si dos publicaciones estiman
-            # la misma veracidad se desplaza una para conservar las dos.
-            while self.arbol_publicaciones.buscar(veracidad) is not None:
-                veracidad += 1
-            self.arbol_publicaciones.insertar(veracidad, item["texto"],
-                                              item.get("tipo", "publicacion"))
-            arbol = ArbolDecision(item)
-            self._arboles_decision[veracidad] = arbol.construir_desde_dict(item)
-
-        self._arboles_dialogo = []
-        for datos in DIALOGOS_EJEMPLO:
-            dialogo = ArbolDialogo()
-            dialogo.construir_desde_dict(datos)
-            self._arboles_dialogo.append(dialogo)
-
-    @staticmethod
-    def _veracidad_de(item):
-        """Clave con la que una publicación entra al ABB.
-
-        La declara quien escribe la publicación en data/publicaciones_ejemplo.py,
-        mirando su contenido: 0 es una mentira fabricada y 100 algo documentado
-        y comprobable. No se deduce de los `efectos`, porque eso sería al revés
-        —una publicación esparce desinformación PORQUE es falsa, no al contrario—
-        y además dejaba sin poder expresar una noticia cierta pero incendiaria.
-
-        Si a alguna le falta el campo, entra como 50 (ni confiable ni dudosa) y
-        se avisa por consola, en vez de inventarle un número.
-        """
-        veracidad = item.get("veracidad")
-        if veracidad is None:
-            print(f"[AVISO] La publicación \"{item.get('texto', '')[:50]}...\" no declara "
-                  f"veracidad. Entra como 50. Agrégasela en data/publicaciones_ejemplo.py.")
-            return 50
-        return max(0, min(100, int(veracidad)))
-
-    def publicaciones_dudosas(self):
-        """Búsqueda por rango en el ABB: las pendientes bajo el umbral."""
-        if self.arbol_publicaciones is None:
-            return []
-        return self.arbol_publicaciones.buscar_menores_a(UMBRAL_DUDOSA)
 
     # -- Partida ----------------------------------------------------------------
 
@@ -282,7 +223,6 @@ class Game:
                 "cursor": puesto % len(ROLES),
                 "listo": False,
                 "rol": None,
-                "personaje": PERSONAJE_POR_PUESTO[puesto],
                 "controles": (f"Mando {puesto - 1}" if self.mandos.hay_mando(puesto)
                               else NOMBRE_CONTROLES[puesto]),
                 # "Flechas" en vez de "ARRIBA/ABAJO": más corto y es como la
@@ -329,6 +269,7 @@ class Game:
 
     def iniciar_partida(self):
         """Carga el mapa, arma los árboles y crea a los jugadores."""
+        self.pausa = None
         nombre_mapa = objetos_mapa.mapa_activo()
         if self.mundo is None or self.mundo.nombre_mapa != nombre_mapa:
             self.mundo = Mundo(nombre_mapa)
@@ -339,10 +280,8 @@ class Game:
         # Dónde va cada cosa del mapa: lo que se puso con el editor de mapa, y
         # lo que no, de data/ (ver objetos_mapa.py).
         self.objetos = objetos_mapa.cargar(nombre_mapa)
-        self._construir_arboles()
         self._preparar_zonas()
 
-        self.state = GameState()
         self.tiempo_restante_ms = DURACION_RONDA_S * 1000
 
         self.jugadores = []
@@ -351,7 +290,7 @@ class Game:
             centro = (int(self.objetos["spawn"][0] * self.mundo.ancho),
                       int(self.objetos["spawn"][1] * self.mundo.alto))
         for puesto, estado in enumerate(self.seleccion_roles):
-            nombre_personaje = estado["personaje"]
+            nombre_personaje = estado["rol"]     # sprites en Imagenes/Personajes/<Rol>/
             ruta = os.path.join("Imagenes", "Personajes", nombre_personaje)
             personaje = Personaje(0, 0, ruta, velocidad=4,
                                   controles=CONTROLES_POR_PUESTO[puesto])
@@ -390,6 +329,8 @@ class Game:
         self.compuertas = puertas.crear_compuertas(self.objetos, self.mundo)
         self._nuevo_ambiente()
         self.tutorial, self.eventos = None, None
+        self.infiltrado = CasoInfiltrado(self, self.objetos) if self.mision.activa else None
+        self.logros = GestorLogros(self)     # uno nuevo cada partida: se reinician solos
         if self.mision.activa:
             self.tiempo_restante_ms = DURACION_MISION_S * 1000
             self.eventos = GestorEventos(self, cajas=crear_cajas(self.objetos, self.mundo))
@@ -408,9 +349,9 @@ class Game:
 
         Una ruta de un solo punto es un guardia: se queda ahí, mirando.
 
-        Todos comparten el mismo árbol de comportamiento: es contenido, como el
-        árbol de decisión de una publicación. Lo que cambia entre aliens es la
-        ruta y lo que percibe cada uno.
+        Todos comparten el mismo árbol de comportamiento: es contenido
+        (data/comportamiento_alien.py). Lo que cambia entre aliens es la ruta
+        y su tipo (data/tipos_alien.py: velocidad, vista y oído).
         """
         self.arbol_alien = ArbolComportamiento(ARBOL_ALIEN)
         self.aliens = []
@@ -495,6 +436,8 @@ class Game:
                 or puertas.bloquea(self.puertas_dobles, self.compuertas, rect))
 
     def _puerta_doble_abierta(self, puerta):
+        if self.logros is not None:
+            self.logros.conseguir("trabajo_en_equipo")
         self.sonar("puerta")
         self.decir("puerta_doble")
 
@@ -524,6 +467,8 @@ class Game:
                 jugador.minijuego = None
                 alien.rendirse()
                 self.decir("escondite_calmado", jugador.rol)
+                if self.logros is not None:
+                    self.logros.conseguir("fantasma", jugador)
                 jugador.sumar_puntos(5)
                 jugador.avisar("Te calmaste. El alien se fue. +5", (96, 200, 120))
             else:
@@ -534,11 +479,31 @@ class Game:
         """Lo llama un alien cuando su árbol llega a la hoja ATRAPAR."""
         if jugador is None:
             return
+        donde = jugador.hitbox.center
+        if self.logros is not None:
+            self.logros.al_atrapar(jugador)
         jugador.atrapado()
         self.ambiente.susto(jugador)
+        if jugador.vidas <= 0:
+            # Tercera vez: queda fuera de la partida, y suelta lo que llevaba
+            # (y las herramientas de su rol) donde lo atraparon.
+            jugador.eliminar()
+            # Primero las pruebas del infiltrado: soltar_al_morir vacía el inventario.
+            if self.infiltrado is not None:
+                self.infiltrado.soltar(jugador, donde)
+            if self.mision is not None:
+                self.mision.soltar_al_morir(jugador, donde)
+            self.decir("eliminado", jugador.rol, forzar=True)
+            jugador.avisar("Te atraparon 3 veces. Estás fuera.", (236, 70, 60))
+            for otro in self.jugadores:
+                if otro is not jugador:
+                    otro.avisar(f"¡Perdimos al {jugador.rol}!", (236, 70, 60))
+            return
         self.decir("atrapado", jugador.rol, forzar=True)
         if self.mision is not None and self.mision.encarcelar(jugador):
-            jugador.avisar("¡Te encerraron! Espera a que te saquen.", (236, 70, 60))
+            vidas = jugador.vidas
+            jugador.avisar(f"¡Te encerraron! Te queda{'n' if vidas > 1 else ''} {vidas} "
+                           f"vida{'s' if vidas > 1 else ''}.", (236, 70, 60))
             return
         jugador.sumar_puntos(-PUNTOS_POR_SER_ATRAPADO)
         jugador.avisar(f"¡Te atrapó el {alien.nombre}! -{PUNTOS_POR_SER_ATRAPADO}",
@@ -547,10 +512,9 @@ class Game:
     def _avisar_zonas_inalcanzables(self):
         """Avisa por consola si alguna zona quedó encerrada tras una pared.
 
-        Pasó con la "Casa de un vecino", que estaba dentro de un salón cerrado
-        del Colegio: se dibujaba en el mapa y no había forma de llegar. Es el
-        tipo de error que solo se nota jugando, así que mejor que el juego lo
-        diga al arrancar.
+        Una terminal metida en un cuarto cerrado se dibuja en el mapa pero no
+        hay forma de llegar. Es el tipo de error que solo se nota jugando, así
+        que mejor que el juego lo diga al arrancar.
         """
         if not self.jugadores or self.mundo is None:
             return
@@ -571,31 +535,14 @@ class Game:
                   f"alcanzar caminando. Muévela con el editor de mapa.")
 
     def _preparar_zonas(self):
-        """Pasa las zonas de data/tareas.py a rects en píxeles del mapa."""
+        """Las zonas donde se interactúa con algo del mapa: las Terminales
+        NEXUS (abren el caso del infiltrado, infiltrado.py)."""
         self.zonas = []
-        posiciones = self.objetos.get("zonas", {})
-        for datos in ZONAS:
-            # Solo las zonas que ese mapa tiene (la nave no tiene las de las
-            # elecciones). La posición viene del editor de mapa; el contenido, no.
-            if datos["clave"] not in posiciones:
-                continue
-            datos = dict(datos, **posiciones[datos["clave"]])
-            radio = int(datos["radio"] * self.mundo.ancho)
-            zona = dict(datos)
-            zona["rect"] = pygame.Rect(
-                int(datos["rx"] * self.mundo.ancho) - radio,
-                int(datos["ry"] * self.mundo.alto) - radio,
-                radio * 2, radio * 2,
-            )
-            self.zonas.append(zona)
-        # Terminales NEXUS: abren el mensaje más dudoso del ABB con su árbol de
-        # decisión, igual que el tablón de antes.
         for i, (rx, ry) in enumerate(self.objetos.get("nexus", []), start=1):
             radio = int(0.02 * self.mundo.ancho)
             self.zonas.append({
                 "clave": f"nexus_{i}", "nombre": "Terminal NEXUS",
-                "pista": "Los mensajes de la tripulación.", "tipo": "verificar",
-                "pregunta": "¿Qué haces con este mensaje?",
+                "pista": "El caso del infiltrado.", "tipo": "nexus",
                 "roles": [], "color": (90, 220, 230),
                 "rect": pygame.Rect(int(rx * self.mundo.ancho) - radio,
                                     int(ry * self.mundo.alto) - radio, radio * 2, radio * 2),
@@ -620,6 +567,10 @@ class Game:
             if not self.tutorial.activo:
                 self._terminar_tutorial()
         for jugador in self.jugadores:
+            if jugador.panel is not None and jugador.panel.get("tipo") == "emision":
+                # Sus teclas de moverse mueven el cursor del mapa de la Emisión.
+                dx, dy = jugador.personaje.leer_movimiento(teclas)
+                acciones_rol.mover_cursor_emision(self, jugador, dx, dy, dt or 16)
             jugador.actualizar(teclas, colisiona=self._colisiona_jugador)
             jugador.zona_cerca = self.zona_bajo(jugador)
             jugador.actualizar_mensaje(dt)
@@ -640,6 +591,8 @@ class Game:
             if self.mision is not None and self.mision.activa:
                 jugador.objetivo = self.mision.objetivo()
                 jugador.pista_mision = self.mision.pista(jugador)
+            if self.infiltrado is not None and not jugador.pista_mision:
+                jugador.pista_mision = self.infiltrado.pista(jugador)
             pista_puerta = puertas.pista(self.puertas_dobles, jugador)
             if pista_puerta and not jugador.preso:
                 jugador.pista_mision = pista_puerta
@@ -665,6 +618,8 @@ class Game:
         self._actualizar_minijuegos(dt)
         self._actualizar_pulsos(dt)
         self._actualizar_ambiente(dt)
+        if self.logros is not None:
+            self.logros.actualizar(dt)
 
         if self.mision is not None:
             self.mision.actualizar(dt)
@@ -684,7 +639,7 @@ class Game:
             "terminales": self.terminales, "paneles": self.paneles, "piezas": self.piezas,
             "senuelos": self.senuelos, "senales": self.senales, "mision": self.mision,
             "puertas_dobles": self.puertas_dobles, "compuertas": self.compuertas,
-            "eventos": self.eventos, "tutorial": self.tutorial,
+            "eventos": self.eventos, "tutorial": self.tutorial, "infiltrado": self.infiltrado,
             # Todo está iluminado; solo se oscurece durante un apagón.
             "oscuridad": self.oscuridad and self.eventos is not None and self.eventos.apagon,
         }
@@ -706,6 +661,8 @@ class Game:
     def terminar_ronda(self):
         if self.mision is not None:
             self.mision.terminar_por_tiempo()
+        if self.logros is not None:
+            self.logros.al_terminar()
         for jugador in self.jugadores:
             jugador.cerrar_panel()
         self.transitions.request(self, "resultados")
@@ -717,135 +674,22 @@ class Game:
         zona = self.zona_bajo(jugador)
         if zona is None:
             return
-        tipo = zona["tipo"]
-        if tipo == "verificar":
-            self._abrir_verificacion(jugador, zona)
-        elif tipo == "reportar":
-            self._abrir_reporte(jugador, zona)
-        elif tipo == "debate":
-            self._abrir_acusacion(jugador, zona)
-        elif tipo == "propuesta":
-            self._abrir_propuesta(jugador, zona)
-        elif tipo == "dialogo":
-            self._abrir_dialogo(jugador, zona)
+        if zona["tipo"] == "nexus":
+            self._abrir_nexus(jugador, zona)
 
-    def _abrir_verificacion(self, jugador, zona):
-        """Tablón: saca del ABB la publicación más dudosa y abre su árbol de decisión."""
-        pendientes = self.arbol_publicaciones.recorrido_inorden()
-        if not pendientes:
+    def _abrir_nexus(self, jugador, zona):
+        """Terminal NEXUS: el caso del infiltrado (infiltrado.py). Es lo único
+        que hay en NEXUS: ver sospechosos, subir pruebas y acusar."""
+        if self.logros is not None:
+            self.logros.conseguir("conectado", jugador)
+        if self.infiltrado is None:
             jugador.abrir_panel({
-                "tipo": "aviso",
-                "titulo": zona["nombre"],
-                "cuerpo": ["Ya revisaste todo lo que estaba circulando. Por ahora el tablón está limpio."],
+                "tipo": "aviso", "titulo": zona["nombre"],
+                "cuerpo": ["NEXUS no tiene conexión en este mapa."],
                 "pie": f"[{jugador.nombre_tecla('interactuar')}] salir",
             })
             return
-
-        objetivo = pendientes[0]
-        raiz = self._arboles_decision.pop(objetivo["veracidad"], None)
-        self.arbol_publicaciones.eliminar(objetivo["veracidad"])
-        if raiz is None:
-            return
-
-        jugador.abrir_panel({
-            "tipo": "opciones",
-            "accion": "decision",
-            "nodo": raiz,
-            "titulo": zona["nombre"],
-            "cuerpo": [self._con_codigo(raiz.texto), "",
-                       zona.get("pregunta", "¿Qué haces con esta publicación?")],
-            "opciones": [{"texto": hijo.texto} for hijo in raiz.hijos],
-            "pie": (f"[{jugador.pista_mover()}] elegir   "
-                    f"[{jugador.nombre_tecla('interactuar')}] confirmar"),
-        })
-
-    def _abrir_reporte(self, jugador, zona):
-        """Junta de vecinos: elegir cuál de las publicaciones pendientes es falsa.
-
-        Se muestran solo los textos, nunca la veracidad: la gracia es que el
-        jugador tenga que juzgar por el contenido, que es justo lo que el juego
-        quiere enseñar.
-        """
-        pendientes = self.arbol_publicaciones.recorrido_inorden()
-        if len(pendientes) < 2:
-            jugador.abrir_panel({
-                "tipo": "aviso",
-                "titulo": zona["nombre"],
-                "cuerpo": ["No queda casi nada circulando como para reportar."],
-                "pie": f"[{jugador.nombre_tecla('interactuar')}] salir",
-            })
-            return
-
-        muestra = random.sample(pendientes, min(4, len(pendientes)))
-        jugador.abrir_panel({
-            "tipo": "opciones",
-            "accion": "reporte",
-            "muestra": muestra,
-            "titulo": zona["nombre"],
-            "cuerpo": ["¿Cuál de estas está circulando como falsa?", ""],
-            "opciones": [{"texto": item["titulo"]} for item in muestra],
-            "pie": (f"[{jugador.pista_mover()}] elegir   "
-                    f"[{jugador.nombre_tecla('interactuar')}] reportar"),
-        })
-
-    def _abrir_acusacion(self, jugador, zona):
-        """Plaza: una acusación contra el candidato. Aquí pesan DEBATE y sus hijas."""
-        evento = random.choice(ACUSACIONES)
-        opciones = opciones_acusacion(evento, jugador.arbol)
-        jugador.abrir_panel({
-            "tipo": "opciones",
-            "accion": "acusacion",
-            "evento": evento,
-            "opciones_datos": opciones,
-            "titulo": zona["nombre"],
-            "cuerpo": [evento["texto"], "", evento["pista"]],
-            "opciones": [{"texto": o["texto"]} for o in opciones],
-            "pie": (f"[{jugador.pista_mover()}] elegir   "
-                    f"[{jugador.nombre_tecla('interactuar')}] confirmar"),
-        })
-
-    def _abrir_propuesta(self, jugador, zona):
-        """Emisora: presentar una propuesta. Aquí pesan PROPUESTA y sus hijas."""
-        evento = random.choice(PROPUESTAS)
-        opciones = opciones_propuesta(evento, jugador.arbol)
-        jugador.abrir_panel({
-            "tipo": "opciones",
-            "accion": "propuesta",
-            "evento": evento,
-            "opciones_datos": opciones,
-            "titulo": zona["nombre"],
-            "cuerpo": [f"Propuesta del día: {evento['texto']}", "", "¿Cómo la presentas?"],
-            "opciones": [{"texto": o["texto"]} for o in opciones],
-            "pie": (f"[{jugador.pista_mover()}] elegir   "
-                    f"[{jugador.nombre_tecla('interactuar')}] confirmar"),
-        })
-
-    def _abrir_dialogo(self, jugador, zona):
-        """Casa de un vecino: un árbol de diálogo, que el jugador recorre bajando."""
-        if not self._arboles_dialogo:
-            return
-        dialogo = random.choice(self._arboles_dialogo)
-        jugador.abrir_panel(self._panel_dialogo(jugador, dialogo, dialogo.raiz, zona["nombre"]))
-
-    def _panel_dialogo(self, jugador, dialogo, nodo, titulo):
-        hijos = nodo.hijos if nodo is not None else []
-        if hijos:
-            pie = (f"[{jugador.pista_mover()}] elegir   "
-                   f"[{jugador.nombre_tecla('interactuar')}] responder")
-        else:
-            pie = f"[{jugador.nombre_tecla('interactuar')}] terminar"
-        return {
-            "tipo": "opciones" if hijos else "aviso",
-            "accion": "dialogo",
-            "dialogo": dialogo,
-            "nodo": nodo,
-            "titulo": f"{titulo} · {dialogo.nombre_npc}",
-            "cuerpo": [nodo.texto if nodo is not None else ""],
-            # En el árbol de diálogo, `respuesta` es lo que dice el jugador para
-            # llegar a ese nodo, y `texto` lo que le contesta el NPC.
-            "opciones": [{"texto": h.respuesta or h.texto} for h in hijos],
-            "pie": pie,
-        }
+        jugador.abrir_panel(self.infiltrado.panel_terminal(jugador, zona))
 
     # -- Resolver la opción elegida ---------------------------------------------
 
@@ -857,145 +701,49 @@ class Game:
 
         tipo = panel.get("tipo")
         if tipo in ("aviso", "resultado"):
-            if panel.get("accion") == "dialogo":
-                jugador.tareas_hechas += 1
             jugador.cerrar_panel()
             return
         if tipo == "habilidades":
             self._confirmar_habilidad(jugador)
             return
+        if tipo == "emision":
+            acciones_rol.poner_emision(self, jugador)
+            return
 
         accion = panel.get("accion")
         indice = jugador.cursor
-        if accion == "decision":
-            self._resolver_decision(jugador, panel, indice)
-        elif accion == "reporte":
-            self._resolver_reporte(jugador, panel, indice)
-        elif accion in ("acusacion", "propuesta"):
-            self._resolver_evento(jugador, panel, indice)
-        elif accion == "dialogo":
-            self._resolver_dialogo(jugador, panel, indice)
-        elif accion == "codigo" and self.mision is not None:
+        if accion == "codigo" and self.mision is not None:
             self.mision.resolver_codigo(jugador, indice)
+        elif accion in ("infiltrado_menu", "infiltrado_acusar"):
+            self._resolver_infiltrado(jugador, panel, indice)
 
-    def _resolver_decision(self, jugador, panel, indice):
-        """Baja un nivel por el árbol de decisión de la publicación."""
-        nodo = panel["nodo"]
-        if indice >= len(nodo.hijos):
+    def _resolver_infiltrado(self, jugador, panel, indice):
+        """Menú de la terminal durante el caso del infiltrado (infiltrado.py)."""
+        caso = self.infiltrado
+        if caso is None:
+            jugador.cerrar_panel()
             return
-        arbol = ArbolDecision(None)
-        hijo = nodo.hijos[indice]
-        efectos = {k: v for k, v in (hijo.efectos or {}).items() if isinstance(v, (int, float))}
-        arbol.aplicar_efectos(hijo, self.state.indicadores)
-
-        if hijo.hijos:
-            # Una opción puede tener varias consecuencias; se escoge una al azar
-            # para que la misma decisión no dé siempre el mismo resultado.
-            consecuencia = random.choice(hijo.hijos)
-            arbol.aplicar_efectos(consecuencia, self.state.indicadores)
-            for clave, valor in (consecuencia.efectos or {}).items():
-                if isinstance(valor, (int, float)):   # "_accion" es texto, no suma
-                    efectos[clave] = efectos.get(clave, 0) + valor
-            final = consecuencia
+        if panel["accion"] == "infiltrado_acusar":
+            candidatos = panel["candidatos"]
+            if indice >= len(candidatos) or not caso.activo:
+                jugador.cerrar_panel()      # "Mejor no"
+                return
+            texto, puntos = caso.acusar(jugador, candidatos[indice])
+            jugador.tareas_hechas += 1
+            self._panel_resultado(jugador, texto, puntos)
+            return
+        acciones = panel["acciones"]
+        if indice >= len(acciones):
+            return
+        eleccion = acciones[indice]
+        if eleccion == "subir" and caso.activo:
+            texto, puntos = caso.subir(jugador)
+            jugador.tareas_hechas += 1
+            self._panel_resultado(jugador, texto, puntos)
+        elif eleccion == "acusar" and caso.activo:
+            jugador.abrir_panel(caso.panel_acusar(jugador))
         else:
-            final = hijo
-
-        puntos = self._puntos_por_efectos(jugador, efectos)
-        jugador.sumar_puntos(puntos)
-        jugador.tareas_hechas += 1
-        self._panel_resultado(jugador, self._con_codigo(final.texto), puntos)
-        accion = (final.efectos or {}).get("_accion") or (hijo.efectos or {}).get("_accion")
-        if accion:
-            self._accion_nexus(jugador, accion)
-
-    def _con_codigo(self, texto):
-        """Los mensajes de NEXUS pueden mencionar el código de la puerta."""
-        codigo = self.mision.codigo if self.mision is not None else "?-?-?"
-        return texto.replace("{codigo}", codigo)
-
-    def _accion_nexus(self, jugador, accion):
-        """Lo que pasa en la partida por creerle (o no) a un mensaje de NEXUS."""
-        if accion == "alertar":
-            for alien in self.aliens:
-                alien.oir(jugador.hitbox.center)
-            self.decir("nexus_trampa", jugador.rol, forzar=True)
-        elif accion == "revelar_piezas" and self.mision is not None:
-            from mision import DURACION_REVELAR_PIEZAS_MS
-            self.mision.revelar_piezas_ms = DURACION_REVELAR_PIEZAS_MS
-        elif accion == "revelar_aliens":
-            jugador.efectos["mapa"] = 8000
-        elif accion == "calma":
-            jugador.pulso = max(0.0, jugador.pulso - 25)
-
-    def _resolver_reporte(self, jugador, panel, indice):
-        """Reportar una publicación: acierta si de verdad era de las dudosas."""
-        muestra = panel["muestra"]
-        if indice >= len(muestra):
-            return
-        elegida = muestra[indice]
-        dudosa = elegida["veracidad"] < UMBRAL_DUDOSA
-
-        if dudosa:
-            self.arbol_publicaciones.eliminar(elegida["veracidad"])
-            self._arboles_decision.pop(elegida["veracidad"], None)
-            puntos = 15
-            self.state.actualizar_indicador("desinformacion", -8)
-            self.state.actualizar_indicador("informacion_verificada", 5)
-            texto = "Bien visto: era falsa. La reportaron y dejó de circular."
-        else:
-            puntos = -8
-            self.state.actualizar_indicador("confianza_ciudadana", -4)
-            texto = ("Esa era información real. Reportar lo que sí es cierto también "
-                     "hace daño.")
-
-        jugador.sumar_puntos(puntos)
-        jugador.tareas_hechas += 1
-        self._panel_resultado(jugador, texto, puntos)
-
-    def _resolver_evento(self, jugador, panel, indice):
-        """Acusación o propuesta del candidato: la opción ya trae puntos y efectos."""
-        opciones = panel["opciones_datos"]
-        if indice >= len(opciones):
-            return
-        opcion = opciones[indice]
-        for clave, valor in (opcion.get("efectos") or {}).items():
-            self.state.actualizar_indicador(clave, valor)
-        jugador.sumar_puntos(opcion["puntos"])
-        jugador.tareas_hechas += 1
-        self._panel_resultado(jugador, opcion["resultado"], opcion["puntos"])
-
-    def _resolver_dialogo(self, jugador, panel, indice):
-        """Desciende por el árbol de diálogo. No se puede volver a subir."""
-        dialogo, nodo = panel["dialogo"], panel["nodo"]
-        # `responder` es el descenso del árbol de diálogo: devuelve el hijo
-        # elegido, que ya ES el nodo siguiente (su `texto` es lo que contesta el
-        # NPC y sus hijos son las nuevas respuestas). Bajar es jugar, y no se
-        # puede volver a subir.
-        elegido = dialogo.responder(nodo, indice)
-        if elegido is None:
-            return
-        dialogo.aplicar_efectos(elegido, self.state.indicadores)
-        jugador.abrir_panel(self._panel_dialogo(jugador, dialogo, elegido,
-                                                panel["titulo"].split(" · ")[0]))
-
-    def _puntos_por_efectos(self, jugador, efectos):
-        """Cuántos puntos gana el ciudadano según a dónde movió la ciudad.
-
-        Su objetivo es protegerse de las noticias falsas y no esparcirlas, así
-        que se le paga por subir la información verificada y bajar la
-        desinformación, y se le cobra por lo contrario. No es un número suelto:
-        sale de los mismos efectos que el árbol de decisión aplicó a la ciudad.
-
-        El resultado se acota a +-TOPE_PUNTOS_TAREA porque una publicación con
-        efectos grandes podía valer sola treinta puntos, y con eso una sola
-        decisión decidía la ronda entera.
-        """
-        puntos = 0
-        puntos += efectos.get("informacion_verificada", 0)
-        puntos -= efectos.get("desinformacion", 0)
-        puntos += efectos.get("confianza_ciudadana", 0) // 2
-        puntos -= efectos.get("conflictos", 0) // 2
-        return max(-TOPE_PUNTOS_TAREA, min(TOPE_PUNTOS_TAREA, int(puntos)))
+            jugador.cerrar_panel()
 
     def _panel_resultado(self, jugador, texto, puntos):
         if puntos > 0:
@@ -1056,7 +804,7 @@ class Game:
             # la del minijuego si un alien lo está revisando, y si no, la de
             # salir. Mientras está metido no abre habilidades ni zonas.
             # Encerrado en una celda: no puede hacer nada hasta que lo saquen.
-            if jugador.preso is not None:
+            if jugador.preso is not None or jugador.eliminado:
                 if any(jugador.es_tecla(key, a) for a in jugador.teclas):
                     return
                 continue
@@ -1073,13 +821,22 @@ class Game:
                     return
                 continue
 
+            # El mapa de la Emisión abierto: la tecla de habilidad o la del
+            # árbol lo cierran sin gastar la habilidad.
+            if (jugador.panel is not None and jugador.panel.get("tipo") == "emision"
+                    and (jugador.es_tecla(key, "habilidad") or jugador.es_tecla(key, "habilidades"))):
+                jugador.cerrar_panel()
+                return
+
             if jugador.es_tecla(key, "habilidades"):
                 self.alternar_habilidades(jugador)
                 return
 
             if jugador.es_tecla(key, "habilidad"):
-                if self.en_tutorial and not jugador.ocupado:
-                    self.tutorial.saltar(jugador)
+                if (self.en_tutorial and not jugador.ocupado
+                        and not self.tutorial.esta_listo(jugador)):
+                    # En el tutorial, la tecla de habilidad pasa de paso.
+                    self.tutorial.siguiente(jugador)
                     if not self.tutorial.activo:
                         self._terminar_tutorial()
                     return
@@ -1103,6 +860,8 @@ class Game:
                                        (255, 214, 64))
                         return
                     if self.mision is not None and self.mision.interactuar(jugador):
+                        return
+                    if self.infiltrado is not None and self.infiltrado.interactuar(jugador):
                         return
                     estacion = (None if self.zona_bajo(jugador)
                                 else acciones_rol.estacion_bajo(self, jugador))
@@ -1142,7 +901,10 @@ class Game:
             dt = self.clock.tick(DEFAULT_FPS)
             self._manejar_eventos()
             if self.current_screen == "partida" and self.transitions.is_idle():
-                self._actualizar_partida(dt)
+                if self.pausa is not None:
+                    self.pausa.actualizar(dt)   # el juego queda congelado
+                else:
+                    self._actualizar_partida(dt)
             self.transitions.update(self, dt)
             self._dibujar()
             pygame.display.flip()
@@ -1157,6 +919,11 @@ class Game:
                 self._manejar_tecla(evento.key)
             elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 self._manejar_click(evento.pos)
+            elif evento.type == pygame.MOUSEMOTION and self.current_screen == "partida":
+                if self.pausa is not None:
+                    self.pausa.mover_mouse(evento.pos)
+                else:
+                    self._mouse_en_mapa(evento.pos)
             elif evento.type in (pygame.JOYBUTTONDOWN, pygame.JOYHATMOTION,
                                  pygame.JOYAXISMOTION, pygame.JOYDEVICEADDED,
                                  pygame.JOYDEVICEREMOVED):
@@ -1168,6 +935,20 @@ class Game:
     def _tecla_mando(self, puesto, accion):
         """Un botón del mando: en partida y en la selección de rol es la tecla
         virtual de ese jugador; en los menús hace de flechas, Enter y Esc."""
+        if self.current_screen == "partida" and (self.pausa is not None or accion == "pausa"):
+            # START abre la pausa; con la pausa abierta el mando la maneja
+            # como en los menús (cruceta, A para aceptar, B o START para volver).
+            tecla = {"arriba": pygame.K_UP, "abajo": pygame.K_DOWN,
+                     "izquierda": pygame.K_LEFT, "derecha": pygame.K_RIGHT,
+                     "interactuar": pygame.K_RETURN, "volver": pygame.K_ESCAPE,
+                     "pausa": pygame.K_ESCAPE}.get(accion)
+            if tecla is not None:
+                self._manejar_tecla(tecla)
+            return
+        if accion in ("izquierda", "derecha"):
+            return     # fuera del árbol de logros no hacen nada (el stick ya mueve)
+        if accion == "pausa":
+            accion = "volver" if self.current_screen == "roles" else "interactuar"
         if self.current_screen in ("partida", "roles"):
             if accion == "volver":
                 jugador = next((j for j in self.jugadores if j.puesto == puesto), None)
@@ -1188,7 +969,7 @@ class Game:
         for jugador in self.jugadores:
             if jugador.puesto in PUESTOS_CON_MANDO:
                 jugador.con_mando = self.mandos.hay_mando(jugador.puesto)
-                jugador.puede_moverse = jugador.con_mando
+                jugador.puede_moverse = jugador.con_mando and not jugador.eliminado
                 jugador.controles_nombre = (f"Mando {jugador.puesto - 1}" if jugador.con_mando
                                             else NOMBRE_CONTROLES[jugador.puesto])
 
@@ -1225,6 +1006,9 @@ class Game:
             else:
                 self._tecla_en_seleccion(key)
 
+        elif self.current_screen == "partida" and self.pausa is not None:
+            self._accion_pausa(self.pausa.tecla(key))
+
         elif self.current_screen == "partida":
             if key == pygame.K_h:
                 self.mostrar_hitboxes = not self.mostrar_hitboxes
@@ -1234,17 +1018,10 @@ class Game:
                 self.oscuridad = not self.oscuridad
             elif key == pygame.K_n and self.aliens:
                 self.alien_en_vista = (self.alien_en_vista + 1) % len(self.aliens)
-            elif key == pygame.K_TAB:
-                self.pantalla_anterior = "partida"
-                self.transitions.request(self, "arbol")
             elif key == pygame.K_ESCAPE:
-                self.transitions.request(self, "menu")
+                self.pausa = MenuPausa(self)
             else:
                 self._tecla_en_partida(key)
-
-        elif self.current_screen == "arbol":
-            if key in (pygame.K_TAB, pygame.K_RETURN, pygame.K_BACKSPACE, pygame.K_ESCAPE):
-                self.transitions.request(self, self.pantalla_anterior)
 
         elif self.current_screen == "resultados":
             if key in (pygame.K_RETURN, pygame.K_ESCAPE):
@@ -1254,7 +1031,45 @@ class Game:
             if key in (pygame.K_RETURN, pygame.K_BACKSPACE, pygame.K_ESCAPE):
                 self.transitions.request(self, self.pantalla_anterior)
 
+    def _accion_pausa(self, accion):
+        """Lo que pidió el menú de pausa (pausa.py)."""
+        if accion == "continuar":
+            self.pausa = None
+        elif accion == "terminar":
+            self.pausa = None
+            for jugador in self.jugadores:
+                jugador.cerrar_panel()
+            self.transitions.request(self, "menu")
+        elif accion == "pantalla_completa":
+            self.alternar_pantalla_completa()
+
+    def _jugador_con_mapa_en(self, pos):
+        """(jugador, punto del mundo) si `pos` cae en el mapa de la Emisión de
+        alguien, o (None, None)."""
+        for jugador in self.jugadores:
+            panel = jugador.panel
+            if panel is None or panel.get("tipo") != "emision" or "rect_mapa" not in panel:
+                continue
+            rect, escala = panel["rect_mapa"], panel["escala_mapa"]
+            if rect.collidepoint(pos):
+                return jugador, ((pos[0] - rect.x) / escala, (pos[1] - rect.y) / escala)
+        return None, None
+
+    def _mouse_en_mapa(self, pos):
+        jugador, punto = self._jugador_con_mapa_en(pos)
+        if jugador is not None:
+            jugador.panel["cursor_mapa"] = [punto[0], punto[1]]
+
     def _manejar_click(self, pos):
+        if self.current_screen == "partida":
+            if self.pausa is not None:
+                if not self.transitions.active:
+                    self._accion_pausa(self.pausa.click(pos))
+                return
+            jugador, punto = self._jugador_con_mapa_en(pos)
+            if jugador is not None:
+                acciones_rol.poner_emision(self, jugador, punto)
+            return
         if self.current_screen != "menu" or self.transitions.active:
             return
         for i, boton in enumerate(self.menu_buttons):
@@ -1295,11 +1110,14 @@ class Game:
             if self.mostrar_arbol_alien and self.aliens:
                 render_arbol_alien(self.screen, self.aliens[self.alien_en_vista],
                                    self.arbol_alien, self.alien_en_vista + 1, len(self.aliens))
-        elif self.current_screen == "arbol":
-            render_arbol_abb(self.screen, self.arbol_publicaciones, self.font, self.small_font)
+            if self.pausa is None:
+                render_aviso_logro(self.screen, self.logros)
+            else:
+                render_pausa(self.screen, self.pausa)
         elif self.current_screen == "resultados":
-            render_resultados(self.screen, self.jugadores, self.state,
-                              self.font, self.small_font, self.mision, self.equipo)
+            render_resultados(self.screen, self.jugadores,
+                              self.font, self.small_font, self.mision, self.equipo,
+                              self.infiltrado, self.logros)
         elif self.current_screen == "ayuda":
             render_ayuda(self.screen, self.small_font)
         elif self.current_screen == "creditos":

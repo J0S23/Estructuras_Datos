@@ -64,6 +64,14 @@ def nueva_partida(roles):
     g.seleccion_roles[0]["cursor"] = nombres.index(roles[0]); g._manejar_tecla(pygame.K_e)
     g.seleccion_roles[1]["cursor"] = nombres.index(roles[1]); g._manejar_tecla(pygame.K_RETURN)
     avanzar(); g.current_screen = "partida"
+    # El tutorial ya no se acaba solo a los 30 s: los bots lo saltan, como si
+    # cada uno pasara sus pasos con la tecla de habilidad.
+    if g.tutorial is not None:
+        for j in g.jugadores:
+            while g.en_tutorial and not g.tutorial.esta_listo(j):
+                g.tutorial.siguiente(j)
+        if not g.en_tutorial:
+            g._terminar_tutorial()
     return g
 
 

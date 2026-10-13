@@ -422,10 +422,6 @@ CONTROLES_FLECHAS = {
 }
 
 # Ambos a la vez: útil para probar con un solo personaje en pantalla.
-# Sin controles: el personaje se dibuja y se anima, pero no se mueve. Lo usan
-# los puestos 3 y 4 mientras no haya soporte de mando.
-CONTROLES_NINGUNO = {}
-
 CONTROLES_AMBOS = {
     "arriba": (pygame.K_w, pygame.K_UP),
     "abajo": (pygame.K_s, pygame.K_DOWN),

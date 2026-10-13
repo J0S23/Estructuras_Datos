@@ -1,4 +1,4 @@
-"""Punto de entrada de Alcalde Digital.
+"""Punto de entrada de NEXUS.
 
     python main.py
 

@@ -1,5 +1,5 @@
 """
-Gestor de transiciones de pantalla para Alcalde Digital.
+Gestor de transiciones de pantalla para NEXUS.
 Aplica un fade-out seguido de un fade-in al cambiar de pantalla.
 Si no hay surface disponible, falla silenciosamente.
 """
@@ -14,7 +14,7 @@ class TransitionManager:
 
     Uso:
         # Solicitar un cambio con transición:
-        game.transitions.request(game, "ciudad")
+        game.transitions.request(game, "partida")
 
         # En el loop principal, antes de flip():
         game.transitions.update(game, dt_ms)

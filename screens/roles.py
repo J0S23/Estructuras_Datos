@@ -120,7 +120,7 @@ def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
     # Las piezas solo las reconoce el Forjador (Ingenio mecánico), salvo que no
     # haya Forjador o que un mensaje de NEXUS las haya revelado.
     mision = extras.get("mision")
-    visibles_todos = mision is not None and (mision.piezas_para_todos or mision.revelar_piezas_ms > 0)
+    visibles_todos = mision is not None and mision.piezas_para_todos
     if _tiene(dueño, "INGENIO") or visibles_todos:
         for pieza in extras.get("piezas", ()):
             if pieza["recogida"] or not pieza["rect"].colliderect(camara):
@@ -164,7 +164,7 @@ def dibujar_encima(screen, offset, camara, dueño, extras, tiempo_ms):
     """Pulso de los compañeros (Biomante) y rutas de los aliens (Interceptación)."""
     if _tiene(dueño, "VINCULO"):
         for otro in extras.get("jugadores", ()):
-            if otro is dueño or getattr(otro, "escondido", False):
+            if otro is dueño or getattr(otro, "escondido", False) or getattr(otro, "eliminado", False):
                 continue
             rect = otro.personaje.hitbox
             x = rect.centerx - offset[0] - 24
@@ -173,6 +173,10 @@ def dibujar_encima(screen, offset, camara, dueño, extras, tiempo_ms):
             color = COLOR_BIOMANTE if otro.pulso < 45 else (255, 196, 64) if otro.pulso < 72 else COLOR_ALIEN
             pygame.draw.rect(screen, color, (x, y, int(48 * otro.pulso / 100), 8))
             pygame.draw.rect(screen, COLOR_BIOMANTE, (x, y, 48, 8), 1)
+            # Y sus vidas, para saber a quién curar.
+            from screens.paneles import dibujar_corazon
+            for i in range(getattr(otro, "vidas", 0)):
+                dibujar_corazon(screen, (x + 8 + i * 16, y - 10), 12, True)
 
     if "intercepcion" in getattr(dueño, "efectos", {}):
         f = fuente_de_tamano(14)

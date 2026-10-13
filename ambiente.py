@@ -50,7 +50,8 @@ class Ambiente:
         for j in jugadores:
             j.susto_ms = max(0, getattr(j, "susto_ms", 0) - dt)
 
-        libres = [j for j in jugadores if j.puede_moverse and j.preso is None]
+        libres = [j for j in jugadores if j.puede_moverse and j.preso is None
+                  and not getattr(j, "eliminado", False)]
         if libres:
             asustado = max(libres, key=lambda j: j.pulso)
             self.fase_latido += asustado.latidos_por_minuto / 60 * dt / 1000

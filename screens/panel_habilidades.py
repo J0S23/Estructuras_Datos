@@ -2,7 +2,7 @@
 
 Dibuja el árbol binario completo —incluidas las ramas que el jugador ya perdió,
 en gris— porque ver lo que se cerró es la mitad de la gracia: el árbol enseña
-que elegir DEBATE fue renunciar a PROPUESTA.
+que elegir HACKEO fue renunciar a ESCANEO.
 
 Las posiciones salen del recorrido por niveles (BFS) del árbol: la profundidad
 da la fila, y dentro de cada fila los nodos se reparten el ancho por igual.
@@ -157,6 +157,7 @@ def _apagar(imagen, alpha=90):
 # Clave del nodo -> nombre del archivo, para cuando el arte no use la misma
 # palabra que la clave. Si no está aquí se usa la clave capitalizada
 # (HACKEO -> Hackeo.png), que hoy sirve para todas.
+# Clave del nodo -> nombre del icono, cuando no coinciden.
 NOMBRE_ARCHIVO = {}
 
 

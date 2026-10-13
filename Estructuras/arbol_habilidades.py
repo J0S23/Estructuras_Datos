@@ -12,8 +12,8 @@ Las cinco preguntas que plantea el laboratorio:
 2) ¿Por qué esta estructura?
    Porque la progresión es una decisión con consecuencia, no una lista de
    compras. Al llegar a un nodo el jugador elige **una de dos** ramas y la otra
-   se cierra para el resto de la ronda: el candidato que se va por DEBATE nunca
-   tendrá PRIORIDAD ni IMPACTO esa partida. Esa regla —dos opciones, una
+   se cierra para el resto de la ronda: el Tecnomante que se va por HACKEO
+   nunca tendrá ESCANEO esa partida. Esa regla —dos opciones, una
    excluye a la otra, y lo que elijas determina qué se te abre después— es
    exactamente un árbol binario recorrido de la raíz hacia abajo. En una lista
    no existe la noción de "esto se abrió porque elegiste aquello".

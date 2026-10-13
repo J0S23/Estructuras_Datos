@@ -94,21 +94,43 @@ TECLAS.clear()
 assert g.tutorial.texto(j1)[0] == 3, "caminar en sigilo completa el paso 2"
 print("tutorial: moverse y sigilo se completan haciéndolos")
 
-# Los dos lo saltan con su tecla de habilidad: despiertan los aliens.
-g._tecla_en_partida(pygame.K_f)
+# Sin tiempo: aunque pase un minuto entero, sigue el tutorial.
+frames(g, int(60 * 1000 / DT))
+assert g.en_tutorial and g.tiempo_restante_ms == tiempo
+print("tutorial: no tiene tiempo, espera a los jugadores")
+
+# La puerta de la prisión no abre mientras alguien no haya terminado.
+j1.personaje.hitbox.center = g.mision.puerta.center
+j1.personaje.sync_sprite_from_hitbox()
+assert "tutorial" in g.mision.pista(j1)
+assert g.mision.interactuar(j1) and j1.panel is None
+print("tutorial: la puerta con código no abre todavía")
+
+# J1 pasa sus pasos con la tecla de habilidad (F), a su ritmo.
+while not g.tutorial.esta_listo(j1):
+    g._tecla_en_partida(pygame.K_f)
 assert g.en_tutorial and "Esperando" in g.tutorial.texto(j1)[2]
-g._tecla_en_partida(pygame.K_MINUS)
+assert "1/2" in g.tutorial.texto(j1)[2]
+cap(g, "sorpresas_a_tutorial_esperando.png")
+# Ya listo, F vuelve a ser su habilidad y no cambia nada del tutorial.
+g._tecla_en_partida(pygame.K_f)
+assert g.en_tutorial
+# J2 también ("-"): ahí sí despiertan los aliens.
+for _ in range(len(T.PASOS)):
+    g._tecla_en_partida(pygame.K_MINUS)
 assert not g.en_tutorial and all(not a.aturdido for a in g.aliens)
 assert any(d[0] == "despertar" for d in g.narrador.dichas)
 frames(g, 30)
 assert g.tiempo_restante_ms < tiempo
-print("tutorial: los dos lo saltan -> despiertan los aliens y corre el reloj")
+print("tutorial: cuando los dos terminan despiertan los aliens y corre el reloj")
 
-# Y si nadie hace nada, se acaba solo a los 30 s.
-g2 = nueva_partida()
-frames(g2, int(31 * 1000 / DT))
-assert not g2.en_tutorial
-print("tutorial: termina solo a los", T.DURACION_S, "s")
+# Y ya se puede usar el teclado de la puerta.
+j1.cerrar_panel()
+assert g.mision.pista(j1) == "Teclado de la puerta"
+g.mision.interactuar(j1)
+assert j1.panel is not None and j1.panel.get("accion") == "codigo"
+j1.cerrar_panel()
+print("tutorial: terminado, la puerta ya abre con el código")
 
 # ================= Sigilo =================
 g = nueva_partida(); g.tutorial.activo = False; g._terminar_tutorial()
@@ -352,6 +374,39 @@ assert not otro["reparado"] and forj.piezas == 1
 g4.iniciar_partida()
 assert not g4.mundo.bloqueos_alien
 print("sellos: el Forjador repara un panel y levanta una barrera que frena solo a los aliens")
+
+# ================= Hackeo desde la sala de control =================
+g5 = nueva_partida(("Tecnomante", "Forjador"))
+g5.tutorial.activo = False; g5._terminar_tutorial()
+tec = g5.jugadores[0]
+terminal = next(t for t in g5.terminales if t["clave"] == "terminal_control")
+vigia5 = next(a for a in g5.aliens if a.tipo == "vigia")
+assert any(math.dist(terminal["rect"].center, c["rect"].center) < 400 for c in g5.mision.consolas)
+tec.arbol.desbloquear("HACKEO", 999)
+poner(tec, terminal["rect"].center)
+acciones_rol.usar_estacion(g5, tec, terminal)
+assert vigia5.aturdido, "el hackeo de la terminal de control apaga al Vigía"
+print("hackeo: la terminal de la sala de control apaga al Vigía junto a las consolas")
+
+# ================= Los aliens rodean las paredes para llegar a un ruido =================
+g6 = nueva_partida(("Tecnomante", "Forjador"))
+g6.tutorial.activo = False; g6._terminar_tutorial()
+for j in g6.jugadores:
+    j.invulnerable_ms = 10 ** 9
+afuera = (g6.mision.puerta.left - 60, g6.mision.puerta.centery)   # la alarma del código malo
+cazador6 = next(a for a in g6.aliens if a.tipo == "cazador")
+inicio6 = cazador6.centro
+assert not g6.mundo.linea_libre(inicio6, afuera), "tiene que haber paredes en medio"
+cazador6.descanso_ms = 0
+cazador6.oir(afuera)
+llego = None
+for f in range(60 * 30):
+    cazador6.actualizar(DT, g6.mundo, g6.jugadores, None, g6.escondites)
+    if math.dist(cazador6.centro, afuera) < 40:
+        llego = f * DT / 1000
+        break
+assert llego is not None, ("el Cazador no llegó a la alarma", cazador6.centro)
+print(f"navegación: el Cazador rodea las paredes y llega a la alarma en {llego:.1f} s")
 
 # ================= Editor: tipos y puertas para dos =================
 import tempfile

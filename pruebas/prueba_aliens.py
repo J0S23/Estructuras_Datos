@@ -26,8 +26,7 @@ os.makedirs(OUT, exist_ok=True)
 
 import App
 import objetos_mapa
-# Siempre con los valores de data/, no con lo que haya guardado el editor de mapa.
-objetos_mapa.USAR_ARCHIVOS = False
+objetos_mapa.mapa_activo = lambda: "Nave"   # el único mapa del juego
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 from data.comportamiento_alien import ARBOL_ALIEN
 
@@ -70,10 +69,17 @@ g._manejar_tecla(pygame.K_RETURN); avanzar(); g.current_screen = "roles"
 g.seleccion_roles[0]["cursor"] = 0; g._manejar_tecla(pygame.K_e)
 g.seleccion_roles[1]["cursor"] = 1; g._manejar_tecla(pygame.K_RETURN)
 avanzar(); g.current_screen = "partida"
+g.tutorial.activo = False; g._terminar_tutorial()
+g.mision.abrir_puerta()          # para recorrer la nave entera
 
 j1, j2 = g.jugadores
-a1, a2 = g.aliens
-print("\naliens:", [(a.nombre, len(a.ruta)) for a in g.aliens])
+# a1 oye (el Ciego), a2 ve (el Vigía); el Cazador se aparta para no estorbar.
+a1 = next(a for a in g.aliens if a.tipo == "ciego")
+a2 = next(a for a in g.aliens if a.tipo == "vigia")
+otros = [a for a in g.aliens if a not in (a1, a2)]
+LEJOS = g.mundo.punto_libre((int(g.mundo.ancho * 0.12), int(g.mundo.alto * 0.12)), 34, 20)
+LEJOS_J = g.mundo.punto_libre((int(g.mundo.ancho * 0.05), int(g.mundo.alto * 0.2)), 48, 19)
+print("\naliens:", [(a.nombre, a.tipo, len(a.ruta)) for a in g.aliens])
 
 alien_ejemplo = a1
 claves = set(alien_ejemplo.percibir(g.jugadores, g.mundo))
@@ -108,11 +114,13 @@ def poner(jugador, punto):
 for j in g.jugadores:
     j.invulnerable_ms = 10 ** 9   # que nadie lo moleste mientras patrulla
 indices = {a.numero: set() for a in g.aliens}
-for _ in range(60 * 25):
+for _ in range(60 * 90):
     g._actualizar_partida(DT)
     for a in g.aliens:
         indices[a.numero].add(a.indice_ruta)
         assert not g.mundo.colisiona(a.hitbox), f"{a.nombre} quedó dentro de una pared"
+    if all(len(indices[a.numero]) == len(a.ruta) for a in g.aliens):
+        break
 for a in g.aliens:
     assert a.accion == "PATRULLAR", (a.nombre, a.accion)
     assert len(indices[a.numero]) == len(a.ruta), f"{a.nombre} no recorrió toda su ruta"
@@ -121,9 +129,13 @@ g.tiempo_restante_ms = 300 * 1000
 cap("aliens_a_patrulla.png")
 
 # ---------- 4. Ver, perseguir y atrapar ----------
+for a in otros:
+    a.hitbox.topleft = LEJOS; a.descanso_ms = 10 ** 9
 for j in g.jugadores:
     j.invulnerable_ms = 0
-poner(j2, (40, 40)); j2.invulnerable_ms = 10 ** 9      # el 2 fuera del juego
+poner(j2, LEJOS_J); j2.invulnerable_ms = 10 ** 9      # el 2 fuera del juego
+# En medio de la prisión, que es amplia: nada tapa la vista.
+a2.hitbox.center = (2250, 1250); a2.angulo = 0.0
 delante = (a2.centro[0] + math.cos(a2.angulo) * 170, a2.centro[1] + math.sin(a2.angulo) * 170)
 poner(j1, delante)
 g._actualizar_partida(DT)
@@ -133,15 +145,15 @@ assert j1.visto
 g.mostrar_arbol_alien = True; g.alien_en_vista = 1
 cap("aliens_b_persigue_arbol.png")
 g.mostrar_arbol_alien = False
-puntos_antes = j1.puntos = 30
+vidas = j1.vidas
 atrapado = frames(60 * 6, lambda: j1.veces_atrapado > 0)
 assert atrapado, "el alien no lo atrapó"
-assert j1.puntos == puntos_antes - App.PUNTOS_POR_SER_ATRAPADO
-assert j1.hitbox.topleft == j1.spawn
+assert j1.vidas == vidas - 1 and j1.preso is not None
 g._actualizar_partida(DT)
 assert a2.accion == "DESCANSAR", a2.accion
-print("lo atrapó: vuelve al inicio, pierde puntos y el alien descansa")
+print("lo atrapó: pierde una vida, va a una celda y el alien descansa")
 cap("aliens_c_atrapado.png")
+g.mision.liberar(j1.preso, j2)
 
 # ---------- 5. Oír un latido ----------
 frames(60 * 3)   # que se le pase el descanso
@@ -158,7 +170,7 @@ assert a2.accion in ("INVESTIGAR", "PERSEGUIR")
 cap("aliens_d_investiga.png")
 
 # ---------- 6. Buscar, volver y retomar ----------
-poner(j1, (40, 40)); j1.invulnerable_ms = 10 ** 9
+poner(j1, LEJOS_J); j1.invulnerable_ms = 10 ** 9
 vistas = []
 for _ in range(60 * 30):
     g._actualizar_partida(DT)
@@ -184,7 +196,7 @@ cap("aliens_e_pulso_alto.png")
 poner(j1, j1.spawn)
 j1.personaje.hitbox.topleft = j1.spawn
 for a in g.aliens:
-    a.hitbox.center = (1500, 1500)
+    a.hitbox.topleft = LEJOS
 for _ in range(60 * 6):
     g._actualizar_pulsos(DT)
 print("pulso tras 6 s lejos y quieto:", round(j1.pulso))
@@ -209,7 +221,12 @@ print("\nescondites:", len(g.escondites), "| ninguno choca, todos se alcanzan, n
 for a in g.aliens:
     a.descanso_ms = 0
 j2.invulnerable_ms = 10 ** 9
-escondite = [e for e in g.escondites if e["clave"] == "casillero_noroeste"][0]
+# Un escondite con piso libre a su derecha, donde se pone el alien.
+def piso_a_la_derecha(e):
+    return all(not g.mundo.colisiona(pygame.Rect(e["rect"].centerx + d - 20,
+                                                 e["rect"].centery - 15, 40, 30))
+               for d in (60, 130, 160))
+escondite = next(e for e in g.escondites if piso_a_la_derecha(e))
 
 def esconder(jugador, e):
     jugador.salir_del_escondite()
@@ -230,7 +247,7 @@ def preparar_alien(a, e, distancia=130):
     e["revisado_por"] = None; e["enfriamiento_ms"] = 0
     for otro in g.aliens:
         if otro is not a:
-            otro.hitbox.center = (1500, 1500); otro.descanso_ms = 10 ** 9
+            otro.hitbox.topleft = LEJOS; otro.descanso_ms = 10 ** 9
 
 esconder(j1, escondite)
 print("se escondió con [E]:", j1.escondido)
@@ -270,8 +287,9 @@ assert frames(60 * 6, lambda: j1.minijuego is not None)
 atrapado_antes = j1.veces_atrapado
 frames(60 * 15, lambda: j1.minijuego is None)
 assert j1.veces_atrapado == atrapado_antes + 1 and not j1.escondido
-assert j1.hitbox.topleft == j1.spawn and escondite["ocupante"] is None
-print("perdió sin presionar: el alien entra, lo atrapa y vuelve al inicio")
+assert j1.preso is not None and escondite["ocupante"] is None
+print("perdió sin presionar: el alien entra, lo atrapa y va a una celda")
+g.mision.liberar(j1.preso, j2)
 
 # Apretar sin parar no sirve: los fallos suben la amenaza.
 juego = MinijuegoLatidos(50)
@@ -282,8 +300,10 @@ for _ in range(60 * 20):
 assert juego.resultado == "atrapado", juego.resultado
 print("apretar sin parar pierde:", juego.aciertos, "aciertos,", juego.fallos, "fallos")
 
-# Visto entrar: si el alien lo ve meterse, va directo a revisar.
+# Visto entrar: si el alien lo ve meterse, va directo a revisar (el Vigía,
+# que sí ve).
 j1.invulnerable_ms = 0
+a1 = a2
 preparar_alien(a1, escondite, distancia=160)
 a1.angulo = math.pi            # ahora sí mirando hacia el escondite
 poner(j1, (escondite["rect"].centerx + 60, escondite["rect"].centery))

@@ -27,6 +27,7 @@ import random
 import pygame
 
 from data.notas import NOTAS, NOTA_CODIGO
+from logros import logro
 
 
 PIEZAS_NECESARIAS = 3
@@ -34,7 +35,6 @@ SABOTAJE_ROL_S, SABOTAJE_OTROS_S = 3.0, 6.0          # segundos manteniendo la t
 REPARACION_ROL_S, REPARACION_OTROS_S = 4.0, 8.0
 DURACION_MISION_S = 420                               # siete minutos
 RADIO_RESCATE = 140
-DURACION_REVELAR_PIEZAS_MS = 25000
 
 PUNTOS_PUERTA = 20
 PUNTOS_CONSOLA = 15
@@ -103,7 +103,6 @@ class Mision:
         self.falta_forjador = "Forjador" not in roles
         self.piezas_para_todos = self.activa and self.falta_forjador
         self.resultado = None            # "victoria" / "derrota"
-        self.revelar_piezas_ms = 0
 
         self.puerta = None
         self.puerta_abierta = True
@@ -111,6 +110,8 @@ class Mision:
         self.consolas, self.celdas, self.notas, self.consumibles = [], [], [], []
         self.codigo = "-".join(str(self.rng.randint(1, 9)) for _ in range(3))
         self.piezas_entregadas = 0
+        self.codigos_fallidos = 0        # para el logro "A la primera"
+        self.abrio = None                # quién abrió la puerta de la prisión
         self.reparacion = 0.0
         self.fase = None
         if not self.activa:
@@ -213,6 +214,8 @@ class Mision:
             if celda["preso"] is not None and math.dist(c, celda["punto"]) <= RADIO_RESCATE:
                 return f"Liberar a {celda['preso'].rol}"
         if self.fase == "prision" and self.puerta and self._cerca(jugador, self.puerta, 70):
+            if getattr(self.juego, "en_tutorial", False):
+                return "Teclado bloqueado hasta que todos terminen el tutorial"
             return "Teclado de la puerta"
         for cons in self.consumibles:
             if not cons["tomado"] and self._cerca(jugador, cons["rect"], 15):
@@ -244,6 +247,10 @@ class Mision:
                 self.liberar(celda, jugador)
                 return True
         if self.fase == "prision" and self.puerta and self._cerca(jugador, self.puerta, 70):
+            if getattr(self.juego, "en_tutorial", False):
+                # Con los aliens dormidos sería gratis: primero todos terminan el tutorial.
+                jugador.avisar("El teclado no responde: terminen todos el tutorial.", COLOR_MAL)
+                return True
             self._panel_codigo(jugador)
             return True
         for cons in self.consumibles:
@@ -306,6 +313,7 @@ class Mision:
         if codigos[indice] == self.codigo:
             self.abrir_puerta(jugador)
         else:
+            self.codigos_fallidos += 1
             for alien in self.juego.aliens:
                 alien.oir(self.puerta.center)
             jugador.avisar("¡Código equivocado! Suena la alarma.", COLOR_MAL)
@@ -318,6 +326,7 @@ class Mision:
             paredes = self.juego.mundo.paredes
             paredes[:] = [p for p in paredes if p != self.puerta]
         self.puerta_abierta = True
+        self.abrio = jugador
         if jugador is not None:
             jugador.sumar_puntos(PUNTOS_PUERTA)
         self.fase = "sabotaje" if self.consolas else "capsula"
@@ -405,8 +414,63 @@ class Mision:
         else:
             preso.avisar(f"El {rescatador.rol} te sacó de la celda.", COLOR_BIEN)
         rescatador.avisar(f"Liberaste al {preso.rol}. +{PUNTOS_RESCATE}", COLOR_BIEN)
+        logro(self.juego, "nadie_atras", rescatador)
+        if preso.vidas == 1:
+            logro(self.juego, "segunda_oportunidad", rescatador)
         self._sonar("puerta", 0.6)
         self._decir("rescate", preso.rol)
+
+    # -- Cuando eliminan a alguien ------------------------------------------------------
+
+    def soltar_al_morir(self, jugador, punto):
+        """Lo eliminaron (sin vidas): suelta lo que llevaba donde lo atraparon.
+
+        Sin esto, perder al Tecnomante o al Forjador dejaba la misión sin
+        forma de terminarse. El Tecnomante deja dos decodificadores (para las
+        consolas) y el Forjador un kit de herramientas (para la cápsula); desde
+        ese momento cualquiera puede recoger piezas. Además cae lo que tuviera
+        en el inventario: consumibles y piezas.
+        """
+        if not self.activa:
+            return []
+        tipos = []
+        if jugador.rol == "Tecnomante":
+            tipos += ["decodificador", "decodificador"]
+            self.falta_tecnomante = True
+        if jugador.rol == "Forjador":
+            tipos.append("kit")
+            self.falta_forjador = True
+            self.piezas_para_todos = True
+        tipos += sorted(t for t in jugador.objetos.elements() if t in NOMBRE_CONSUMIBLE)
+        jugador.objetos.clear()
+        piezas, jugador.piezas = jugador.piezas, 0
+
+        mundo = self.juego.mundo
+        soltados = []
+        total = len(tipos) + piezas
+        for i in range(total):
+            angulo = 2 * math.pi * i / max(1, total)
+            deseado = (punto[0] + math.cos(angulo) * 46 - TAMANO_CONSUMIBLE[0] / 2,
+                       punto[1] + math.sin(angulo) * 34 - TAMANO_CONSUMIBLE[1] / 2)
+            x, y = mundo.punto_libre(deseado, *TAMANO_CONSUMIBLE)
+            centro = (int(x + TAMANO_CONSUMIBLE[0] / 2), int(y + TAMANO_CONSUMIBLE[1] / 2))
+            if i < len(tipos):
+                cons = {"rect": _rect(centro, TAMANO_CONSUMIBLE), "tipo": tipos[i], "tomado": False}
+                self.consumibles.append(cons)
+                soltados.append(tipos[i])
+            else:
+                self.juego.piezas.append({"rect": _rect(centro, (34, 34)), "recogida": False})
+                soltados.append("pieza")
+        if soltados:
+            nombres = {"decodificador": ("decodificador", "decodificadores"),
+                       "kit": ("kit de herramientas", "kits de herramientas"),
+                       "pieza": ("pieza", "piezas")}
+            cuenta = {}
+            for s in soltados:
+                cuenta[s] = cuenta.get(s, 0) + 1
+            lista = ", ".join(f"{n} {nombres[t][n > 1]}" for t, n in cuenta.items())
+            self._avisar_todos(f"El {jugador.rol} dejó caer: {lista}. ¡Recójanlo!", COLOR_AVISO)
+        return soltados
 
     # -- Fases --------------------------------------------------------------------------
 
@@ -422,10 +486,15 @@ class Mision:
     def actualizar(self, dt):
         if not self.activa or self.resultado is not None:
             return
-        self.revelar_piezas_ms = max(0, self.revelar_piezas_ms - dt)
         # Los puestos sin mando todavía no se mueven: no cuentan para ganar ni
         # para perder, o con 3 o 4 jugadores nunca se podría escapar.
-        jugadores = [j for j in self.juego.jugadores if j.puede_moverse] or self.juego.jugadores
+        # Los eliminados (sin vidas) tampoco: ya no están en la partida.
+        jugadores = [j for j in self.juego.jugadores if j.puede_moverse]
+        if not jugadores:
+            if any(getattr(j, "eliminado", False) for j in self.juego.jugadores):
+                self.resultado = "derrota"     # los atraparon a todos 3 veces
+                return
+            jugadores = self.juego.jugadores
         if jugadores and all(j.preso for j in jugadores):
             self.resultado = "derrota"
             return

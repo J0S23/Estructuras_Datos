@@ -72,8 +72,9 @@ FORJADOR = {
             "descripcion": ("Restaura el funcionamiento de sistemas dañados, como "
                             "generadores, puertas y paneles."),
             "costo": COSTO_NIVEL_2,
-            "detalle_puntos": "En un panel dañado: lo repara con 1 pieza. +15",
+            "detalle_puntos": "En un panel dañado: lo repara con 1 pieza y levanta su sello. +15",
             "uso": "estacion",
+            "recarga_s": 25,
             "hijos": [],
         },
         {
@@ -96,7 +97,7 @@ BIOMANTE = {
     "descripcion": ("Le permite percibir, canalizar y transferir energía vital "
                     "entre seres vivos."),
     "costo": 0,
-    "detalle_puntos": "Ve el pulso de sus compañeros encima de ellos.",
+    "detalle_puntos": "Ve el pulso y las vidas de sus compañeros encima de ellos.",
     "uso": "pasiva",
     "hijos": [
         {
@@ -105,8 +106,9 @@ BIOMANTE = {
             "descripcion": ("Cura heridas específicas y detiene efectos "
                             "negativos."),
             "costo": COSTO_NIVEL_2,
-            "detalle_puntos": ("Tecla de habilidad: calma el pulso de quien esté cerca, "
-                               "y si hay un escondite revisado, le quita amenaza. +5"),
+            "detalle_puntos": ("Tecla de habilidad: devuelve una vida a los compañeros "
+                               "cercanos (cada 40 s), calma su pulso y le quita amenaza "
+                               "a un escondite revisado. +5"),
             "uso": "activa",
             "recarga_s": 14,
             "hijos": [],
@@ -117,7 +119,9 @@ BIOMANTE = {
             "descripcion": ("Transfiere energía vital a un compañero, restaurando su "
                             "energía para que pueda seguir actuando."),
             "costo": COSTO_NIVEL_2,
-            "detalle_puntos": "Tecla de habilidad: recarga al instante la habilidad de los compañeros cercanos. +5",
+            "detalle_puntos": ("Tecla de habilidad: recarga al instante la habilidad de los "
+                               "compañeros cercanos (también la Reparación) y reinicia todas "
+                               "las terminales para un nuevo hackeo. +5"),
             "uso": "activa",
             "recarga_s": 20,
             "hijos": [],
@@ -151,7 +155,8 @@ RESONANTE = {
             "descripcion": ("Transmite y modifica señales para comunicarse, "
                             "confundir, distraer o establecer contacto."),
             "costo": COSTO_NIVEL_2,
-            "detalle_puntos": "Tecla de habilidad: una señal falsa lejos de ti que los aliens van a revisar.",
+            "detalle_puntos": ("Tecla de habilidad: abre el mapa y escoges dónde cae una "
+                               "señal falsa que los aliens van a revisar."),
             "uso": "activa",
             "recarga_s": 15,
             "hijos": [],
@@ -166,22 +171,3 @@ ARBOLES_POR_ROL = {
     "Biomante": BIOMANTE,
     "Resonante": RESONANTE,
 }
-
-
-def datos_de(clave):
-    """El diccionario de un nodo por su clave, en cualquier árbol (o None)."""
-    def buscar(nodo):
-        if nodo is None:
-            return None
-        if nodo["clave"] == clave:
-            return nodo
-        for hijo in nodo.get("hijos", []):
-            encontrado = buscar(hijo)
-            if encontrado is not None:
-                return encontrado
-        return None
-    for arbol in ARBOLES_POR_ROL.values():
-        encontrado = buscar(arbol)
-        if encontrado is not None:
-            return encontrado
-    return None

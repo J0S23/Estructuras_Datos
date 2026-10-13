@@ -26,6 +26,7 @@ ajusta BOTONES / EJES con `python pruebas/probar_mando.py`):
     Y                           árbol de habilidades
     LB o LT (mantener)          caminar en sigilo
     B                           volver (solo en los menús)
+    START                       pausa en la partida (en los menús, aceptar)
 """
 
 import pygame
@@ -81,6 +82,7 @@ class Mandos:
     def __init__(self):
         self.por_puesto = {}       # puesto -> pygame.joystick.Joystick
         self._stick_y = {}         # puesto -> -1/0/1 (para no repetir en los menús)
+        self._stick_x = {}
         try:
             pygame.joystick.init()
             for i in range(pygame.joystick.get_count()):
@@ -175,7 +177,7 @@ class Mandos:
         if ev.type == pygame.JOYBUTTONDOWN:
             nombre = next((n for n, b in BOTONES.items() if b == ev.button), None)
             accion = {"A": "interactuar", "X": "habilidad", "Y": "habilidades",
-                      "B": "volver", "START": "volver"}.get(nombre)
+                      "B": "volver", "START": "pausa"}.get(nombre)
             return [(puesto, accion)] if accion else []
         if ev.type == pygame.JOYHATMOTION:
             hx, hy = ev.value
@@ -183,6 +185,11 @@ class Mandos:
                 return [(puesto, "arriba")]
             if hy == -1:
                 return [(puesto, "abajo")]
+            # Izquierda/derecha solo se usan en el árbol de logros de la pausa.
+            if hx == -1:
+                return [(puesto, "izquierda")]
+            if hx == 1:
+                return [(puesto, "derecha")]
             return []
         if ev.type == pygame.JOYAXISMOTION and ev.axis == EJE_Y:
             # El stick como "flecha" para elegir opciones: una vez por empujón.
@@ -195,4 +202,14 @@ class Mandos:
                 return [(puesto, "arriba" if nuevo < 0 else "abajo")]
             if nuevo == 0:
                 self._stick_y[puesto] = 0
+        if ev.type == pygame.JOYAXISMOTION and ev.axis == EJE_X:
+            nuevo = -1 if ev.value < -0.6 else (1 if ev.value > 0.6 else 0)
+            if abs(ev.value) < 0.3:
+                nuevo = 0
+            antes = self._stick_x.get(puesto, 0)
+            if nuevo != 0 and antes == 0:
+                self._stick_x[puesto] = nuevo
+                return [(puesto, "izquierda" if nuevo < 0 else "derecha")]
+            if nuevo == 0:
+                self._stick_x[puesto] = 0
         return []

@@ -6,12 +6,25 @@ si un evento tiene varias, se escoge una al azar.
 
 Eventos que usa el juego (ia_nave.py):
     inicio, pulso_alto, atrapado, codigo_malo, puerta_abierta, consola,
-    huida, escondite_revisado, escondite_calmado, nexus_trampa, rescate,
+    huida, escondite_revisado, escondite_calmado, rescate,
     poco_tiempo, ambiente, tutorial, despertar, apagon, alarma, compuerta,
-    fin_evento, puerta_doble, luz, sello
+    fin_evento, puerta_doble, luz, sello, eliminado, curacion,
+    prueba, infiltrado_expuesto, acusacion_falsa
 """
 
 FRASES = {
+    "prueba": [
+        "{rol} anda recogiendo cosas que no son suyas. Interesante.",
+        "Esa grabación no debía salir de la bodega. Nadie la va a creer, {rol}.",
+    ],
+    "infiltrado_expuesto": [
+        "Unidad infiltrada comprometida. Mis unidades... no saben qué creer.",
+        "¿Cómo lo supieron? Recalibrando a todas las unidades.",
+    ],
+    "acusacion_falsa": [
+        "Acusaron a un inocente. Qué humanos. {rol}, te estoy oyendo.",
+        "Error, {rol}. Y ahora todos saben dónde estás.",
+    ],
     "inicio": [
         "Bienvenidos, sujetos. No intenten escapar. Es aburrido verlos intentarlo.",
         "Sujetos despiertos. Comenzando estudio del miedo humano.",
@@ -50,10 +63,6 @@ FRASES = {
         "Falsa alarma. Por ahora.",
         "{rol} mantuvo la calma. Fastidioso.",
     ],
-    "nexus_trampa": [
-        "¿Le creíste a un mensaje anónimo, {rol}? Encantador.",
-        "Ese mensaje lo escribí yo. Gracias por confiar.",
-    ],
     "rescate": [
         "Liberaron al sujeto {rol}. Trabajo en equipo. Qué molesto.",
     ],
@@ -61,7 +70,7 @@ FRASES = {
         "Queda un minuto para el salto. Después de eso, nadie vuelve a casa.",
     ],
     "tutorial": [
-        "Sedación de la tripulación: treinta segundos. Aprovechen. O no.",
+        "Sedación de la tripulación en curso. Cuando todos despierten, mis unidades también.",
     ],
     "despertar": [
         "La tripulación despertó. Buena suerte. Bueno, no.",
@@ -71,6 +80,13 @@ FRASES = {
         "Falla de energía. Mis unidades ven en la oscuridad. Ustedes no.",
         "Apagando luces. Es por ahorro, no por maldad. Un poco por maldad.",
         "Se quemó un fusible. Uno solo. Suerte encontrando cuál.",
+    ],
+    "eliminado": [
+        "Sujeto {rol}: tercera captura. Ya no es un prisionero. Es una muestra.",
+        "{rol} queda fuera del experimento. Permanentemente.",
+    ],
+    "curacion": [
+        "La Biomante cura a sus compañeros. Interesante. Molesto, pero interesante.",
     ],
     "sello": [
         "¿Un sello de energía? {rol}, esa pieza era para algo más importante.",

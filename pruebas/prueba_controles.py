@@ -29,8 +29,7 @@ pygame.init()
 
 import App
 import objetos_mapa
-# Siempre con los valores de data/, no con lo que haya guardado el editor de mapa.
-objetos_mapa.USAR_ARCHIVOS = False
+objetos_mapa.mapa_activo = lambda: "Nave"   # el único mapa del juego
 from jugador import TECLAS_POR_PUESTO
 
 CONFIRMAR = [pygame.K_e, pygame.K_RETURN, pygame.K_o, pygame.K_y]

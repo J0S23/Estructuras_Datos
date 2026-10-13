@@ -18,7 +18,8 @@ COLOR_NOTA = (240, 226, 170)
 COLOR_CONSOLA = (180, 110, 255)
 COLOR_LISTO = (96, 210, 120)
 COLOR_CAPSULA = (90, 220, 230)
-COLOR_CONSUMIBLE = {"decodificador": (90, 160, 255), "kit": (255, 170, 50)}
+# El kit era naranja como las piezas y se confundían: ahora es verde.
+COLOR_CONSUMIBLE = {"decodificador": (90, 160, 255), "kit": (110, 210, 140)}
 
 
 def _texto(screen, texto, centro_x, y, color):

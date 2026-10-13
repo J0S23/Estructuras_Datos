@@ -7,9 +7,7 @@ habilidad en el juego está en acciones_rol.py.
 El rol no viene atado al puesto del jugador: cada uno escoge el suyo en la
 pantalla de selección, y dos jugadores no pueden repetir rol.
 
-`personaje` es la carpeta de sprites que usa ese puesto, no el rol: hoy solo
-existen dos personajes dibujados (Anny y Joseph), así que los puestos 3 y 4 los
-repiten hasta que lleguen los sprites de los cuatro roles.
+Cada rol tiene su personaje en Imagenes/Personajes/<Rol>/ (los dibujó Anny).
 """
 
 # Orden en que se ofrecen los roles en la pantalla de selección.
@@ -45,10 +43,6 @@ ROLES = [
 ]
 
 ROLES_POR_NOMBRE = {r["nombre"]: r for r in ROLES}
-
-# Personajes dibujados hoy. Los puestos 3 y 4 repiten a propósito: se ven en el
-# mapa aunque todavía no se muevan, y cuando haya arte nueva solo cambia esto.
-PERSONAJE_POR_PUESTO = ["Anny", "Joseph", "Anny", "Joseph"]
 
 # Cuántos jugadores admite una partida local.
 MINIMO_JUGADORES = 2

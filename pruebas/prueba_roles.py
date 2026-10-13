@@ -23,8 +23,7 @@ os.makedirs(OUT, exist_ok=True)
 
 import App
 import objetos_mapa
-# Siempre con los valores de data/, no con lo que haya guardado el editor de mapa.
-objetos_mapa.USAR_ARCHIVOS = False
+objetos_mapa.mapa_activo = lambda: "Nave"   # el único mapa del juego
 import acciones_rol
 from data.habilidades import ARBOLES_POR_ROL
 from data.roles import ROLES
@@ -55,8 +54,15 @@ g._manejar_tecla(pygame.K_RETURN); avanzar(); g.current_screen = "roles"
 g.seleccion_roles[0]["cursor"] = 0; g._manejar_tecla(pygame.K_e)
 g.seleccion_roles[1]["cursor"] = 1; g._manejar_tecla(pygame.K_RETURN)
 avanzar(); g.current_screen = "partida"
+g.tutorial.activo = False; g._terminar_tutorial()
+g.mision.abrir_puerta()      # para recorrer la nave entera
 j1, j2 = g.jugadores
 print("\njugadores:", [j.rol for j in g.jugadores])
+# Las coordenadas de abajo se escribieron para un cuarto abierto: P() las
+# lleva a la prisión de la nave, que es amplia y sin paredes en medio.
+def P(x, y):
+    return (x - 768 + 2250, y - 640 + 1250)
+LEJOS = g.mundo.punto_libre((int(g.mundo.ancho * 0.12), int(g.mundo.alto * 0.12)), 34, 20)
 
 def cap(nombre):
     g._dibujar(); pygame.display.flip()
@@ -82,7 +88,7 @@ def rol(jugador, nombre, hija=None):
 
 def aliens_lejos():
     for a in g.aliens:
-        a.hitbox.center = (1500, 1500); a.descanso_ms = 0; a.punto_ruido = None
+        a.hitbox.topleft = LEJOS; a.descanso_ms = 0; a.punto_ruido = None
         a.rastro.clear(); a.escondite_objetivo = None; a.busqueda_ms = 0
 
 for j in g.jugadores:
@@ -104,7 +110,9 @@ for i, a in enumerate(cosas):
 print(f"{len(g.terminales)} terminales, {len(g.paneles)} paneles, {len(g.piezas)} piezas: bien puestos")
 
 terminal = g.terminales[0]
-a1, a2 = g.aliens
+a1, a2 = g.aliens[:2]
+for a in g.aliens[2:]:
+    a.descanso_ms = 10 ** 9          # el tercero no estorba
 
 # ---------- 3. Tecnomante ----------
 aliens_lejos()
@@ -169,9 +177,8 @@ print("Reparación básica: repara el panel con una pieza")
 cap("roles_e_panel.png")
 
 rol(j2, "Forjador", "FABRICACION"); j2.piezas = 1
-poner(j2, (768, 900)); aliens_lejos()
-a2.hitbox.center = (768 + 350, 900 - 300 + 0)
-a2.hitbox.center = (1000, 640)
+poner(j2, P(768, 900)); aliens_lejos()
+a2.hitbox.center = P(1000, 640)
 g._tecla_en_partida(pygame.K_MINUS)
 assert len(g.senuelos) == 1 and j2.piezas == 0
 g._actualizar_partida(DT)
@@ -184,7 +191,7 @@ g.senuelos.clear()
 # ---------- 5. Biomante ----------
 aliens_lejos()
 rol(j1, "Biomante", "REGENERACION")
-poner(j1, (768, 640)); poner(j2, (820, 640))
+poner(j1, P(768, 640)); poner(j2, P(820, 640))
 j2.pulso = 90
 g._tecla_en_partida(pygame.K_f)
 assert j2.pulso <= 90 - acciones_rol.CALMA_REGENERACION + 1, j2.pulso
@@ -193,14 +200,37 @@ cap("roles_g_vinculo.png")
 
 rol(j1, "Biomante", "IMPULSO")
 j2.recarga_ms = 12000
+for t in g.terminales:
+    t["recarga_ms"] = 9000
 g._tecla_en_partida(pygame.K_f)
-assert j2.recarga_ms == 0
-print("Impulso energético: la habilidad del compañero queda lista")
+assert j2.recarga_ms == 0 and all(t["recarga_ms"] == 0 for t in g.terminales)
+print("Impulso energético: la habilidad del compañero y las terminales quedan listas")
+j1.recarga_ms = 0
+for t in g.terminales:
+    t["recarga_ms"] = 0
+g._tecla_en_partida(pygame.K_f)
+assert j1.recarga_ms == 0, "si nada necesita energía no gasta la recarga"
+
+# Reparación tiene recarga, y el Impulso la llena.
+rol(j2, "Forjador", "REPARACION"); j2.piezas = 2
+for p in g.paneles:
+    p["reparado"] = False
+p1, p2 = g.paneles[0], g.paneles[1]
+poner(j2, p1["rect"].center); acciones_rol.usar_estacion(g, j2, p1)
+assert p1["reparado"] and j2.recarga_ms > 0
+poner(j2, p2["rect"].center); acciones_rol.usar_estacion(g, j2, p2)
+assert not p2["reparado"], "en recarga no repara otro panel"
+poner(j1, j2.hitbox.center); j1.recarga_ms = 0
+g._tecla_en_partida(pygame.K_f)
+acciones_rol.usar_estacion(g, j2, p2)
+assert p2["reparado"], "después del Impulso sí"
+print("Reparación: tiene recarga; el Impulso de la Biomante la deja lista")
 
 # Regeneración ayudando a alguien escondido que está en el minijuego.
 from minijuego_latidos import MinijuegoLatidos
 rol(j1, "Biomante", "REGENERACION")
-escondite = g.escondites[0]
+# El escondite más cerca de la terminal: más abajo se hackea desde ella.
+escondite = min(g.escondites, key=lambda e: math.dist(e["rect"].center, terminal["rect"].center))
 poner(j2, escondite["rect"].center); j2.esconderse(escondite)
 j2.minijuego = MinijuegoLatidos(80, a1, escondite)
 a1.escondite_objetivo = escondite; escondite["revisado_por"] = a1
@@ -226,30 +256,49 @@ j2.salir_del_escondite()
 # ---------- 6. Resonante ----------
 aliens_lejos()
 rol(j2, "Resonante")
-poner(j2, (768, 640))
-a1.hitbox.center = (300, 420)          # fuera de su pantalla
+poner(j2, P(768, 640))
+a1.hitbox.topleft = LEJOS          # fuera de su pantalla
 cap("roles_h_sintonia.png")
 print("\nSintonía de señales: flechas hacia los aliens fuera de pantalla (ver captura)")
 
 rol(j2, "Resonante", "INTERCEPCION")
 g._tecla_en_partida(pygame.K_MINUS)
 assert "intercepcion" in j2.efectos
-a1.hitbox.center = (700, 560)
+a1.hitbox.center = P(700, 560)
 cap("roles_i_intercepcion.png")
 print("Interceptación básica: rutas y decisiones de los aliens")
 
 rol(j2, "Resonante", "EMISION")
 aliens_lejos()
-a1.hitbox.center = (1000, 640); a1.angulo = 0
+a1.hitbox.center = P(1000, 640); a1.angulo = 0
 j2.personaje.direccion = "west"
 g._tecla_en_partida(pygame.K_MINUS)
-assert g.senales and a1.punto_ruido == g.senales[0]["pos"]
-distancia = math.hypot(g.senales[0]["pos"][0] - j2.hitbox.centerx,
-                       g.senales[0]["pos"][1] - j2.hitbox.centery)
-assert distancia > 150, "la señal debería caer lejos del jugador"
+assert j2.panel and j2.panel["tipo"] == "emision" and not g.senales and j2.recarga_ms == 0
+cap("roles_j_emision_mapa.png")
+# Cancelar con la misma tecla no gasta nada.
+g._tecla_en_partida(pygame.K_MINUS)
+assert j2.panel is None and j2.recarga_ms == 0
+# Otra vez, y ahora se escoge el punto con el mouse sobre el mapa.
+g._tecla_en_partida(pygame.K_MINUS)
+g._dibujar()
+rect, escala = j2.panel["rect_mapa"], j2.panel["escala_mapa"]
+destino = P(900, 640)
+g._manejar_click((int(rect.x + destino[0] * escala), int(rect.y + destino[1] * escala)))
+assert j2.panel is None and g.senales and j2.recarga_ms > 0
+assert math.dist(g.senales[0]["pos"], destino) < 40, g.senales[0]["pos"]
+assert a1.punto_ruido == g.senales[0]["pos"]
 g._actualizar_partida(DT)
 assert a1.accion == "INVESTIGAR"
-print(f"Emisión modulada: la señal cae a {int(distancia)} px y el alien va a revisarla")
+print(f"Emisión modulada: mapa, clic en {g.senales[0]['pos']} y el alien va a revisarla")
+# Con teclado: el cursor se mueve con las teclas de moverse y se confirma.
+j2.recarga_ms = 0; g.senales.clear()
+g._tecla_en_partida(pygame.K_MINUS)
+antes = list(j2.panel["cursor_mapa"])
+acciones_rol.mover_cursor_emision(g, j2, 1, 0)
+assert j2.panel["cursor_mapa"][0] > antes[0]
+g._tecla_en_partida(pygame.K_RETURN)
+assert j2.panel is None and g.senales
+print("Emisión modulada: también con teclas (mover cursor + interactuar)")
 cap("roles_j_emision.png")
 
 # ---------- 7. El HUD dice qué tecla usar ----------

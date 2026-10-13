@@ -36,8 +36,8 @@ class Button:
 
 
 def construir_botones(labels, ancho_pantalla, alto_pantalla,
-                      centro_y=None, ancho=None, alto=52, separacion=14):
-    """Crea una columna de botones centrada horizontalmente.
+                      centro_y=None, ancho=None, alto=52, separacion=14, centro_x=None):
+    """Crea una columna de botones (centrada, o en `centro_x` si se da).
 
     `labels` es una lista de (texto, accion).
     """
@@ -52,7 +52,8 @@ def construir_botones(labels, ancho_pantalla, alto_pantalla,
     botones = []
     for i, (texto, accion) in enumerate(labels):
         y = y_inicial + i * (alto + separacion)
-        botones.append(Button((ancho_pantalla // 2 - ancho // 2, y, ancho, alto), texto, accion))
+        cx = ancho_pantalla // 2 if centro_x is None else int(centro_x)
+        botones.append(Button((cx - ancho // 2, y, ancho, alto), texto, accion))
     return botones
 
 

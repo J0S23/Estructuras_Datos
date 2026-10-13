@@ -1,8 +1,8 @@
-"""Configuración global: colores, constantes y datos de la ciudad.
+"""Configuración global: colores y constantes.
 
 Este archivo venía de EmpatiaQuest y traía un montón de constantes de aquel
 juego (paletas de personalización de personaje, partes del cuerpo, controles
-por defecto, versión de guardado). Nada de eso se usa en Alcalde Digital, así
+por defecto, versión de guardado). Nada de eso se usa en NEXUS, así
 que se sacó. Lo que queda es lo que alguien importa de verdad.
 """
 
@@ -16,32 +16,3 @@ TEXT_MAIN = (25, 26, 39)
 
 # Duración de los fundidos entre pantallas, en milisegundos.
 TRANSITION_DURATION_MS = 300
-
-
-# -- Ciudad Nova ------------------------------------------------------------
-
-ROLES_JUGABLES = ["Tecnomante", "Forjador", "Biomante", "Resonante"]
-
-INDICADORES_CIUDAD_INICIALES = {
-    "informacion_verificada": 50,
-    "confianza_ciudadana": 50,
-    "convivencia": 50,
-    "bienestar_digital": 50,
-    "desinformacion": 20,
-    "conflictos": 10,
-}
-
-# Nombre bonito de cada indicador, para la interfaz.
-# Las claves vienen del diseño anterior y se conservan para no romper los datos;
-# los nombres que se ven en pantalla ya son los de la tripulación.
-INDICADOR_LABELS = {
-    "informacion_verificada": "Información verificada",
-    "confianza_ciudadana": "Confianza del equipo",
-    "convivencia": "Unión del equipo",
-    "bienestar_digital": "Calma en NEXUS",
-    "desinformacion": "Desinformación",
-    "conflictos": "Pánico",
-}
-
-# Indicadores donde subir es MALO: la interfaz los pinta al revés.
-INDICADORES_INVERSOS = {"desinformacion", "conflictos"}

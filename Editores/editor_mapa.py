@@ -1,7 +1,7 @@
 """Editor de mapa: pon con el mouse todo lo que va en el mapa, sin tocar código.
 
     python Editores/editor_mapa.py            (elige el fondo en una lista)
-    python Editores/editor_mapa.py Colegio    (abre ese fondo directo)
+    python Editores/editor_mapa.py Nave       (abre ese fondo directo)
 
 Qué se pone aquí (las paredes siguen en Editores/hitbox_editor.py):
 
@@ -14,11 +14,11 @@ Qué se pone aquí (las paredes siguen en Editores/hitbox_editor.py):
     7  Consolas de navegación      las que hay que apagar (fase 2)
     8  Cápsula de escape           fases 3 y 4; sin cápsula no hay misión
     9  Piezas                      las recoge el Forjador
-    0  Terminales NEXUS            los mensajes de la red social
+    0  Terminales NEXUS            el caso del infiltrado
     ,  y  .  para las demás: compuertas (las cierra un evento), puertas para
              dos (con sus dos paneles), cajas de fusibles (para los apagones),
              terminales del Tecnomante, paneles del
-             Forjador, consumibles (decodificador / kit) y zonas viejas.
+             Forjador, consumibles (decodificador / kit) y pruebas del infiltrado.
     En las rutas, T cambia el tipo de alien (Rastreador, Vigía, Ciego, Cazador).
     También se puede hacer clic en la lista de la derecha.
 
@@ -70,17 +70,17 @@ HERRAMIENTAS = [
     {"clave": "compuertas", "nombre": "Compuertas (evento)", "color": (255, 120, 60)},
     {"clave": "puertas_dobles", "nombre": "Puertas para dos", "color": (255, 214, 64)},
     {"clave": "fusibles", "nombre": "Cajas de fusibles", "color": (255, 240, 120)},
+    {"clave": "pruebas", "nombre": "Pruebas del infiltrado", "color": (233, 120, 200)},
     {"clave": "terminales", "nombre": "Terminales (Tecnomante)", "color": (150, 120, 255)},
     {"clave": "paneles", "nombre": "Paneles y sellos (Forjador)", "color": (255, 120, 80)},
     {"clave": "consumibles", "nombre": "Consumibles (si falta un rol)", "color": (120, 200, 160)},
-    {"clave": "zonas", "nombre": "Zonas viejas (solo mover)", "color": (96, 188, 118)},
 ]
 TECLAS_HERRAMIENTA = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5,
                       pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9, pygame.K_0]
 
 # Cómo se guarda cada parte: lista de puntos [rx, ry], lista de diccionarios
 # con nombre, un solo punto, o la puerta (punto con tamaño).
-LISTAS = ("piezas", "celdas", "notas", "consolas", "consumibles", "nexus", "fusibles")
+LISTAS = ("piezas", "celdas", "notas", "consolas", "consumibles", "nexus", "fusibles", "pruebas")
 CON_NOMBRE = ("escondites", "terminales", "paneles")
 UNICOS = ("spawn", "capsula")
 # Rectángulos con tamaño, como la puerta, pero varios.
@@ -89,7 +89,7 @@ TAMANO_PANEL = (30, 30)
 NOMBRE_SINGULAR = {
     "escondites": "Escondite", "terminales": "Terminal", "paneles": "Panel", "piezas": "Pieza",
     "celdas": "Celda", "notas": "Nota", "consolas": "Consola", "consumibles": "Consumible",
-    "nexus": "NEXUS", "fusibles": "Fusibles",
+    "nexus": "NEXUS", "fusibles": "Fusibles", "pruebas": "Prueba",
 }
 
 # Tamaño en el juego (píxeles del mundo) de lo que ocupa cada cosa. Con esto se
@@ -107,6 +107,7 @@ TAMANOS = {
     "consumibles": (34, 34),
     "nexus": (60, 60),
     "fusibles": (40, 46),
+    "pruebas": (30, 30),
 }
 TAMANO_ALIEN = (34, 20)
 NOMBRES_ESCONDITE = ["Casillero", "Armario", "Contenedor", "Ducto"]
@@ -133,10 +134,6 @@ AYUDA_HERRAMIENTA = {
                 "Clic derecho: borra el panel o su sello."],
     "piezas": ["Clic: pone una.  Arrastrar: la mueve.",
                "Clic derecho: la borra."],
-    "zonas": ["Arrastrar: mueve la zona.",
-              "+ / - sobre una: cambia su tamaño.",
-              "No se crean ni se borran aquí: su",
-              "contenido vive en data/tareas.py."],
     "celdas": ["Clic: pone una celda (puede ir detrás",
                "de los barrotes, en la pared).",
                "Tiene que quedar cerca del piso: desde",
@@ -158,12 +155,16 @@ AYUDA_HERRAMIENTA = {
                     "Ahí aparece un decodificador o un kit",
                     "solo si falta el Tecnomante o el Forjador."],
     "nexus": ["Clic: pone una terminal NEXUS.",
-              "Abre los mensajes de data/nexus.py."],
+              "Abre el caso del infiltrado (infiltrado.py)."],
     "compuertas": ["Clic: pone una compuerta en un pasillo.",
                    "Un evento al azar la baja 20 s.",
                    "+ / -: más alta o más baja (bajo el mouse).",
                    "[ / ]: más angosta o más ancha.",
                    "Tiene que tapar el pasillo de pared a pared."],
+    "pruebas": ["Clic: pone un lugar posible para una prueba",
+                "del infiltrado (audio, expediente, captura).",
+                "Cada partida se usan 3 al azar: pongan más",
+                "de 3 y fuera de la prisión. Con menos, no hay caso."],
     "fusibles": ["Clic: pone una caja de fusibles.",
                  "En un apagón se sortea cuál es la buena:",
                  "hay que encontrarla y encenderla.",
@@ -184,7 +185,7 @@ AYUDA_GENERAL = [
     "M: usar este mapa en el juego",
     "F5: guardar y probar en el juego",
     "V paredes   G zona caminable",
-    "R dos veces: herramienta a valores de fábrica",
+    "R dos veces: vacía lo de esta herramienta",
     "ESC salir",
 ]
 
@@ -374,14 +375,6 @@ class EditorMapa:
                     if d <= mejor_d:
                         mejor, mejor_d = ("punto", i, j), d
             return mejor
-        if clave == "zonas":
-            for zclave, zona in self.datos["zonas"].items():
-                centro = self.px(zona["rx"], zona["ry"])
-                d = math.dist(p, centro)
-                alcance = max(radio, zona["radio"] * self.mundo.ancho)
-                if d <= alcance and (mejor is None or d < mejor_d):
-                    mejor, mejor_d = ("zona", zclave), d
-            return mejor
         for i, obj in enumerate(self.datos[clave]):
             rect = self.rect_de(clave, self.posicion(clave, obj))
             d = math.dist(p, rect.center)
@@ -406,8 +399,6 @@ class EditorMapa:
         elif cosa[0] == "sello":
             sello = self.datos["paneles"][cosa[1]]["sello"]
             sello["rx"], sello["ry"] = rx, ry
-        elif cosa[0] == "zona":
-            self.datos["zonas"][cosa[1]]["rx"], self.datos["zonas"][cosa[1]]["ry"] = rx, ry
         elif cosa[0] == "obj":
             obj = self.datos[self.clave][cosa[1]]
             if self.clave in LISTAS:
@@ -457,8 +448,6 @@ class EditorMapa:
             self.ruta_elegida = min(self.ruta_elegida, len(rutas) - 1)
             rutas[self.ruta_elegida].append([rx, ry])
             self.arrastre = ("punto", self.ruta_elegida, len(rutas[self.ruta_elegida]) - 1)
-        elif clave == "zonas":
-            self.avisar("Las zonas no se crean aquí: arrastra una existente.")
         elif clave == "paneles" and self.datos["paneles"] and not self.datos["paneles"][-1].get("sello"):
             self.datos["paneles"][-1]["sello"] = {"rx": rx, "ry": ry, "ancho": 0.05, "alto": 0.02}
             self.arrastre = ("sello", len(self.datos["paneles"]) - 1)
@@ -529,8 +518,6 @@ class EditorMapa:
                 self.ruta_elegida = max(0, min(self.ruta_elegida, len(self.datos["rutas_aliens"]) - 1))
         elif cosa[0] == "obj":
             del self.datos[clave][cosa[1]]
-        elif cosa[0] == "zona":
-            self.avisar("Las zonas no se borran aquí (su contenido está en data/tareas.py).")
         self._terminar_cambio()
 
     def nueva_ruta(self):
@@ -619,14 +606,6 @@ class EditorMapa:
     def cambiar_radio(self, pos, delta):
         if self.clave in ("puerta", "paneles") or self.clave in RECTS:
             self.cambiar_puerta(0, delta)
-            return
-        cosa = self.buscar("zonas", pos)
-        if self.clave != "zonas" or cosa is None:
-            return
-        self._empezar_cambio()
-        zona = self.datos["zonas"][cosa[1]]
-        zona["radio"] = round(min(0.2, max(0.01, zona["radio"] + delta)), 4)
-        self._terminar_cambio()
 
     def restaurar_herramienta(self):
         self._empezar_cambio()
@@ -634,7 +613,7 @@ class EditorMapa:
         self.datos[self.clave] = copy.deepcopy(fabrica[self.clave])
         self.ruta_elegida = 0
         self._terminar_cambio()
-        self.avisar(f"{HERRAMIENTAS[self.herramienta]['nombre']}: valores de fábrica.")
+        self.avisar(f"{HERRAMIENTAS[self.herramienta]['nombre']}: vaciada.")
 
     def deshacer_uno(self):
         if self.deshacer:
@@ -697,15 +676,6 @@ class EditorMapa:
         nombres = NOMBRE_SINGULAR
         ocupados = []   # (rect, id) de todo lo que ocupa espacio
 
-        for zclave, zona in self.datos["zonas"].items():
-            r = int(zona["radio"] * self.mundo.ancho)
-            rect = pygame.Rect(0, 0, 2 * r, 2 * r)
-            rect.center = tuple(map(int, self.px(zona["rx"], zona["ry"])))
-            ocupados.append((rect, ("zonas", zclave)))
-            if not self._alcanzable(rect):
-                self.estado[("zonas", zclave)] = "lejos"
-                self.problemas.append(f"Zona {zclave}: no se llega caminando")
-
         for clave in CON_NOMBRE + LISTAS:
             for i, obj in enumerate(self.datos[clave]):
                 rect = self.rect_de(clave, self.posicion(clave, obj))
@@ -714,8 +684,6 @@ class EditorMapa:
             ocupados.append((self.rect_de("capsula", self.px(*self.datos["capsula"])), ("capsula", 0)))
 
         for rect, ident in ocupados:
-            if ident[0] == "zonas":
-                continue
             clave, i = ident
             nombre = nombres.get(clave, "Cápsula")
             if clave == "celdas":
@@ -749,6 +717,9 @@ class EditorMapa:
                 self.problemas.append("Misión: hay puerta pero no notas con el código")
         elif self.datos.get("puerta") or self.datos["consolas"]:
             self.problemas.append("Misión: falta la cápsula; sin ella no hay misión")
+
+        if 0 < len(self.datos.get("pruebas", [])) < 3:
+            self.problemas.append("Infiltrado: hacen falta al menos 3 lugares para pruebas")
 
         for i, doble in enumerate(self.datos.get("puertas_dobles", [])):
             if len(doble.get("paneles", [])) < 2:
@@ -830,7 +801,7 @@ class EditorMapa:
                 self.restaurar_herramienta()
             else:
                 self.confirmar = "r"
-                self.avisar("R otra vez para volver esta herramienta a los valores de fábrica.")
+                self.avisar("R otra vez para vaciar lo de esta herramienta.")
         elif key == pygame.K_ESCAPE:
             if not self.sucio or confirmar == "esc":
                 return "salir"
@@ -924,14 +895,6 @@ class EditorMapa:
 
         actual = self.clave
         apagado = lambda clave: clave != actual
-
-        # Zonas.
-        for zclave, zona in self.datos["zonas"].items():
-            centro = self.a_pantalla(self.px(zona["rx"], zona["ry"]))
-            radio = max(3, int(zona["radio"] * self.mundo.ancho * self.zoom))
-            color = self._color(("zonas", zclave), HERRAMIENTAS[6]["color"])
-            pygame.draw.circle(s, color, centro, radio, 3 if not apagado("zonas") else 1)
-            self._etiqueta(zclave, (centro[0], centro[1] - radio), color)
 
         # Todo lo que es un punto o una lista de puntos.
         colores = {h["clave"]: h for h in HERRAMIENTAS}
@@ -1072,8 +1035,6 @@ class EditorMapa:
                 cuenta = "puesta" if self.datos.get(clave) else "no"
             elif clave in RECTS:
                 cuenta = str(len(self.datos.get(clave, [])))
-            elif clave == "zonas":
-                cuenta = str(len(self.datos["zonas"]))
             else:
                 cuenta = str(len(self.datos[clave]))
             elegida = i == self.herramienta

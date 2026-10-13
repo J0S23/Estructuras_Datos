@@ -23,8 +23,12 @@ Hay varios **tipos** de alien (data/tipos_alien.py): todos usan el mismo
 árbol, pero cada tipo ve, oye y corre distinto. El Ciego, por ejemplo, nunca
 responde "sí" a "¿ve a un jugador?" salvo que lo tenga casi encima.
 
-Todavía no hay sprite del alien: se dibuja una figura provisional con formas.
+Los sprites de los aliens (de Anny) están en Imagenes/Aliens/<carpeta>/ con
+el mismo formato que los personajes (8 direcciones, idle/breathing/walking).
+Un tipo sin carpeta (el Rastreador) se sigue dibujando con formas.
 """
+
+import os
 
 import math
 
@@ -34,16 +38,7 @@ from fuentes import fuente_de_tamano
 from data.tipos_alien import datos_tipo, TIPO_POR_DEFECTO
 
 
-# Velocidades en píxeles por frame a 60 FPS. Los jugadores caminan a 4: el
-# alien que persigue es un poco más lento, así que escapar es posible pero
-# hay que moverse.
-VEL_PATRULLA = 1.7
-VEL_INVESTIGAR = 2.4
-VEL_PERSEGUIR = 3.3
-
-# Visión: un cono hacia donde mira.
-ALCANCE_VISION = 300
-MEDIO_ANGULO_VISION = math.radians(38)
+# Velocidad, visión y oído de cada tipo de alien: data/tipos_alien.py.
 
 DISTANCIA_ATRAPAR = 46
 DISTANCIA_REVISAR = 80           # a esta distancia del escondite se pone a revisarlo
@@ -67,9 +62,43 @@ COLOR_CONO = {
     "REVISAR_ESCONDITE": (240, 70, 60),
 }
 
-# Lo que se ve de un alien en la oscuridad: los ojos brillan hasta esta
-# distancia del jugador (ver oscuridad.py).
-DISTANCIA_OJOS = 620
+# Sprites por tipo: carpeta en Imagenes/Aliens/ y escala (los cuadros vienen
+# de 96 px; el Ciego de 80 px y es bajito porque va a cuatro patas).
+SPRITES_ALIEN = {
+    "ciego": ("Alien_Ciego", 2.0),
+    "cazador": ("Alien_Rapido", 1.8),
+    "vigia": ("Alien_Vision", 1.9),
+}
+FPS_ANIMACION = 8
+# Ángulo -> dirección del sprite (0 = este, va en sentido horario en pantalla).
+_DIRECCIONES_ANGULO = ("east", "south-east", "south", "south-west",
+                       "west", "north-west", "north", "north-east")
+_cache_sprites = {}
+
+
+def sprites_de(tipo):
+    """Animaciones del tipo de alien, o None si no tiene sprites (o no hay
+    pantalla todavía). Se cargan una sola vez por tipo."""
+    if tipo in _cache_sprites:
+        return _cache_sprites[tipo]
+    datos = SPRITES_ALIEN.get(tipo)
+    resultado = None
+    if datos is not None and pygame.display.get_surface() is not None:
+        carpeta, escala = datos
+        ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Imagenes", "Aliens", carpeta)
+        if os.path.isdir(ruta):
+            from Movimiento.Personaje import cargar_animaciones
+            animaciones = cargar_animaciones(ruta, escala=escala, ancho_ratio=1.0)
+            muestra = (animaciones.get("idle", {}).get("south") or [None])[0]
+            if muestra is not None:
+                contenido = muestra.get_bounding_rect()
+                # Cuánto aire transparente hay debajo de los pies, y la caja de
+                # lo que se ve (para poner encima el "!" y los ojos).
+                resultado = {"animaciones": animaciones,
+                             "pie": muestra.get_height() - contenido.bottom,
+                             "contenido": contenido}
+    _cache_sprites[tipo] = resultado
+    return resultado
 
 
 def _distancia(a, b):
@@ -101,11 +130,16 @@ class Alien:
         self.busqueda_ms = 0
         self.descanso_ms = 0
         self.aturdido = False             # el descanso viene de un hackeo
+        self.confundido = False           # ...o de que expusieron al infiltrado
         self.alerta = False               # huida final: más rápido y ve más lejos
         self.atascado_ms = 0
         self.tiempo_ms = 0                # reloj propio, para animaciones
         self.persecucion_ms = 0           # cuánto lleva persiguiendo (el Cazador se cansa)
         self.cansado = False
+        self.moviendose = False           # para escoger la animación de caminar
+        self.ruta_ruido = []              # camino (navegacion.py) hacia el ruido
+        self._destino_ruta = None
+        self._recalcular_ms = 0
 
     # -- Percepción ---------------------------------------------------------------
 
@@ -218,10 +252,13 @@ class Alien:
         if self.descanso_ms == 0:
             self.aturdido = False
             self.cansado = False
+            self.confundido = False
 
         condiciones = self.percibir(jugadores, mundo, escondites)
         self.accion, self.camino = self.arbol.decidir(condiciones)
+        antes = self.hitbox.center
         self._ejecutar(self.accion, dt, factor, mundo, al_atrapar, al_revisar)
+        self.moviendose = self.hitbox.center != antes
         self._cansarse(dt)
 
     def _cansarse(self, dt):
@@ -254,6 +291,13 @@ class Alien:
         self.punto_ruido = None
         self.busqueda_ms = 0
 
+    def confundir(self, ms):
+        """Expusieron al infiltrado de NEXUS (infiltrado.py): se quedan
+        quietos `ms` milisegundos, sin ver ni oír, como con un hackeo."""
+        self.aturdir(ms)
+        self.confundido = True
+        self.objetivo = None
+
     def oir(self, punto):
         """Un ruido que no viene de un latido: señuelo o señal falsa.
 
@@ -265,6 +309,7 @@ class Alien:
             return False
         self.punto_ruido = (int(punto[0]), int(punto[1]))
         self.escondite_objetivo = None
+        self.ruta_ruido, self._destino_ruta = [], None
         return True
 
     def rendirse(self):
@@ -323,10 +368,12 @@ class Alien:
             return
 
         if accion == "INVESTIGAR":
-            llego = self._ir_hacia(self.punto_ruido, self.datos["vel_investigar"] * factor, dt, mundo)
+            llego = self._ir_por_camino(self.punto_ruido, self.datos["vel_investigar"] * factor,
+                                        dt, mundo)
             if llego or self.atascado_ms > TIEMPO_ATASCADO_MS:
                 # Llegó (o no puede llegar): ahora busca alrededor un rato.
                 self.punto_ruido = None
+                self.ruta_ruido, self._destino_ruta = [], None
                 self.escondite_objetivo = None
                 self.busqueda_ms = DURACION_BUSQUEDA_MS
                 self.atascado_ms = 0
@@ -354,6 +401,49 @@ class Alien:
                 or self.atascado_ms > TIEMPO_ATASCADO_MS:
             self.indice_ruta = (self.indice_ruta + 1) % len(self.ruta)
             self.atascado_ms = 0
+
+    def _ir_por_camino(self, destino, velocidad, dt, mundo):
+        """Como _ir_hacia, pero rodeando paredes (navegacion.py).
+
+        Si hay línea libre va directo; si no, sigue un camino buscado con BFS.
+        El camino se recalcula si el destino se mueve bastante (un ruido que
+        se desplaza), pero no más de una vez cada 400 ms. Devuelve True al
+        llegar, o si no hay forma de llegar (para que deje de intentarlo).
+        """
+        self._recalcular_ms = max(0, self._recalcular_ms - dt)
+        if not hasattr(mundo, "paredes_base"):
+            return self._ir_hacia(destino, velocidad, dt, mundo)
+        import navegacion
+        nav = navegacion.de_mundo(mundo, self.hitbox.width, self.hitbox.height)
+        movido = (self._destino_ruta is None or
+                  _distancia(self._destino_ruta, destino) > 64)
+        if movido and (self._recalcular_ms == 0 or not self.ruta_ruido):
+            self._destino_ruta = destino
+            self._recalcular_ms = 400
+            if nav.libre_entre(self.centro, destino):
+                self.ruta_ruido = [destino]
+            else:
+                camino = nav.camino(self.centro, destino)
+                if camino is None:
+                    self.ruta_ruido = []
+                    return True          # no se puede llegar: que se rinda
+                self.ruta_ruido = camino
+        if not self.ruta_ruido:
+            return self._ir_hacia(destino, velocidad, dt, mundo)
+        # El último punto del camino sigue al ruido aunque se mueva un poco.
+        self.ruta_ruido[-1] = destino
+        # Si ya ve el siguiente punto del camino, se salta el actual.
+        while len(self.ruta_ruido) > 1 and nav.libre_entre(self.centro, self.ruta_ruido[1]):
+            self.ruta_ruido.pop(0)
+        objetivo = self.ruta_ruido[0]
+        # Los puntos intermedios se tocan casi exactos: si dobla antes de
+        # llegar, se roza con la esquina y se queda pegado.
+        if self._ir_hacia(objetivo, velocidad, dt, mundo, 3 if len(self.ruta_ruido) > 1 else 10):
+            self.ruta_ruido.pop(0)
+            if not self.ruta_ruido:
+                self._destino_ruta = None
+                return True
+        return False
 
     def _dejar_rastro(self):
         """Apila un punto cada SEPARACION_RASTRO píxeles mientras está fuera."""
@@ -454,8 +544,46 @@ class Alien:
         cuerpo.midbottom = (pie_x, pie_y - 4 + flote)
         return cuerpo, pie_x, pie_y
 
+    def _frame_sprite(self):
+        """(superficie, datos) del cuadro que toca ahora, o (None, None)."""
+        datos = sprites_de(self.tipo)
+        if datos is None:
+            return None, None
+        estado = "walking" if self.moviendose else "breathing"
+        indice = round(self.angulo / (math.pi / 4)) % 8
+        frames = datos["animaciones"].get(estado, {}).get(_DIRECCIONES_ANGULO[indice]) or []
+        if not frames:
+            return None, None
+        cuadro = int(self.tiempo_ms / (1000 / FPS_ANIMACION)) % len(frames)
+        return frames[cuadro], datos
+
+    def _posicion_sprite(self, imagen, datos, offset):
+        rect = imagen.get_rect()
+        rect.midbottom = (self.hitbox.centerx - offset[0],
+                          self.hitbox.bottom - offset[1] + datos["pie"])
+        return rect
+
+    def _caja_figura(self, offset):
+        """Rect en pantalla de lo que se ve del alien (sprite o formas)."""
+        imagen, datos = self._frame_sprite()
+        if imagen is not None:
+            rect = self._posicion_sprite(imagen, datos, offset)
+            return datos["contenido"].move(rect.topleft)
+        return self._cuerpo(offset)[0]
+
     def dibujar(self, screen, offset):
-        """Figura provisional hasta que llegue el sprite de PixelLab.
+        imagen, datos = self._frame_sprite()
+        if imagen is not None:
+            rect = self._posicion_sprite(imagen, datos, offset)
+            sombra = pygame.Rect(0, 0, int(datos["contenido"].width * 0.8), 14)
+            sombra.center = (rect.centerx, self.hitbox.bottom - offset[1] - 2)
+            pygame.draw.ellipse(screen, (10, 12, 20), sombra)
+            screen.blit(imagen, rect)
+            return
+        self._dibujar_formas(screen, offset)
+
+    def _dibujar_formas(self, screen, offset):
+        """Figura provisional, para el tipo que todavía no tiene sprite.
 
         Cada tipo tiene su silueta para que se reconozca de un vistazo: el
         Vigía es alto y de un solo ojo, el Ciego lleva una venda sin ojos y el
@@ -505,38 +633,18 @@ class Alien:
             pygame.draw.line(screen, borde, base, punta, 3)
             pygame.draw.circle(screen, (255, 120, 200), (int(punta[0]), int(punta[1])), 5)
 
-    def dibujar_ojos(self, screen, offset):
-        """Lo único que se ve del alien en la oscuridad: el brillo de sus ojos.
-
-        Se dibuja encima de la capa de oscuridad (oscuridad.py). El Ciego no
-        tiene ojos, así que en lo oscuro no se le ve nada: solo se le oye.
-        """
-        if self.tipo == "ciego":
-            return
-        cuerpo, _, _ = self._cuerpo(offset)
-        color = (255, 70, 60) if self.accion in ("PERSEGUIR", "ATRAPAR") else (
-            (255, 214, 64) if self.accion in ("INVESTIGAR", "BUSCAR") else (170, 255, 190))
-        mira_x = math.cos(self.angulo) * 4
-        y = int(cuerpo.y + 22 + math.sin(self.angulo) * 3)
-        if self.tipo == "vigia":
-            centros = [(int(cuerpo.centerx + mira_x * 1.5), y)]
-        else:
-            centros = [(int(cuerpo.centerx + lado * 10 + mira_x), y) for lado in (-1, 1)]
-        brillo = pygame.Surface((24, 24), pygame.SRCALPHA)
-        pygame.draw.circle(brillo, (*color, 70), (12, 12), 11)
-        pygame.draw.circle(brillo, (*color, 255), (12, 12), 3)
-        for c in centros:
-            screen.blit(brillo, (c[0] - 12, c[1] - 12))
-
     def dibujar_senal(self, screen, offset):
-        """"!" si persigue, "?" si investiga o busca, "zZ" si lo hackearon y
-        "..." si se cansó. Va encima de la oscuridad para que siempre se vea."""
-        cuerpo, _, _ = self._cuerpo(offset)
+        """"!" si persigue, "?" si investiga o busca, "zZ" si lo hackearon,
+        "?!?" si está confundido (expusieron al infiltrado) y "..." si se cansó.
+        Se dibuja debajo de la oscuridad: en un apagón queda igual de oscura."""
+        cuerpo = self._caja_figura(offset)
         signo = {"PERSEGUIR": "!", "ATRAPAR": "!", "REVISAR_ESCONDITE": "!",
                  "INVESTIGAR": "?", "BUSCAR": "?"}.get(self.accion)
         if self.accion == "DESCANSAR" and self.cansado:
             signo = "..."
-        if self.accion == "DESCANSAR" and self.aturdido:
+        if self.accion == "DESCANSAR" and self.aturdido and self.confundido:
+            signo = "?!?"
+        elif self.accion == "DESCANSAR" and self.aturdido:
             signo = "zZ"
             # Chispas: lo apagó un hackeo.
             for i in range(3):
@@ -547,7 +655,7 @@ class Alien:
                 pygame.draw.line(screen, (150, 200, 255), (px, py - 4), (px, py + 4), 2)
         if signo:
             color = {"!": (240, 70, 60), "?": (255, 214, 64),
-                     "...": (200, 200, 210)}.get(signo, (150, 200, 255))
+                     "...": (200, 200, 210), "?!?": (233, 120, 200)}.get(signo, (150, 200, 255))
             f = fuente_de_tamano(30)
             texto = f.render(signo, True, color)
             sombra = f.render(signo, True, (12, 11, 23))

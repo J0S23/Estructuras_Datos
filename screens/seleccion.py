@@ -1,7 +1,6 @@
 """Las dos pantallas previas a la partida: cuántos juegan y quién es quién.
 
-Antes el rol venía atado al puesto —el primero Ciudadano, el segundo
-Candidato—, así que no había nada que elegir. Ahora hay dos pasos:
+Hay dos pasos:
 
 1. **Cantidad**: 2, 3 o 4. Ese número decide en cuántas partes se corta la
    pantalla, así que se pregunta antes que nada.
@@ -13,6 +12,8 @@ La sección de cada jugador se dibuja con el mismo `calcular_viewports` de la
 partida, así que desde la selección ya se ve qué trozo de pantalla le va a
 tocar a cada uno.
 """
+
+import os
 
 import pygame
 
@@ -140,6 +141,44 @@ def render_roles(screen, viewports, seleccion):
     screen.blit(etiqueta, caja)
 
 
+_retratos = {}
+
+
+def _retrato(rol, alto_max):
+    """El personaje del rol, de frente y quieto, recortado y agrandado."""
+    clave = (rol, alto_max)
+    if clave not in _retratos:
+        ruta = os.path.join("Imagenes", "Personajes", rol, f"{rol}_idle_south.png")
+        imagen = None
+        try:
+            hoja = pygame.image.load(ruta).convert_alpha()
+            lado = hoja.get_height()
+            cuadro = hoja.subsurface((0, 0, min(lado, hoja.get_width()), lado))
+            caja = cuadro.get_bounding_rect()
+            recorte = cuadro.subsurface(caja).copy()
+            escala = max(1, min(3, alto_max // max(1, recorte.get_height())))
+            imagen = pygame.transform.scale(recorte, (recorte.get_width() * escala,
+                                                      recorte.get_height() * escala))
+        except (pygame.error, OSError, ValueError):
+            imagen = None
+        _retratos[clave] = imagen
+    return _retratos[clave]
+
+
+def _dibujar_retrato(screen, vista, rol, tope, color):
+    imagen = _retrato(rol, max(40, min(190, vista.height // 3)))
+    if imagen is None:
+        return
+    x = vista.right - MARGEN - imagen.get_width()
+    y = vista.y + tope + MARGEN
+    sombra = pygame.Rect(0, 0, imagen.get_width(), 14)
+    sombra.midtop = (x + imagen.get_width() // 2, y + imagen.get_height() - 8)
+    pygame.draw.ellipse(screen, (14, 15, 28), sombra)
+    screen.blit(imagen, (x, y))
+    pygame.draw.line(screen, color, (x, y + imagen.get_height() + 8),
+                     (x + imagen.get_width(), y + imagen.get_height() + 8), 2)
+
+
 def _seccion_jugador(screen, vista, indice, estado, tomados, tope=0):
     f = fuente_de_tamano(max(12, min(20, vista.width // 34)))
     f_titulo = fuente_de_tamano(max(14, min(26, vista.width // 26)))
@@ -160,8 +199,12 @@ def _seccion_jugador(screen, vista, indice, estado, tomados, tope=0):
 
     if estado["listo"]:
         _confirmado(screen, vista, f, y, estado)
+        rol = next((r for r in ROLES if r["nombre"] == estado["rol"]), None)
+        if rol is not None:
+            _dibujar_retrato(screen, vista, rol["nombre"], tope, rol["color"])
         screen.set_clip(clip_previo)
         return
+
 
     for i, rol in enumerate(ROLES):
         sobre = (i == estado["cursor"])
@@ -185,6 +228,9 @@ def _seccion_jugador(screen, vista, indice, estado, tomados, tope=0):
                     (vista.x + MARGEN, y))
         y += paso + 12
 
+    sobre_rol = ROLES[estado["cursor"]]
+    _dibujar_retrato(screen, vista, sobre_rol["nombre"], tope, sobre_rol["color"])
+
     pie = f.render(f"[{estado['tecla_mover']}] elegir   [{estado['tecla_ok']}] confirmar",
                    True, (194, 216, 248))
     screen.blit(pie, (vista.x + MARGEN, vista.bottom - MARGEN - pie.get_height()))
@@ -197,7 +243,7 @@ def _confirmado(screen, vista, f, y, estado):
     if rol is None:
         return
 
-    caja = pygame.Rect(vista.x + MARGEN, y, vista.width - MARGEN * 2, paso * 4 + 16)
+    caja = pygame.Rect(vista.x + MARGEN, y, int(vista.width * 0.62) - MARGEN, paso * 3 + 16)
     pygame.draw.rect(screen, (34, 48, 40), caja)
     pygame.draw.rect(screen, COLOR_LISTO, caja, 2)
 
@@ -205,9 +251,6 @@ def _confirmado(screen, vista, f, y, estado):
     screen.blit(f.render(rol["nombre"], True, rol["color"]), (caja.x + 12, y))
     y += paso
     screen.blit(f.render(rol["objetivo"], True, COLOR_TEXTO), (caja.x + 12, y))
-    y += paso
-    screen.blit(f.render(f"Personaje: {estado['personaje']}", True, COLOR_TENUE),
-                (caja.x + 12, y))
     y += paso
     screen.blit(f.render("Listo", True, COLOR_LISTO), (caja.x + 12, y))
 

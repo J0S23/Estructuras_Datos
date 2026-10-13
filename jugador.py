@@ -11,13 +11,13 @@ compartieran las teclas de elegir opción, uno le respondería los diálogos al
 otro.
 """
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import pygame
 
 from Estructuras.arbol_habilidades import construir_arbol
 from data.habilidades import ARBOLES_POR_ROL
-from data.tareas import OBJETIVOS
+from data.roles import ROLES_POR_NOMBRE
 from oscuridad import Linterna
 from mandos import tecla_virtual, es_virtual, NOMBRE_BOTON
 
@@ -113,6 +113,10 @@ FACTOR_RUIDO_SIGILO = 0.6
 FACTOR_VELOCIDAD_SIGILO = 0.5
 PULSO_EXTRA_SIGILO = 3
 
+# Vidas: cada vez que lo atrapan pierde una. Sin vidas queda eliminado: ya no
+# vuelve a la partida (ni de la celda). La Biomante puede devolver vidas.
+VIDAS_INICIALES = 3
+
 # Después de que lo atrapan, un rato en que los aliens no lo persiguen, para
 # que no lo vuelvan a atrapar apenas reaparece.
 INVULNERABLE_MS = 2500
@@ -121,6 +125,26 @@ INVULNERABLE_MS = 2500
 # tiene un panel abierto, para que siga animándose quieto en vez de caminar
 # mientras lee. Es un defaultdict porque Personaje indexa por código de tecla.
 SIN_TECLAS = defaultdict(bool)
+
+
+class Inventario(Counter):
+    """Los consumibles que lleva un jugador, con cuántos de cada uno.
+
+    Se usa como antes se usaba el set: `"kit" in objetos`, `objetos.add(...)`,
+    `objetos.discard(...)`; pero ahora puede llevar varios del mismo.
+    """
+
+    def add(self, tipo, cantidad=1):
+        self[tipo] += cantidad
+
+    def discard(self, tipo):
+        if self[tipo] > 0:
+            self[tipo] -= 1
+        if self[tipo] <= 0:
+            del self[tipo]
+
+    def __contains__(self, tipo):
+        return self.get(tipo, 0) > 0
 
 
 class Jugador:
@@ -181,17 +205,19 @@ class Jugador:
         # con la tecla mantenida (texto, 0 a 1) y el equipo con el que suma
         # puntos para las habilidades.
         self.preso = None
-        self.objetos = set()
+        self.objetos = Inventario()
         self.progreso = None
         self.equipo = None
         self.pista_mision = None
         self.susto_ms = 0            # cuánto le queda al susto de ser atrapado
+        self.vidas = VIDAS_INICIALES
+        self.eliminado = False       # sin vidas: fuera de la partida
+        self.vida_cambio_ms = 0      # para que el corazón que cambia parpadee
+        self.curacion_ms = 0         # recarga de la curación de la Biomante
         self.invulnerable_ms = 0
         self.veces_atrapado = 0
 
-        # Línea extra del HUD, propia de cada rol. El ciudadano la usa para el
-        # aviso de cuántas cadenas dudosas siguen circulando, que sale de la
-        # búsqueda por rango del ABB.
+        # Línea extra del HUD, propia de cada rol (acciones_rol.linea_de_estado).
         self.info = ""
 
     def asignar_rol(self, rol):
@@ -201,7 +227,7 @@ class Jugador:
         jugador existe desde antes de que sepa qué va a jugar.
         """
         self.rol = rol
-        self.objetivo = OBJETIVOS.get(rol, "")
+        self.objetivo = ROLES_POR_NOMBRE.get(rol, {}).get("objetivo", "")
         self.arbol = construir_arbol(rol, ARBOLES_POR_ROL.get(rol))
 
     # -- Estado ----------------------------------------------------------------
@@ -289,7 +315,8 @@ class Jugador:
         Los puestos sin mando todavía no se mueven: si los aliens los cazaran,
         los atraparían una y otra vez sin que el jugador pudiera hacer nada.
         """
-        return self.puede_moverse and self.invulnerable_ms <= 0 and self.preso is None
+        return (self.puede_moverse and not self.eliminado
+                and self.invulnerable_ms <= 0 and self.preso is None)
 
     @property
     def latidos_por_minuto(self):
@@ -307,6 +334,7 @@ class Jugador:
         """
         self.visto = visto
         self.invulnerable_ms = max(0, self.invulnerable_ms - dt)
+        self.vida_cambio_ms = max(0, self.vida_cambio_ms - dt)
         segundos = dt / 1000
         if self.minijuego is not None:
             self.fase_latido = (self.fase_latido + self.latidos_por_minuto / 60 * segundos) % 1.0
@@ -329,8 +357,11 @@ class Jugador:
         self.fase_latido = (self.fase_latido + self.latidos_por_minuto / 60 * segundos) % 1.0
 
     def atrapado(self):
-        """Lo atrapó un alien: vuelve a su punto de inicio y pierde puntos."""
+        """Lo atrapó un alien: pierde una vida y vuelve a su punto de inicio
+        (después la misión lo mete en una celda)."""
         self.veces_atrapado += 1
+        self.vidas = max(0, self.vidas - 1)
+        self.vida_cambio_ms = 1200
         self.invulnerable_ms = INVULNERABLE_MS
         self.pulso = 45.0
         self.cerrar_panel()
@@ -338,6 +369,24 @@ class Jugador:
         if self.spawn is not None:
             self.personaje.hitbox.topleft = self.spawn
             self.personaje.sync_sprite_from_hitbox()
+
+    def eliminar(self):
+        """Se quedó sin vidas: sale de la partida para siempre."""
+        self.eliminado = True
+        self.puede_moverse = False
+        self.cerrar_panel()
+        self.salir_del_escondite()
+        self.progreso = None
+
+    def curar(self, cantidad=1):
+        """Recupera vidas (la Biomante). Devuelve cuántas recuperó."""
+        if self.eliminado:
+            return 0
+        antes = self.vidas
+        self.vidas = min(VIDAS_INICIALES, self.vidas + cantidad)
+        if self.vidas != antes:
+            self.vida_cambio_ms = 1200
+        return self.vidas - antes
 
     # -- Puntos y mensajes ------------------------------------------------------
 
@@ -399,6 +448,6 @@ class Jugador:
         self.linterna.actualizar(self.personaje.direccion)
 
     def dibujar(self, screen, offset):
-        if self.escondido:
-            return   # metido en el escondite: no se ve
+        if self.escondido or self.eliminado:
+            return   # metido en el escondite (o eliminado): no se ve
         self.personaje.dibujar(screen, offset)

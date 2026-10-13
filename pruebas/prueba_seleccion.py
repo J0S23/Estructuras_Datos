@@ -20,8 +20,7 @@ OUT = os.path.join(RAIZ, "pruebas", "capturas", "seleccion")
 os.makedirs(OUT, exist_ok=True)
 import App
 import objetos_mapa
-# Siempre con los valores de data/, no con lo que haya guardado el editor de mapa.
-objetos_mapa.USAR_ARCHIVOS = False
+objetos_mapa.mapa_activo = lambda: "Nave"   # el único mapa del juego
 from data.roles import ROLES
 
 CONFIRMAR = [pygame.K_e, pygame.K_RETURN, pygame.K_o, pygame.K_y]

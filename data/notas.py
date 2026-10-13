@@ -25,5 +25,5 @@ NOTAS = [
     {"titulo": "Manual de la cápsula",
      "texto": "Cápsula de emergencia: requiere 3 piezas de repuesto y reparación manual."},
     {"titulo": "Papel quemado",
-     "texto": "No les creas a todos los mensajes de NEXUS. Algunos los mandan ellos."},
+     "texto": "Uno de los que escriben en NEXUS no es humano. Lo vi cambiar de cara."},
 ]
