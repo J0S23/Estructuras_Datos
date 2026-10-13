@@ -26,9 +26,9 @@ PASOS = [
      "accion": "sigilo"},
     {"texto": "El anillo a tu alrededor es tu ruido. Si un alien queda adentro, te oye. "
               "Entre más asustado, más grande.", "accion": "leer"},
-    {"texto": "Si se va la luz, solo alumbra tu linterna y no verás a los aliens ni "
-              "por dónde miran. Busquen la caja de fusibles que parpadea en rojo y "
-              "enciéndanla.",
+    {"texto": "No ves a través de las paredes. Si se va la luz, solo alumbra tu "
+              "linterna, nada eléctrico funciona y no verás a los aliens ni por dónde "
+              "miran. Busquen la caja de fusibles que parpadea en rojo y enciéndanla.",
      "accion": "leer"},
     {"texto": "{interactuar}: usar, leer notas y esconderte. Si te atrapan vas a una "
               "celda y tus compañeros te sacan. Tienes 3 vidas.", "accion": "leer"},

@@ -141,11 +141,11 @@ class GestorEventos:
             self.apagon = True
             self.caja = self.rng.choice(self._cajas_alcanzables() or self.cajas)
             self.caja["progreso"] = 0.0
-            self._sonar("susto", 0.5)
+            self._sonar("apagon", 0.9)
         elif nombre == "compuerta":
             self.compuerta = self.rng.choice(self._compuertas_libres())
             self.compuerta["cerrada"] = True
-            self._sonar("puerta", 0.8)
+            self._sonar("compuerta", 0.9)
         elif nombre == "alarma":
             self.alertados = [a for a in self.juego.aliens if not a.alerta]
             for alien in self.alertados:
@@ -217,7 +217,7 @@ class GestorEventos:
             for j in self.juego.jugadores:
                 j.avisar("¡Volvió la luz!" if j is not jugador
                          else f"¡Volvió la luz! +{PUNTOS_FUSIBLES}", COLOR_BIEN)
-        self._sonar("consola", 0.9)
+        self._sonar("luz", 0.9)
         self._decir("luz")
 
     def pista(self, jugador):

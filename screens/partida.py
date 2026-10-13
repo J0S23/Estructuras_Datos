@@ -16,6 +16,7 @@ import pygame
 
 from fuentes import fuente, fuente_de_tamano
 import oscuridad
+import vision
 from screens.infiltrado_dibujo import dibujar_pruebas
 import puertas
 from eventos import dibujar_cajas, dibujar_brillo_caja
@@ -229,6 +230,15 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
     # ojos. Así no queda otra que ir a prender la caja de fusibles.
     a_oscuras = bool((extras or {}).get("oscuridad")) and not mostrar_hitboxes
 
+    # Campo de visión (vision.py): lo que el dueño tiene detrás de una pared no
+    # se ve. Los aliens fuera de su vista no se dibujan (ni cuerpo, ni cono, ni
+    # señal); los compañeros sí, oscurecidos como el resto del mapa.
+    campo = None
+    if (extras or {}).get("vision") and not mostrar_hitboxes:
+        campo = vision.campo_de(dueño.hitbox.center, vision.obstaculos(
+            mundo, extras.get("puertas_dobles", ()), extras.get("compuertas", ())))
+        aliens = [a for a in aliens if campo.ve_a(a.hitbox)]
+
     # Los conos de visión van en el piso, debajo de todos los personajes.
     if not a_oscuras:
         for alien in aliens:
@@ -255,8 +265,10 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
     # donde llega la linterna.
     for alien in aliens:
         alien.dibujar_senal(screen, offset)
+    if a_oscuras or campo is not None:
+        oscuridad.dibujar(screen, vista, camara, dueño, jugadores, a_oscuras,
+                          campo.puntos if campo else None)
     if a_oscuras:
-        oscuridad.dibujar(screen, vista, camara, dueño, jugadores)
         dibujar_brillo_caja(screen, offset, dueño, eventos, tiempo_ms)
     _dibujar_ruido(screen, offset, dueño)
 

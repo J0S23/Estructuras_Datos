@@ -6,7 +6,7 @@ detienen (todo avanza con `dt`, no con el reloj de pygame).
 
 Tiene cuatro vistas:
     "menu"       Continuar / Opciones / Logros / Terminar partida
-    "opciones"   volumen del sonido, oscuridad, pantalla completa
+    "opciones"   volumen del sonido, campo de visión y oscuridad, pantalla completa
     "logros"     el árbol de logros de la partida (screens/logros.py)
     "confirmar"  ¿seguro que quieres terminar la partida?
 
@@ -66,7 +66,7 @@ class MenuPausa:
             efectos = round(audio_manager.sfx_volume * 100)
             return [
                 (f"Sonido: < {efectos}% >", "efectos"),
-                ("Oscuridad en apagones: " + ("Sí" if self.juego.oscuridad else "No"), "oscuridad"),
+                ("Campo de visión y oscuridad: " + ("Sí" if self.juego.oscuridad else "No"), "oscuridad"),
                 ("Pantalla completa: " + ("Sí" if self.juego.pantalla_completa else "No"),
                  "pantalla_completa"),
                 ("Volver", "volver"),

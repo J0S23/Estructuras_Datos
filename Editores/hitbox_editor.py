@@ -82,10 +82,6 @@ def collides_rect_with_hitbox(rect, h, img_rect):
     return False
 
 
-def collides_with_any_hitbox(rect, hitboxes, img_rect):
-    return any(collides_rect_with_hitbox(rect, h, img_rect) for h in hitboxes)
-
-
 def save_hitboxes(out_path, hitboxes, img_rect, image_path,
                   spawn_data=None, npc_positions=None, decoracion=None):
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -130,18 +126,6 @@ def load_hitboxes(in_path):
             payload.get("spawn", {}),
             payload.get("npc_positions", {}),
             payload.get("decoracion", None))   # None = key absent (migration needed)
-
-
-def choose_image_from_console(project_root):
-    print("Ruta de imagen del fondo (enter = usar Imagenes/Fondos/Salon(1).jpg):")
-    user = input().strip().strip('"')
-    if user:
-        return user
-    for root, _, files in os.walk(os.path.join(project_root, "Imagenes")):
-        for name in files:
-            if name.lower() == "salon(1).jpg":
-                return os.path.relpath(os.path.join(root, name), project_root)
-    return os.path.join("Imagenes", "Fondos", "Salon(1).jpg")
 
 
 def build_dummy_from_game_logic(project_root, img_rect, tamano_nativo=None):
@@ -400,55 +384,6 @@ def choose_image_gui(scan_dir, title="Elegir imagen"):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def migrate_all_objetos_to_hitboxes(project_root):
-    """Imports every Objetos/*_objetos.json into its Hitboxes/*_hitboxes.json.
-    Runs once at startup; skips files that already have decoracion data."""
-    objetos_dir = os.path.join(project_root, "Objetos")
-    hitboxes_dir = os.path.join(project_root, "Hitboxes")
-    if not os.path.isdir(objetos_dir):
-        return
-    migrated = 0
-    for fname in sorted(os.listdir(objetos_dir)):
-        if not fname.endswith("_objetos.json") or fname.startswith("_"):
-            continue
-        image_base = fname[:-len("_objetos.json")]
-        hb_path = os.path.join(hitboxes_dir, f"{image_base}_hitboxes.json")
-        obj_path = os.path.join(objetos_dir, fname)
-        try:
-            with open(obj_path, "r", encoding="utf-8") as fh:
-                obj_payload = json.load(fh)
-            objects = [o for o in obj_payload.get("objects", [])
-                       if isinstance(o, dict) and "name" in o]
-            if not objects:
-                continue
-            if os.path.exists(hb_path):
-                with open(hb_path, "r", encoding="utf-8") as fh:
-                    hb_payload = json.load(fh)
-                if hb_payload.get("decoracion"):
-                    continue  # Already has decoracion, skip
-                hb_payload["decoracion"] = objects
-                with open(hb_path, "w", encoding="utf-8") as fh:
-                    json.dump(hb_payload, fh, indent=2)
-            else:
-                os.makedirs(hitboxes_dir, exist_ok=True)
-                hb_payload = {
-                    "image": obj_payload.get("image", f"Imagenes/Fondos/{image_base}.jpg"),
-                    "image_size": obj_payload.get("image_size", [1920, 1200]),
-                    "hitboxes": [],
-                    "spawn": {},
-                    "npc_positions": {},
-                    "decoracion": objects,
-                }
-                with open(hb_path, "w", encoding="utf-8") as fh:
-                    json.dump(hb_payload, fh, indent=2)
-            migrated += 1
-            print(f"[migration] {fname} → {os.path.basename(hb_path)}")
-        except Exception as e:
-            print(f"[migration] Error en {fname}: {e}")
-    if migrated > 0:
-        print(f"[migration] {migrated} archivos migrados de Objetos/ a Hitboxes/.")
-
-
 def main():
     pygame.init()
     clock = pygame.time.Clock()
@@ -456,7 +391,6 @@ def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(base_dir)
 
-    migrate_all_objetos_to_hitboxes(project_root)
 
     if len(sys.argv) > 1:
         image_path = sys.argv[1]
@@ -608,9 +542,7 @@ def main():
 
     # ── Panel state ───────────────────────────────────────────────────────────
     panel_scroll = 0
-    panel_hovered = None
     PANEL_ROW_H = 22
-    EYE_W = 24
 
     # ── Spawn system ──────────────────────────────────────────────────────────
     hb_template = build_dummy_from_game_logic(project_root, world_rect, raw_image.get_size())
@@ -622,7 +554,6 @@ def main():
     spawn_status_message = ""
     spawn_status_timer = 0
     pending_spawn_rect = None
-    active_spawn_label = "Cualquier fondo"
     npc_positions = {}
     selected_npc_name = "sara"
     npc_default_site_w = 96
@@ -639,22 +570,6 @@ def main():
         s.clamp_ip(world_rect)
         test_player.topleft = s.topleft
         test_player.size = spawn_rect.size
-
-    def _resolve_to_nearest_free(base_rect):
-        candidate = base_rect.copy()
-        candidate.clamp_ip(world_rect)
-        if not collides_with_any_hitbox(candidate, hitboxes, world_rect):
-            return candidate
-        for radius in range(8, max(world_rect.width, world_rect.height) + 8, 8):
-            for dx, dy in ((radius, 0), (-radius, 0), (0, radius), (0, -radius),
-                           (radius, radius), (radius, -radius), (-radius, radius), (-radius, -radius)):
-                probe = base_rect.copy()
-                probe.x += dx
-                probe.y += dy
-                probe.clamp_ip(world_rect)
-                if not collides_with_any_hitbox(probe, hitboxes, world_rect):
-                    return probe
-        return None
 
     def set_spawn_to_mouse(mouse_pos):
         nonlocal pending_spawn_rect
@@ -678,9 +593,8 @@ def main():
         )
 
     def _apply_loaded_spawn(spawn_payload):
-        nonlocal spawn_rules, spawn_rect, active_spawn_label
+        nonlocal spawn_rules, spawn_rect
         spawn_rules = {"default": None, "by_origin": {}}
-        active_spawn_label = "Cualquier fondo"
         if not isinstance(spawn_payload, dict):
             return
         if "default" in spawn_payload or "by_origin" in spawn_payload:
@@ -814,8 +728,6 @@ def main():
     npc_anim_modal = False
     npc_modal_selected = 0
     npc_anim_modal_selected = 0
-    npc_modal_scroll = 0
-    npc_anim_scroll = 0
     npc_modal_source = "hitbox"   # "hitbox" | "deco"
     thumbnail_cache = {}
     THUMB = 72
@@ -1373,7 +1285,7 @@ def main():
     # ── Main loop ─────────────────────────────────────────────────────────────
     running = True
     while running:
-        dt_ms = clock.tick(60)
+        clock.tick(60)
         fps = clock.get_fps()
         mouse_pos_screen = pygame.mouse.get_pos()
         mouse_world = screen_to_world(mouse_pos_screen)
@@ -1381,7 +1293,6 @@ def main():
             f"{mouse_world[0] / world_rect.width:.3f}, {mouse_world[1] / world_rect.height:.3f}"
             if mouse_world else "---, ---"
         )
-        any_modal = spawn_modal_active or npc_char_modal or npc_anim_modal
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -1408,7 +1319,6 @@ def main():
                                 continue
                             spawn_rules["default"] = spawn_data
                             spawn_rect.topleft = pending_spawn_rect.topleft
-                            active_spawn_label = "Cualquier fondo"
                             clamp_spawn_rect()
                             reset_test_player_to_spawn()
                             spawn_status_message = "Spawn por defecto creado."
@@ -1419,7 +1329,6 @@ def main():
                                 continue
                             spawn_rules["by_origin"][selected] = spawn_data
                             spawn_rect.topleft = pending_spawn_rect.topleft
-                            active_spawn_label = selected
                             clamp_spawn_rect()
                             reset_test_player_to_spawn()
                             spawn_status_message = f"Spawn creado para '{selected}'."

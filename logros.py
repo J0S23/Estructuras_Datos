@@ -64,7 +64,7 @@ class GestorLogros:
         for nodo in nuevos:
             self.avisos.append([nodo, DURACION_AVISO_MS])
         if nuevos and hasattr(self.juego, "sonar"):
-            self.juego.sonar("acierto", 0.7)
+            self.juego.sonar("logro", 0.6)
         return nuevos
 
     def tiene(self, clave):

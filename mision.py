@@ -216,6 +216,8 @@ class Mision:
         if self.fase == "prision" and self.puerta and self._cerca(jugador, self.puerta, 70):
             if getattr(self.juego, "en_tutorial", False):
                 return "Teclado bloqueado hasta que todos terminen el tutorial"
+            if getattr(self.juego, "sin_luz", False):
+                return "Teclado sin energía"
             return "Teclado de la puerta"
         for cons in self.consumibles:
             if not cons["tomado"] and self._cerca(jugador, cons["rect"], 15):
@@ -230,6 +232,8 @@ class Mision:
         if self.fase == "sabotaje":
             for consola in self.consolas:
                 if consola["progreso"] < 1 and self._cerca(jugador, consola["rect"], 20):
+                    if getattr(self.juego, "sin_luz", False):
+                        return "Consola sin energía"
                     return "Mantener: apagar consola"
         return None
 
@@ -251,6 +255,9 @@ class Mision:
                 # Con los aliens dormidos sería gratis: primero todos terminan el tutorial.
                 jugador.avisar("El teclado no responde: terminen todos el tutorial.", COLOR_MAL)
                 return True
+            if getattr(self.juego, "sin_luz", False):
+                jugador.avisar("El teclado está apagado. Sin energía: enciendan la caja de fusibles.", COLOR_MAL)
+                return True
             self._panel_codigo(jugador)
             return True
         for cons in self.consumibles:
@@ -258,6 +265,7 @@ class Mision:
                 cons["tomado"] = True
                 jugador.objetos.add(cons["tipo"])
                 jugador.avisar(f"Recogiste: {NOMBRE_CONSUMIBLE[cons['tipo']]}", COLOR_BIEN)
+                self._sonar("recoger", 0.7)
                 return True
         if self.capsula and self.fase == "capsula" and self._cerca(jugador, self.capsula, 10):
             faltan = PIEZAS_NECESARIAS - self.piezas_entregadas
@@ -266,6 +274,7 @@ class Mision:
                 jugador.piezas -= dejar
                 self.piezas_entregadas += dejar
                 jugador.sumar_puntos(PUNTOS_PIEZA * dejar)
+                self._sonar("encajar", 0.8)
                 jugador.avisar(f"Piezas en la cápsula: {self.piezas_entregadas}/{PIEZAS_NECESARIAS}",
                                COLOR_BIEN)
             elif faltan > 0:
@@ -346,6 +355,10 @@ class Mision:
             for consola in self.consolas:
                 if consola["progreso"] >= 1 or not self._cerca(jugador, consola["rect"], 20):
                     continue
+                if getattr(self.juego, "sin_luz", False):
+                    # Sin energía no hay sistema que desconectar.
+                    jugador.avisar("Sin energía: enciendan la caja de fusibles.", COLOR_MAL)
+                    return
                 if jugador.rol == "Tecnomante":
                     duracion = SABOTAJE_ROL_S
                 elif "decodificador" in jugador.objetos:

@@ -47,6 +47,7 @@ from ia_nave import Narrador
 from mandos import Mandos, tecla_virtual, PUESTOS_CON_MANDO
 from tutorial import Tutorial
 from pausa import MenuPausa
+from audio_manager import audio_manager
 from infiltrado import CasoInfiltrado
 from logros import GestorLogros
 from eventos import GestorEventos, crear_cajas
@@ -77,6 +78,10 @@ DURACION_RONDA_S = 300  # cinco minutos, como pide el diseño
 
 # Tutorial de 30 s al empezar (tutorial.py). Solo en mapas con misión.
 TUTORIAL_ACTIVO = True
+
+# Teclas que suenan en los menús (menú, cantidad, roles y pausa).
+TECLAS_MOVER_MENU = {pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT, pygame.K_w, pygame.K_s}
+TECLAS_OK_MENU = {pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_e}
 
 # Lo que cuesta que te atrape un alien.
 PUNTOS_POR_SER_ATRAPADO = 10
@@ -418,6 +423,12 @@ class Game:
             self.decir("poco_tiempo", forzar=True)
 
     @property
+    def sin_luz(self):
+        """Hay un apagón: no funciona nada eléctrico (terminales, NEXUS,
+        teclado de la prisión, consolas, sellos, puertas para dos, escaneo)."""
+        return self.eventos is not None and self.eventos.apagon
+
+    @property
     def en_tutorial(self):
         return self.tutorial is not None and self.tutorial.activo
 
@@ -494,6 +505,7 @@ class Game:
             if self.mision is not None:
                 self.mision.soltar_al_morir(jugador, donde)
             self.decir("eliminado", jugador.rol, forzar=True)
+            self.sonar("eliminado", 0.8)
             jugador.avisar("Te atraparon 3 veces. Estás fuera.", (236, 70, 60))
             for otro in self.jugadores:
                 if otro is not jugador:
@@ -595,13 +607,24 @@ class Game:
                 jugador.pista_mision = self.infiltrado.pista(jugador)
             pista_puerta = puertas.pista(self.puertas_dobles, jugador)
             if pista_puerta and not jugador.preso:
-                jugador.pista_mision = pista_puerta
+                jugador.pista_mision = "Puerta sin energía" if self.sin_luz else pista_puerta
             pista_caja = self.eventos.pista(jugador) if self.eventos is not None else None
             if pista_caja and not jugador.preso:
                 jugador.pista_mision = pista_caja
-        puertas.actualizar(self.puertas_dobles, sosteniendo, dt, self._puerta_doble_abierta)
+        # Las puertas para dos son eléctricas: en un apagón no abren.
+        puertas.actualizar(self.puertas_dobles, [] if self.sin_luz else sosteniendo, dt,
+                           self._puerta_doble_abierta)
 
         acciones_rol.actualizar(self, dt)
+        if self.sin_luz:
+            for jugador in self.jugadores:
+                if jugador.pista_mision or jugador.preso:
+                    continue
+                estacion = getattr(jugador, "estacion_cerca", None)
+                if jugador.zona_cerca is not None and jugador.zona_cerca["tipo"] == "nexus":
+                    jugador.pista_mision = "Terminal NEXUS sin energía"
+                elif estacion is not None and estacion["tipo"] == "terminal":
+                    jugador.pista_mision = "Terminal sin energía"
         for jugador in self.jugadores:
             jugador.escondite_cerca = (None if jugador.escondido or jugador.zona_cerca
                                        or jugador.estacion_cerca
@@ -640,8 +663,10 @@ class Game:
             "senuelos": self.senuelos, "senales": self.senales, "mision": self.mision,
             "puertas_dobles": self.puertas_dobles, "compuertas": self.compuertas,
             "eventos": self.eventos, "tutorial": self.tutorial, "infiltrado": self.infiltrado,
-            # Todo está iluminado; solo se oscurece durante un apagón.
+            # Campo de visión siempre; la oscuridad de la linterna, solo en un apagón.
+            "vision": self.oscuridad,
             "oscuridad": self.oscuridad and self.eventos is not None and self.eventos.apagon,
+            "sin_luz": self.sin_luz,
         }
 
     def _actualizar_pulsos(self, dt):
@@ -663,6 +688,8 @@ class Game:
             self.mision.terminar_por_tiempo()
         if self.logros is not None:
             self.logros.al_terminar()
+        if self.mision is not None and self.mision.activa:
+            self.sonar("victoria" if self.mision.resultado == "victoria" else "derrota", 0.8)
         for jugador in self.jugadores:
             jugador.cerrar_panel()
         self.transitions.request(self, "resultados")
@@ -680,6 +707,9 @@ class Game:
     def _abrir_nexus(self, jugador, zona):
         """Terminal NEXUS: el caso del infiltrado (infiltrado.py). Es lo único
         que hay en NEXUS: ver sospechosos, subir pruebas y acusar."""
+        if self.sin_luz:
+            jugador.avisar("La terminal NEXUS está apagada: no hay luz.", (245, 130, 120))
+            return
         if self.logros is not None:
             self.logros.conseguir("conectado", jugador)
         if self.infiltrado is None:
@@ -783,6 +813,7 @@ class Game:
             else:
                 jugador.sumar_puntos(-costo)
             jugador.avisar(mensaje, (255, 214, 64))
+            self.sonar("acierto", 0.7)
             jugador.cursor = 0
         else:
             jugador.avisar(mensaje, (245, 130, 120))
@@ -837,6 +868,7 @@ class Game:
                         and not self.tutorial.esta_listo(jugador)):
                     # En el tutorial, la tecla de habilidad pasa de paso.
                     self.tutorial.siguiente(jugador)
+                    self.sonar("menu_ok", 0.5)
                     if not self.tutorial.activo:
                         self._terminar_tutorial()
                     return
@@ -879,11 +911,14 @@ class Game:
             total = self._total_opciones(jugador)
             if jugador.es_tecla(key, "arriba"):
                 jugador.mover_cursor(-1, total)
+                self.sonar("menu_mover", 0.35)
                 return
             if jugador.es_tecla(key, "abajo"):
                 jugador.mover_cursor(1, total)
+                self.sonar("menu_mover", 0.35)
                 return
             if jugador.es_tecla(key, "interactuar"):
+                self.sonar("menu_ok", 0.4)
                 self.confirmar(jugador)
                 return
             # Tampoco era suya aunque tenga un panel abierto: se sigue buscando.
@@ -900,6 +935,7 @@ class Game:
         while self.running:
             dt = self.clock.tick(DEFAULT_FPS)
             self._manejar_eventos()
+            self._sonido_de_fondo()
             if self.current_screen == "partida" and self.transitions.is_idle():
                 if self.pausa is not None:
                     self.pausa.actualizar(dt)   # el juego queda congelado
@@ -910,6 +946,18 @@ class Game:
             pygame.display.flip()
         pygame.quit()
         sys.exit()
+
+    def _sonido_de_fondo(self):
+        """El zumbido de la nave suena durante la partida; se calla en los
+        apagones (las máquinas se apagan) y baja en la pausa."""
+        if self.current_screen == "partida" and self.mundo is not None:
+            if self.eventos is not None and self.eventos.apagon:
+                volumen = 0.0
+            else:
+                volumen = 0.12 if self.pausa is not None else 0.35
+            audio_manager.bucle("ambiente", volumen)
+        elif audio_manager.sonando_bucle:
+            audio_manager.parar_bucle()
 
     def _manejar_eventos(self):
         for evento in pygame.event.get():
@@ -979,6 +1027,12 @@ class Game:
             return
         if self.transitions.active:
             return
+        if self.current_screen in ("menu", "cantidad", "roles") or (
+                self.current_screen == "partida" and self.pausa is not None):
+            if key in TECLAS_MOVER_MENU:
+                self.sonar("menu_mover", 0.5)
+            elif key in TECLAS_OK_MENU:
+                self.sonar("menu_ok", 0.6)
 
         if self.current_screen == "menu":
             if key in (pygame.K_UP, pygame.K_w):
@@ -1020,6 +1074,7 @@ class Game:
                 self.alien_en_vista = (self.alien_en_vista + 1) % len(self.aliens)
             elif key == pygame.K_ESCAPE:
                 self.pausa = MenuPausa(self)
+                self.sonar("pausa", 0.6)
             else:
                 self._tecla_en_partida(key)
 

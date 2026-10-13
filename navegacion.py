@@ -70,8 +70,16 @@ class Navegacion:
 
     # -- Buscar un camino --------------------------------------------------------------
 
-    def camino(self, desde, hasta):
-        """Lista de puntos (centros) de `desde` a `hasta`, o None si no hay."""
+    def camino(self, desde, hasta, parcial=False):
+        """Lista de puntos (centros) de `desde` a `hasta`, o None si no hay.
+
+        Con `parcial=True`, si no se puede llegar (por ejemplo, el ruido está
+        al otro lado de la puerta cerrada de la prisión), devuelve el camino
+        hasta la celda alcanzable más cercana al destino: el alien va lo más
+        cerca que puede, como haría alguien que oye algo detrás de una puerta.
+        En ese caso el último punto NO es `hasta` (ver `self.ultimo_parcial`).
+        """
+        self.ultimo_parcial = False
         extra = self._bloqueos_extra()
         w, h = self.ancho, self.alto
 
@@ -101,8 +109,12 @@ class Navegacion:
                     continue
                 previo[v] = c
                 cola.append(v)
-        if meta not in previo:
-            return None
+        llego = meta in previo
+        if not llego:
+            if not parcial or len(previo) <= 1:
+                return None
+            meta = min(previo, key=lambda c: (c[0] + w / 2 - hasta[0]) ** 2 + (c[1] + h / 2 - hasta[1]) ** 2)
+            self.ultimo_parcial = True
         celdas = []
         c = meta
         while c is not None:
@@ -110,7 +122,8 @@ class Navegacion:
             c = previo[c]
         celdas.reverse()
         puntos = [(cx + w // 2, cy + h // 2) for cx, cy in celdas]
-        puntos.append((int(hasta[0]), int(hasta[1])))
+        if llego:
+            puntos.append((int(hasta[0]), int(hasta[1])))
         return self.estirar(puntos)
 
     def libre_entre(self, a, b):

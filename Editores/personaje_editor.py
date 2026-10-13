@@ -1,21 +1,16 @@
 """
-Editor de personaje + Hitboxes de Minijuego — EmpatiaQuest
-- Selector visual de personajes/imágenes al inicio.
-- Escala e hitboxes independientes por asset (cada uno tiene su propio config).
-- Assets de minijuego (Corazon/Puño/Mensaje): solo hitbox roja, sin amarilla,
-  scale se refleja en el minijuego.
+Editor de personaje: escala e hitboxes de cada rol.
+
+- Selector visual de personajes al inicio.
+- Cada personaje guarda su config en Hitboxes/<Rol>_config.json, que es lo que
+  lee Movimiento/Personaje.py.
+- Hitbox roja (colisión) e hitbox amarilla (interacción); [I] alterna entre
+  las dos. "Todos" escribe la misma hitbox en el config de cada personaje.
 """
 import json
 import os
 import sys
 import pygame
-
-# ─── Rutas de config ──────────────────────────────────────────────────────────
-# El juego SOLO lee personaje_config.json (para el personaje principal).
-# Todos los demás usan archivos independientes en Hitboxes/.
-MAIN_CHARACTER_FOLDER = "personaje_main"
-PERSONAJE_CONFIG_NAME = os.path.join("Hitboxes", "personaje_config.json")
-MINIJUEGO_CONFIG_NAME = os.path.join("Hitboxes", "minijuego_config.json")
 
 DEFAULT_SCALE = 1.6
 # Mismo valor que Movimiento/Personaje.ANCHO_RATIO_DEFECTO: estrecha el sprite
@@ -24,12 +19,6 @@ ANCHO_RATIO_DEFECTO = 0.7
 MAX_SCALE     = 12.0
 DEFAULT_HB    = {"w_ratio": 0.20, "h_ratio": 0.12,
                  "offset_x_ratio": 0.40, "offset_y_ratio": 0.86}
-
-MINI_HITBOX_DEFAULTS = {
-    "heart":   {"w_ratio": 0.50, "h_ratio": 0.50, "offset_x_ratio": 0.25, "offset_y_ratio": 0.25, "scale": 4.0},
-    "fist":    {"w_ratio": 0.50, "h_ratio": 0.50, "offset_x_ratio": 0.25, "offset_y_ratio": 0.25, "scale": 4.0},
-    "message": {"w_ratio": 0.70, "h_ratio": 0.60, "offset_x_ratio": 0.15, "offset_y_ratio": 0.20, "scale": 3.0},
-}
 
 # ─── Colores ──────────────────────────────────────────────────────────────────
 C_BG      = (22, 24, 36)
@@ -44,8 +33,6 @@ C_TITLE   = (200, 215, 255)
 C_ACCENT  = (80, 160, 255)
 C_RED     = (220, 60, 60)
 C_YELLOW  = (255, 210, 40)
-C_ORANGE  = (255, 140, 30)
-C_BLUE    = (80, 190, 255)
 C_GREEN   = (80, 210, 120)
 
 
@@ -84,31 +71,12 @@ def load_thumb(path, size=80):
         return None
 
 
-# ─── Detección de asset de minijuego ─────────────────────────────────────────
-
-def get_minijuego_key(sprite_path):
-    """Devuelve 'heart', 'fist', 'message' o None según el sprite."""
-    marker = os.path.join("Minijuegos", "Undertale")
-    if marker not in sprite_path and "Minijuegos" not in sprite_path:
-        return None
-    fname = os.path.basename(sprite_path).lower()
-    # Normalizar: quitar acentos del comparador
-    fname_n = fname.replace("ó", "o").replace("ñ", "n")
-    if "corazon" in fname_n or "corazon" in fname_n:
-        return "heart"
-    if "puno" in fname_n or "fist" in fname_n or "puno" in fname_n:
-        return "fist"
-    if "mensaje" in fname_n or "message" in fname_n:
-        return "message"
-    return None
-
-
 def nombre_de_personaje(sprite_path, project_root):
     """Nombre con el que se identifica al personaje dueño de un sprite.
 
     Si el sprite está dentro de una subcarpeta de Imagenes/Personajes
-    (Imagenes/Personajes/Anny/Anny_idle_south.png), el personaje es esa
-    carpeta: Anny.
+    (Imagenes/Personajes/Tecnomante/Tecnomante_idle_south.png), el personaje
+    es esa carpeta: Tecnomante.
     Si es un PNG suelto, se usa el nombre del archivo.
     """
     carpeta = os.path.basename(os.path.dirname(os.path.abspath(sprite_path)))
@@ -121,9 +89,7 @@ def nombre_de_personaje(sprite_path, project_root):
 def rutas_config_de_todos(project_root):
     """Todos los archivos que hay que escribir para aplicar una hitbox a todos.
 
-    Es el config de cada personaje que exista en Imagenes/Personajes/ más el
-    compartido personaje_config.json, que es el que heredan los personajes
-    que todavía no tienen el suyo (P3, P4...).
+    Es el config de cada personaje que exista en Imagenes/Personajes/.
     """
     rutas = []
     personajes_dir = os.path.join(project_root, "Imagenes", "Personajes")
@@ -134,14 +100,13 @@ def rutas_config_de_todos(project_root):
                 continue
             if any(f.lower().endswith(".png") for f in os.listdir(carpeta)):
                 rutas.append(os.path.join(project_root, "Hitboxes", f"{nombre}_config.json"))
-    rutas.append(os.path.join(project_root, PERSONAJE_CONFIG_NAME))
     return rutas
 
 
 def get_char_config_path(sprite_path, project_root):
     """Cada personaje guarda su propio config: Hitboxes/<personaje>_config.json.
 
-    El nombre sale de la carpeta del personaje (Anny -> Anny_config.json), no del
+    El nombre sale de la carpeta del personaje (Tecnomante -> Tecnomante_config.json), no del
     sprite que se esté viendo, para que calibrar desde cualquier pose escriba
     siempre el mismo archivo. Es también el primer nombre que busca
     Movimiento/Personaje.py al cargar un personaje.
@@ -151,12 +116,8 @@ def get_char_config_path(sprite_path, project_root):
 
 
 def load_char_config(sprite_path, project_root):
-    """Lee el config propio del personaje; si todavía no tiene uno, parte del
-    personaje_config.json general para no arrancar de cero."""
-    cfg = load_json(get_char_config_path(sprite_path, project_root))
-    if cfg:
-        return cfg
-    return load_json(os.path.join(project_root, PERSONAJE_CONFIG_NAME))
+    """Lee el config propio del personaje (vacío si todavía no tiene)."""
+    return load_json(get_char_config_path(sprite_path, project_root))
 
 
 # ─── Colección de entradas para el selector ───────────────────────────────────
@@ -245,34 +206,6 @@ def collect_entries(project_root):
                         "path":  os.path.join(item_path, fname),
                         "thumb": None,
                     })
-
-    # Assets de minijuego (Corazon, Puño, Mensajes)
-    mini_dir = os.path.join(img_root, "Minijuegos", "Undertale")
-    if os.path.isdir(mini_dir):
-        priority = ["Corazon.png", "Puño.png"]
-        all_pngs = sorted(f for f in os.listdir(mini_dir) if f.lower().endswith(".png"))
-        ordered  = [f for f in priority if f in all_pngs]
-        # Solo UN representante de mensajes — todos comparten la clave "message"
-        msg_repr = None
-        for f in all_pngs:
-            if f not in priority:
-                full = os.path.join(mini_dir, f)
-                if get_minijuego_key(full) == "message":
-                    if msg_repr is None:
-                        msg_repr = f   # primer mensaje encontrado = representante
-                    # los demás se omiten (misma hitbox/escala)
-                else:
-                    ordered.append(f)  # otros assets no-mensaje se incluyen
-        if msg_repr:
-            ordered.append(msg_repr)
-        for fname in ordered:
-            is_msg = (fname == msg_repr)
-            label  = "[Minijuego] Mensajes (compartido)" if is_msg else f"[Minijuego] {fname}"
-            entries.append({
-                "label": label,
-                "path":  os.path.join(mini_dir, fname),
-                "thumb": None,
-            })
 
     return entries
 
@@ -460,8 +393,6 @@ def run_selector(screen, clock, project_root):
 # ─── Editor principal ─────────────────────────────────────────────────────────
 
 def run_editor(screen, clock, sprite_path, project_root, aplicar_a_todos=False):
-    mj_key = get_minijuego_key(sprite_path)
-
     font       = pygame.font.SysFont("consolas", 18)
     title_font = pygame.font.SysFont("consolas", 22, bold=True)
     small_font = pygame.font.SysFont("consolas", 14)
@@ -473,46 +404,30 @@ def run_editor(screen, clock, sprite_path, project_root, aplicar_a_todos=False):
         return
     iw_raw, ih_raw = image.get_size()
 
-    # Animación de caminata (personajes)
+    # Animación de caminata de frente (<Rol>_walking_south.png, de PixelLab).
     walk_frames = []
-    if not mj_key:
-        walk_dir  = os.path.dirname(sprite_path)
-        for wname in ("walk_down.png", "walk_down_0.png"):
-            wpath = os.path.join(walk_dir, wname)
-            if os.path.exists(wpath):
-                try:
-                    ws = pygame.image.load(wpath).convert_alpha()
-                    wsw, wsh = ws.get_size()
-                    wfc = max(1, round(wsw / max(1, wsh)))
-                    wfw = wsw // wfc
-                    walk_frames = [ws.subsurface(pygame.Rect(i*wfw, 0, wfw, wsh)).copy() for i in range(wfc)]
-                except Exception:
-                    pass
-                break
+    walk_dir = os.path.dirname(sprite_path)
+    for wname in sorted(os.listdir(walk_dir)):
+        if wname.lower().endswith("walking_south.png"):
+            try:
+                ws = pygame.image.load(os.path.join(walk_dir, wname)).convert_alpha()
+                wsw, wsh = ws.get_size()
+                wfc = max(1, round(wsw / max(1, wsh)))
+                wfw = wsw // wfc
+                walk_frames = [ws.subsurface(pygame.Rect(i*wfw, 0, wfw, wsh)).copy() for i in range(wfc)]
+            except Exception:
+                pass
+            break
 
     # ── Cargar estado ─────────────────────────────────────────────────────────
-    if mj_key:
-        # Assets de minijuego: config en minijuego_config.json bajo la clave mj_key
-        mj_config_path = os.path.join(project_root, MINIJUEGO_CONFIG_NAME)
-        mj_cfg_all = load_json(mj_config_path)
-        stored = mj_cfg_all.get(mj_key, {})
-        defaults = MINI_HITBOX_DEFAULTS[mj_key]
-        scale = float(stored.get("scale", defaults["scale"]))
-        hitboxes = {
-            "collision": {k: float(stored.get(k, defaults[k]))
-                          for k in ("w_ratio", "h_ratio", "offset_x_ratio", "offset_y_ratio")},
-        }
-        config_path = mj_config_path  # referencia para saber a dónde guardar
-    else:
-        # Personaje: config independiente por carpeta
-        config_path = get_char_config_path(sprite_path, project_root)
-        cfg = load_char_config(sprite_path, project_root)
-        ancho_ratio = float(cfg.get("ancho_ratio", ANCHO_RATIO_DEFECTO))
-        scale = float(cfg.get("scale", DEFAULT_SCALE))
-        hitboxes = {
-            "collision":    read_hitbox(cfg, "hitbox",             DEFAULT_HB),
-            "interactable": read_hitbox(cfg, "interactable_hitbox", DEFAULT_HB),
-        }
+    config_path = get_char_config_path(sprite_path, project_root)
+    cfg = load_char_config(sprite_path, project_root)
+    ancho_ratio = float(cfg.get("ancho_ratio", ANCHO_RATIO_DEFECTO))
+    scale = float(cfg.get("scale", DEFAULT_SCALE))
+    hitboxes = {
+        "collision":    read_hitbox(cfg, "hitbox",             DEFAULT_HB),
+        "interactable": read_hitbox(cfg, "interactable_hitbox", DEFAULT_HB),
+    }
 
     active_hb = "collision"
 
@@ -574,18 +489,14 @@ def run_editor(screen, clock, sprite_path, project_root, aplicar_a_todos=False):
                 elif k == pygame.K_DOWN:
                     hitboxes[active_hb]["offset_y_ratio"] = clamp01(hitboxes[active_hb]["offset_y_ratio"] + 0.01); push()
 
-                # Toggle hitbox amarilla (solo personajes)
-                elif k == pygame.K_i and not mj_key:
+                # Alternar entre la hitbox roja y la amarilla
+                elif k == pygame.K_i:
                     active_hb = "interactable" if active_hb == "collision" else "collision"; push()
 
                 # Reset
                 elif k == pygame.K_r:
-                    scale = MINI_HITBOX_DEFAULTS[mj_key]["scale"] if mj_key else DEFAULT_SCALE
-                    if mj_key:
-                        d = MINI_HITBOX_DEFAULTS[mj_key]
-                        hitboxes["collision"] = {k2: d[k2] for k2 in ("w_ratio", "h_ratio", "offset_x_ratio", "offset_y_ratio")}
-                    else:
-                        hitboxes = {"collision": dict(DEFAULT_HB), "interactable": dict(DEFAULT_HB)}
+                    scale = DEFAULT_SCALE
+                    hitboxes = {"collision": dict(DEFAULT_HB), "interactable": dict(DEFAULT_HB)}
                     push()
 
                 # Undo/Redo
@@ -598,46 +509,31 @@ def run_editor(screen, clock, sprite_path, project_root, aplicar_a_todos=False):
 
                 # Guardar
                 elif k == pygame.K_RETURN:
-                    if mj_key:
-                        mj_cfg_all = load_json(config_path)
-                        mj_cfg_all[mj_key] = dict(hitboxes["collision"])
-                        mj_cfg_all[mj_key]["scale"] = scale
-                        save_json(config_path, mj_cfg_all)
-                        status_msg = f"Guardado en minijuego_config.json [{mj_key}]"
+                    col = hitboxes["collision"]
+                    itr = hitboxes.get("interactable", col)
+                    payload = {
+                        "scale": scale,
+                        "ancho_ratio": ancho_ratio,
+                        "hitbox_w_ratio":                     col["w_ratio"],
+                        "hitbox_h_ratio":                     col["h_ratio"],
+                        "hitbox_offset_x_ratio":              col["offset_x_ratio"],
+                        "hitbox_offset_y_ratio":              col["offset_y_ratio"],
+                        "interactable_hitbox_w_ratio":        itr["w_ratio"],
+                        "interactable_hitbox_h_ratio":        itr["h_ratio"],
+                        "interactable_hitbox_offset_x_ratio": itr["offset_x_ratio"],
+                        "interactable_hitbox_offset_y_ratio": itr["offset_y_ratio"],
+                    }
+                    if aplicar_a_todos:
+                        destinos = rutas_config_de_todos(project_root)
+                        for destino in destinos:
+                            save_json(destino, payload)
+                        status_msg = f"Guardado en los {len(destinos)} configs (todos los personajes)"
+                        print("[todos] misma hitbox escrita en:")
+                        for destino in destinos:
+                            print("   ", os.path.basename(destino))
                     else:
-                        col = hitboxes["collision"]
-                        itr = hitboxes.get("interactable", col)
-                        payload = {
-                            "scale": scale,
-                            "ancho_ratio": ancho_ratio,
-                            "hitbox_w_ratio":                     col["w_ratio"],
-                            "hitbox_h_ratio":                     col["h_ratio"],
-                            "hitbox_offset_x_ratio":              col["offset_x_ratio"],
-                            "hitbox_offset_y_ratio":              col["offset_y_ratio"],
-                            "interactable_hitbox_w_ratio":        itr["w_ratio"],
-                            "interactable_hitbox_h_ratio":        itr["h_ratio"],
-                            "interactable_hitbox_offset_x_ratio": itr["offset_x_ratio"],
-                            "interactable_hitbox_offset_y_ratio": itr["offset_y_ratio"],
-                        }
-
-                        if aplicar_a_todos:
-                            destinos = rutas_config_de_todos(project_root)
-                            for destino in destinos:
-                                save_json(destino, payload)
-                            status_msg = f"Guardado en los {len(destinos)} configs (todos los personajes)"
-                            print("[todos] misma hitbox escrita en:")
-                            for destino in destinos:
-                                print("   ", os.path.basename(destino))
-                        else:
-                            save_json(config_path, payload)
-                            status_msg = f"Guardado: {os.path.basename(config_path)}"
-
-                        char_name = os.path.basename(os.path.dirname(sprite_path))
-                        # Si es personaje_main, también guardamos en el path canónico
-                        if not aplicar_a_todos and char_name == MAIN_CHARACTER_FOLDER:
-                            canonical = os.path.join(project_root, PERSONAJE_CONFIG_NAME)
-                            if config_path != canonical:
-                                save_json(canonical, load_json(config_path))
+                        save_json(config_path, payload)
+                        status_msg = f"Guardado: {os.path.basename(config_path)}"
                     status_timer = 180
 
         # ── Render ────────────────────────────────────────────────────────────
@@ -660,14 +556,11 @@ def run_editor(screen, clock, sprite_path, project_root, aplicar_a_todos=False):
             title_color = C_GREEN
         else:
             titulo_texto = f"Editando: {asset_name}"
-            title_color = C_ORANGE if mj_key else C_TITLE
+            title_color = C_TITLE
         t = title_font.render(titulo_texto, True, title_color)
         screen.blit(t, (PREV_X - 14, 30))
         back_hint = small_font.render("ESC → volver al selector", True, C_SOFT)
         screen.blit(back_hint, (PREV_X - 14, 56))
-        if mj_key:
-            mk_lbl = small_font.render(f"Asset minijuego: {mj_key.upper()}  — config independiente, escala se refleja en el juego", True, C_GREEN)
-            screen.blit(mk_lbl, (PREV_X - 14, 74))
 
         # Panel sprite
         pygame.draw.rect(screen, C_PANEL,  (PREV_X-14, PREV_Y-14, PREV_AREA_W+28, PREV_AREA_H+28), border_radius=10)
@@ -691,8 +584,8 @@ def run_editor(screen, clock, sprite_path, project_root, aplicar_a_todos=False):
         pygame.draw.line(screen, C_RED, (spr_rect.left, col_rect.top),    (spr_rect.right, col_rect.top), 1)
         pygame.draw.line(screen, C_RED, (spr_rect.left, col_rect.bottom), (spr_rect.right, col_rect.bottom), 1)
 
-        # ── Hitbox amarilla (solo personajes, no minijuego) ───────────────────
-        if not mj_key and "interactable" in hitboxes:
+        # ── Hitbox amarilla (interacción) ─────────────────────────────────────
+        if "interactable" in hitboxes:
             itr = hitboxes["interactable"]
             int_rect = pygame.Rect(
                 spr_rect.left + int(scaled_w * itr["offset_x_ratio"]),
@@ -719,42 +612,22 @@ def run_editor(screen, clock, sprite_path, project_root, aplicar_a_todos=False):
         actual_w = max(1, int(iw_raw * scale))
         actual_h = max(1, int(ih_raw * scale))
 
-        if mj_key:
-            info_lines = [
-                f"Asset: {mj_key.upper()}",
-                f"",
-                f"Scale: {scale:.3f}   (Q/E)",
-                f"  → sprite en juego: {actual_w}x{actual_h}px",
-                f"",
-                f"HITBOX ROJA (colision):",
-                f"  rx: {ahb['offset_x_ratio']:.4f}   LEFT/RIGHT",
-                f"  ry: {ahb['offset_y_ratio']:.4f}   UP/DOWN",
-                f"  rw: {ahb['w_ratio']:.4f}    A/D",
-                f"  rh: {ahb['h_ratio']:.4f}    W/S",
-                f"  px: {px_w} x {px_h}",
-                f"",
-                f"Sin hitbox amarilla para minijuego.",
-                f"",
-                f"ENTER guardar  R reset",
-                f"Ctrl+Z/Y undo/redo  ESC salir",
-            ]
-        else:
-            info_lines = [
-                f"Scale: {scale:.3f}   (Q/E)",
-                f"  → sprite: {actual_w}x{actual_h}px",
-                f"",
-                f"Editando: {active_label}  (I)",
-                f"  rx: {ahb['offset_x_ratio']:.4f}   LEFT/RIGHT",
-                f"  ry: {ahb['offset_y_ratio']:.4f}   UP/DOWN",
-                f"  rw: {ahb['w_ratio']:.4f}    A/D",
-                f"  rh: {ahb['h_ratio']:.4f}    W/S",
-                f"  px: {px_w} x {px_h}",
-                f"",
-                f"ENTER guardar   R reset",
-                f"Ctrl+Z/Y undo/redo   ESC salir",
-                f"",
-                f"Config: {os.path.basename(config_path)}",
-            ]
+        info_lines = [
+            f"Scale: {scale:.3f}   (Q/E)",
+            f"  → sprite: {actual_w}x{actual_h}px",
+            "",
+            f"Editando: {active_label}  (I)",
+            f"  rx: {ahb['offset_x_ratio']:.4f}   LEFT/RIGHT",
+            f"  ry: {ahb['offset_y_ratio']:.4f}   UP/DOWN",
+            f"  rw: {ahb['w_ratio']:.4f}    A/D",
+            f"  rh: {ahb['h_ratio']:.4f}    W/S",
+            f"  px: {px_w} x {px_h}",
+            "",
+            "ENTER guardar   R reset",
+            "Ctrl+Z/Y undo/redo   ESC salir",
+            "",
+            f"Config: {os.path.basename(config_path)}",
+        ]
         draw_text(screen, "\n".join(info_lines), INFO_X + 14, INFO_Y + 14, font)
 
         # Preview caminata (solo personajes)
