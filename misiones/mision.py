@@ -604,6 +604,13 @@ class Mision:
         self._sonar("alarma")
         self._decir("huida", None, True)
 
+    def volver_a_reparar(self):
+        """El Cambiaformas saboteó la cápsula ya lista: se vuelve a la fase de
+        reparar (traer la pieza que arrancó y terminar la reparación)."""
+        self.fase = "capsula"
+        for alien in self.juego.aliens:
+            alien.alerta = False
+
     def actualizar(self, dt):
         if not self.activa or self.resultado is not None:
             return

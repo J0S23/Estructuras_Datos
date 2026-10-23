@@ -281,9 +281,15 @@ def render_mensaje(screen, vista, jugador, tapado=None):
     # y sin meterse debajo de la barra ni del cartel de la IA (que va justo
     # debajo de la barra, al centro).
     y2 = (corazones.bottom if corazones is not None else y + f.get_height()) + 10
+    # Y debajo de lo que dice render_escolta ("Te sigue...", "Verificando...").
+    y2 = max(y2, getattr(jugador, "hud_abajo", 0) + 8)
     ocupados = []
     if tapado is not None:
         ocupados.append((tapado.left - 40, tapado.right + 40))   # el cartel es más ancho
+    if jugador.panel is not None and jugador.panel.get("tipo") == "celular":
+        from screens.celular import _marco                       # ni detrás del celular
+        telefono, _ = _marco(vista, tapado)
+        ocupados.append((telefono.left - 12, telefono.right + 12))
     t0, t1 = max(_tramos_libres(vista.x + 8, vista.right - 8, ocupados),
                  key=lambda t: t[1] - t[0], default=(vista.x + 8, vista.right - 8))
     renglones = partir_lineas(jugador.mensaje, f, max(80, t1 - t0 - 20))

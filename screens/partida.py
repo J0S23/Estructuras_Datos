@@ -111,7 +111,7 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
         render_hud(screen, vista, jugador, segundos_restantes)
         dibujo_celular.render_aviso_celular(screen, vista, jugador, extras.get("nexus"))
         render_vidas(screen, vista, jugador, tapado)
-        render_escolta(screen, vista, jugador, extras.get("escolta"), tapado)
+        render_escolta(screen, vista, jugador, extras.get("escolta"), tapado, extras.get("nexus"))
         render_pista_zona(screen, vista, jugador)
         if jugador.panel is not None and jugador.panel.get("tipo") == "habilidades":
             render_panel_habilidades(screen, vista, jugador)
@@ -127,7 +127,7 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
         dibujo_roles.render_minimapa(screen, vista, jugador, extras)
         mision_dibujo.render_progreso(screen, vista, jugador)
         if jugador.panel is not None and jugador.panel.get("tipo") == "celular":
-            dibujo_celular.render_celular(screen, vista, jugador, extras.get("nexus"))
+            dibujo_celular.render_celular(screen, vista, jugador, extras.get("nexus"), tapado)
         render_minijuego(screen, vista, jugador)
         render_tutorial(screen, vista, jugador, extras.get("tutorial"))
         dibujar_susto(screen, vista, jugador)
@@ -390,21 +390,39 @@ def _envolver(texto, f, ancho):
     return lineas
 
 
-def render_escolta(screen, vista, jugador, escoltado, tapado=None):
-    """Debajo de las vidas: a quién llevas a la cápsula (npcs.py). Muestra el
-    nombre que se ve, aunque sea el Cambiaformas disfrazado."""
+def render_escolta(screen, vista, jugador, escoltado, tapado=None, red=None):
+    """Debajo de las vidas, lo que está haciendo ahora: a quién lleva a la
+    cápsula (npcs.py; muestra el nombre que se ve, aunque sea el Cambiaformas
+    disfrazado) y qué está verificando en NEXUS (o si ya tiene la foto)."""
+    lineas = []
     usuario = escoltado(jugador) if escoltado is not None else None
-    if not usuario:
+    if usuario:
+        lineas.append((f"Te sigue: {usuario}  ->  cápsula", (120, 230, 150)))
+    if red is not None and not jugador.preso:
+        from redes import celular as logica
+        fotos = [p for p in red.evidencias.get(jugador, []) if logica.es_mision_activa(red, p)]
+        yendo = red.investigando.get(jugador)
+        if fotos:
+            lineas.append((f"Foto lista: publícala en NEXUS [{jugador.nombre_tecla('celular')}]",
+                           (120, 230, 150)))
+        elif yendo is not None and logica.es_mision_activa(red, yendo):
+            lugar = logica.nombre_lugar(yendo) or "el lugar"
+            lineas.append((f"Verificando: {lugar}  ->  sigue la flecha azul", (120, 190, 255)))
+    jugador.hud_abajo = 0           # hasta dónde llega esto (el mensaje va debajo)
+    if not lineas:
         return
     from screens.paneles import fila_vidas
     corazones, _ = fila_vidas(vista, jugador, tapado)
     y = corazones.bottom + 2
     f = fuente_de_tamano(max(13, min(16, vista.width // 50)))
-    img = f.render(f"Te sigue: {usuario}  ->  cápsula", True, (120, 230, 150))
-    fondo = pygame.Surface((img.get_width() + 16, img.get_height() + 8), pygame.SRCALPHA)
-    fondo.fill((14, 15, 28, 170))
-    screen.blit(fondo, (corazones.x, y))
-    screen.blit(img, (corazones.x + 8, y + 4))
+    for texto, color in lineas:
+        img = f.render(texto, True, color)
+        fondo = pygame.Surface((img.get_width() + 16, img.get_height() + 8), pygame.SRCALPHA)
+        fondo.fill((14, 15, 28, 170))
+        screen.blit(fondo, (corazones.x, y))
+        screen.blit(img, (corazones.x + 8, y + 4))
+        y += img.get_height() + 10
+    jugador.hud_abajo = y
 
 
 def render_tutorial(screen, vista, jugador, tutorial):

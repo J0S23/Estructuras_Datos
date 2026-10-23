@@ -70,6 +70,7 @@ from screens.partida import render_partida, calcular_viewports
 from screens.seleccion import render_cantidad, render_roles, render_dificultad, OPCIONES
 from data.dificultad import DIFICULTADES, POR_DEFECTO as DIFICULTAD_POR_DEFECTO
 from screens.arbol_alien import render_arbol_alien
+from screens.grafo_vista import render_grafo_nexus, render_grafo_nave
 from screens.panel_habilidades import precargar_iconos
 from screens.resultados import render_resultados, opciones_resultados
 from screens.ayuda import render_ayuda
@@ -178,6 +179,7 @@ class Game:
         self.senuelos, self.senales = [], []
         self.arbol_alien = None
         self.mostrar_arbol_alien = False
+        self.vista_grafo = None      # None, "nexus" o "nave" (screens/grafo_vista.py)
         self.alien_en_vista = 0      # cuál alien muestra la vista del árbol
         self.credit_scroll = reiniciar_scroll()
 
@@ -974,6 +976,14 @@ class Game:
                     return
                 continue
 
+            # Con el celular en el inicio, izquierda/derecha cambian de pestaña.
+            if (jugador.panel is not None and jugador.panel.get("tipo") == "celular"
+                    and (jugador.es_tecla(key, "izquierda") or jugador.es_tecla(key, "derecha"))):
+                if celular.cambiar_pestana(self, jugador, -1 if jugador.es_tecla(key, "izquierda") else 1):
+                    jugador.cursor = 0
+                    self.sonar("menu_mover", 0.35)
+                return
+
             # El celular (NEXUS): abre, va atrás o cierra.
             if jugador.es_tecla(key, "celular"):
                 if jugador.panel is not None and jugador.panel.get("tipo") == "celular":
@@ -1128,14 +1138,24 @@ class Game:
                 self._manejar_tecla(tecla)
             return
         if accion in ("izquierda", "derecha"):
-            return     # fuera del árbol de logros no hacen nada (el stick ya mueve)
+            # Fuera del árbol de logros solo sirven para las pestañas del celular.
+            jugador = next((j for j in self.jugadores if j.puesto == puesto), None)
+            if (self.current_screen == "partida" and jugador is not None and jugador.panel
+                    and jugador.panel.get("tipo") == "celular"):
+                if celular.cambiar_pestana(self, jugador, -1 if accion == "izquierda" else 1):
+                    jugador.cursor = 0
+                    self.sonar("menu_mover", 0.35)
+            return
         if accion == "pausa":
             accion = "volver" if self.current_screen == "roles" else "interactuar"
         if self.current_screen in ("partida", "roles"):
             if accion == "volver":
                 jugador = next((j for j in self.jugadores if j.puesto == puesto), None)
                 if self.current_screen == "partida" and jugador is not None and jugador.ocupado:
-                    jugador.cerrar_panel()
+                    if jugador.panel is not None and jugador.panel.get("tipo") == "celular":
+                        celular.volver(self, jugador)      # B en el celular: atrás
+                    else:
+                        jugador.cerrar_panel()
                 return
             self._manejar_tecla(tecla_virtual(puesto, accion))
             return
@@ -1366,6 +1386,11 @@ class Game:
                 alien = self.aliens[self.alien_en_vista]
                 render_arbol_alien(self.screen, alien, alien.arbol,
                                    self.alien_en_vista + 1, len(self.aliens))
+            if self.vista_grafo == "nexus":
+                render_grafo_nexus(self.screen, self.nexus)
+            elif self.vista_grafo == "nave":
+                render_grafo_nave(self.screen, self.mundo, self.aliens,
+                                  self.npcs.npcs if self.npcs is not None else (), self.jugadores)
             if self.pausa is None:
                 render_aviso_logro(self.screen, self.logros)
             else:

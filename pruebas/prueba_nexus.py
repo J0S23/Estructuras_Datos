@@ -163,8 +163,10 @@ for a in juego.aliens:
     a.hitbox.center = (j1.hitbox.centerx + 300, j1.hitbox.centery)
     a.punto_ruido = None
 juego._tecla_en_partida(pygame.K_TAB)
-assert j1.panel["opciones"][0] == ("foto", rumor)
+assert j1.panel["pestana"] == "misiones" and j1.panel["opciones"][0] == ("post", rumor)
 juego._tecla_en_partida(pygame.K_e)
+assert j1.panel["estado"] == "foto" and j1.panel["opciones"][0][1] == "desmentir"
+juego._tecla_en_partida(pygame.K_e)                # "Publicar mi foto y desmentirlo"
 assert j1.panel["vista"] == "ubicacion"
 cap(juego, "nexus_e_ubicacion.png")
 j1.cursor = 1; juego._tecla_en_partida(pygame.K_e)  # recortada
@@ -268,5 +270,41 @@ j3.teclas["celular"] = tuple(j3.teclas["celular"]) + (tecla_virtual(2, "celular"
 juego3._tecla_en_partida(tecla_virtual(2, "celular"))
 assert j3.panel is not None and j3.panel["tipo"] == "celular"
 print("mando: RB abre el celular")
+
+# El celular separa por pestañas y nadie tiene más de 3 cosas por ir a verificar
+# (el límite es POR JUGADOR: lo que le llega a uno que ya tiene 3 se pierde).
+from redes import celular as logica
+from data.nexus import MAX_POR_VERIFICAR
+juego4 = nueva_partida()
+red4, j4 = juego4.nexus, juego4.jugadores[0]
+n = len([j for j in juego4.jugadores if j in red4.vistas])
+nodo4 = red4.nodo_de(j4)
+for nodo in red4._presos():                 # todos se lo creen: el rumor llega a todos
+    red4.grafo.datos[nodo]["color"] = ROJO
+lanzados = []
+for _ in range(12):
+    lanzados.append(red4.lanzar_rumor())
+    for _ in range(12):
+        for prop in list(red4.propagaciones):
+            if not prop.terminada:
+                red4._avanzar(prop)
+for j in juego4.jugadores:
+    if j in red4.vistas:
+        assert len(red4.por_verificar_de(j)) <= MAX_POR_VERIFICAR, len(red4.por_verificar_de(j))
+assert len(red4.por_verificar_de(j4)) == MAX_POR_VERIFICAR
+assert len(red4.por_verificar()) <= MAX_POR_VERIFICAR * n
+assert None in lanzados                       # llegó un punto en que no cabía más
+perdido = next((p for p in red4.rumores_activos() if nodo4 not in p.alcanzados), None)
+if perdido is not None:
+    print("  un rumor que llegó con J1 lleno no le aparece:", perdido.rumor["lugar"])
+assert len([p for p in logica.misiones(red4, j4) if logica.es_mision_activa(red4, p)]) == MAX_POR_VERIFICAR
+assert all(p.tipo not in ("rumor", "trampa") for p in logica.contenido(red4, j4, "red"))
+logica.abrir(juego4, j4)
+assert logica.pestana_de(red4, j4) == "misiones"
+logica.cambiar_pestana(juego4, j4, 1)
+assert logica.pestana_de(red4, j4) == "equipo"
+logica.cambiar_pestana(juego4, j4, -2)
+assert logica.pestana_de(red4, j4) == "red"          # da la vuelta
+print(f"celular: pestañas Misiones/Equipo/Red y máximo {MAX_POR_VERIFICAR} por verificar por jugador ({n} jugador(es))")
 
 print("\nTODO OK")

@@ -7,7 +7,8 @@ detienen (todo avanza con `dt`, no con el reloj de pygame).
 Tiene cuatro vistas:
     "menu"       Continuar / Opciones / Logros / Terminar partida
     "opciones"   volumen del sonido, campo de visión y oscuridad, pantalla completa,
-                 y las vistas de prueba: hitboxes y árbol del alien
+                 y las vistas de prueba: hitboxes, árbol del alien y grafo
+                 (NEXUS o la nave, screens/grafo_vista.py)
     "logros"     el árbol de logros de la partida (screens/logros.py)
     "confirmar"  ¿seguro que quieres terminar la partida?
 
@@ -92,6 +93,7 @@ class MenuPausa:
                  "pantalla_completa"),
                 ("Ver hitboxes: " + ("Sí" if self.juego.mostrar_hitboxes else "No"), "hitboxes"),
                 (f"Árbol del alien: < {self._texto_arbol()} >", "arbol"),
+                (f"Grafo: < {self._texto_grafo()} >", "grafo"),
                 ("Volver", "volver"),
             ]
         if self.vista == "confirmar":
@@ -102,6 +104,20 @@ class MenuPausa:
         if not self.juego.mostrar_arbol_alien or not self.juego.aliens:
             return "No"
         return f"{self.juego.alien_en_vista + 1} de {len(self.juego.aliens)}"
+
+    VISTAS_GRAFO = [None, "nexus", "nave"]
+
+    def _texto_grafo(self):
+        return {None: "No", "nexus": "NEXUS", "nave": "Nave"}[getattr(self.juego, "vista_grafo", None)]
+
+    def _cambiar_grafo(self, signo):
+        """Ciclo No -> NEXUS -> Nave -> No (screens/grafo_vista.py)."""
+        juego = self.juego
+        vistas = self.VISTAS_GRAFO
+        actual = vistas.index(getattr(juego, "vista_grafo", None))
+        juego.vista_grafo = vistas[(actual + signo) % len(vistas)]
+        if juego.vista_grafo is not None:
+            juego.mostrar_arbol_alien = False     # una vista de prueba a la vez
 
     def _cambiar_arbol(self, signo):
         """Ciclo No -> alien 1 -> alien 2 -> ... -> No (o al revés)."""
@@ -116,6 +132,7 @@ class MenuPausa:
         juego.mostrar_arbol_alien = nuevo > 0
         if nuevo > 0:
             juego.alien_en_vista = nuevo - 1
+            juego.vista_grafo = None
 
     def titulo(self):
         return {"opciones": "Opciones", "confirmar": "¿Terminar la partida?"}.get(self.vista, "Pausa")
@@ -199,6 +216,8 @@ class MenuPausa:
             audio_manager.apply_sfx_volume(nuevo)
         elif accion == "arbol":
             self._cambiar_arbol(signo)
+        elif accion == "grafo":
+            self._cambiar_grafo(signo)
         elif accion in ("oscuridad", "pantalla_completa", "hitboxes"):
             return self.activar(self.seleccion)
         return None
@@ -237,6 +256,8 @@ class MenuPausa:
             self.juego.mostrar_hitboxes = not self.juego.mostrar_hitboxes
         elif accion == "arbol":
             self._cambiar_arbol(1)
+        elif accion == "grafo":
+            self._cambiar_grafo(1)
         elif accion == "volver":
             self._ir_a("menu")
             self.seleccion = 1

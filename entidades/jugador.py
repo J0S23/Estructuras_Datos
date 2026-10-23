@@ -40,6 +40,10 @@ TECLAS_PUESTO_1 = {
     "habilidad": (pygame.K_f,),
     "sigilo": (pygame.K_LSHIFT,),
     "celular": (pygame.K_TAB,),
+    # Izquierda/derecha solo sirven en menús del jugador (pestañas del celular);
+    # para caminar se usan los controles del personaje.
+    "izquierda": (pygame.K_a,),
+    "derecha": (pygame.K_d,),
 }
 
 TECLAS_PUESTO_2 = {
@@ -56,6 +60,8 @@ TECLAS_PUESTO_2 = {
     "sigilo": (pygame.K_RALT, pygame.K_MODE, pygame.K_KP0),
     # El punto, junto al "-" de la habilidad (o el del teclado numérico).
     "celular": (pygame.K_PERIOD, pygame.K_KP_PERIOD),
+    "izquierda": (pygame.K_LEFT,),
+    "derecha": (pygame.K_RIGHT,),
 }
 
 def _con_mando(puesto, teclado):
@@ -71,6 +77,8 @@ TECLAS_PUESTO_3 = _con_mando(2, {
     "habilidad": (pygame.K_p,),
     "sigilo": (),
     "celular": (pygame.K_j,),
+    "izquierda": (),
+    "derecha": (),
 })
 
 TECLAS_PUESTO_4 = _con_mando(3, {
@@ -81,6 +89,8 @@ TECLAS_PUESTO_4 = _con_mando(3, {
     "habilidad": (pygame.K_v,),
     "sigilo": (),
     "celular": (pygame.K_b,),
+    "izquierda": (),
+    "derecha": (),
 })
 
 TECLAS_POR_PUESTO = [TECLAS_PUESTO_1, TECLAS_PUESTO_2, TECLAS_PUESTO_3, TECLAS_PUESTO_4]
@@ -266,9 +276,18 @@ class Jugador:
             pygame.K_LSHIFT: "SHIFT IZQ", pygame.K_RALT: "ALT GR",
             pygame.K_MINUS: "-", pygame.K_SLASH: "/",
             pygame.K_TAB: "TAB", pygame.K_PERIOD: ".", pygame.K_KP_PERIOD: ".",
-            pygame.K_j: "J", pygame.K_b: "B",
+            pygame.K_j: "J", pygame.K_b: "B", pygame.K_a: "A", pygame.K_d: "D",
+            pygame.K_LEFT: "IZQ", pygame.K_RIGHT: "DER",
         }
         return nombres.get(teclas[0], "?")
+
+    def pista_pestanas(self):
+        """Cómo se nombran en pantalla las teclas para cambiar de pestaña."""
+        if getattr(self, "con_mando", False):
+            return "Stick"
+        if pygame.K_LEFT in self.teclas.get("izquierda", ()):
+            return "IZQ/DER"
+        return f"{self.nombre_tecla('izquierda')}/{self.nombre_tecla('derecha')}"
 
     def pista_mover(self):
         """Cómo se nombra en pantalla el par de teclas para mover el cursor.
