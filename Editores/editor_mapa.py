@@ -49,8 +49,8 @@ os.chdir(RAIZ)
 
 import pygame
 
-import objetos_mapa
-from mundo import Mundo, CARPETA_FONDOS
+from juego import objetos_mapa
+from juego.mundo import Mundo, CARPETA_FONDOS
 from data.tipos_alien import TIPOS_ALIEN, ORDEN_TIPOS, TIPO_POR_DEFECTO
 
 
@@ -207,7 +207,7 @@ RADIO_TOQUE = 22          # en píxeles de pantalla: qué tan cerca hay que hace
 
 def _fuente(px):
     try:
-        from fuentes import fuente_de_tamano
+        from juego.fuentes import fuente_de_tamano
         return fuente_de_tamano(px)
     except Exception:
         return pygame.font.SysFont("consolas", px)

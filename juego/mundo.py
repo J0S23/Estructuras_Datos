@@ -8,13 +8,16 @@ desnormalizan contra el tamaño al que se dibuja el mundo.
 
 import json
 import os
+
+# La raíz del proyecto (este archivo está en una subcarpeta).
+_RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 from collections import deque
 
 import pygame
 
 
-CARPETA_FONDOS = os.path.join(os.path.dirname(__file__), "Imagenes", "Fondos")
-CARPETA_HITBOXES = os.path.join(os.path.dirname(__file__), "Hitboxes")
+CARPETA_FONDOS = os.path.join(_RAIZ_PROYECTO, "Imagenes", "Fondos")
+CARPETA_HITBOXES = os.path.join(_RAIZ_PROYECTO, "Hitboxes")
 
 # El mapa se dibuja más grande que su archivo original para que el personaje
 # no ocupe media pantalla. Se escala con nearest neighbor para no emborronar

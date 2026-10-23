@@ -32,22 +32,31 @@ import random
 
 import pygame
 
-import alien as modulo_alien
-from alien import Alien, DISTANCIA_ATRAPAR, DISTANCIA_REVISAR, DURACION_DESCANSO_MS
+from entidades.alien import Alien, DISTANCIA_ATRAPAR, DISTANCIA_REVISAR, DURACION_DESCANSO_MS
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 from data.comportamiento_cambiaformas import ARBOL_CAMBIAFORMAS
-from data.npcs import (DISTANCIA_REVELARSE, DISTANCIA_ACECHO, DISTANCIA_COMPANIA, VISION,
+from data.npcs import (DISTANCIA_REVELARSE, DISTANCIA_COMPANIA, VISION,
                        RAFAGA_MS, PISTA_PRESA_MS, RECUERDA_ESCONDITE_MS, HUIDA_MAX_MS,
                        EXPUESTO_MS, DESCANSO_TRAS_FALLAR_MS, GLITCH_CADA_MS, GLITCH_DURA_MS,
                        TRANSFORMARSE_MS, ESPERA_INICIAL_MS, ENFRIAMIENTO_CAZA_MS,
                        TRAMPAS, PRIMERA_TRAMPA_MS, TRAMPA_CADA_MS, DESENMASCARADO_MS,
                        DISTANCIA_SEGUIR_CF, TRAICION_SOLO_MS, RADIO_SABOTAJE,
-                       SUSURRO_RADIO, SUSURRO_CADA_MS, MANADA_MS)
+                       SUSURRO_RADIO, SUSURRO_CADA_MS, MANADA_MS,
+                       ESTUDIO_NECESARIO_MS, RADIO_ESTUDIO, DISTANCIA_PASADA, PASADA_MAX_MS,
+                       RONDA_MS, RONDA_DISTANCIA, DE_ESPALDAS, ABURRIRSE_MS, ALEJARSE_CALMA_MS,
+                       OLVIDA_TRAS_FALLAR, CALMA_TRAS_FALLAR_MS)
 from data.nexus import NOMBRE_LUGAR
-from logros import logro
-import npcs
-
+from misiones.logros import logro
+from entidades import npcs
+from juego import dificultad
 GLITCH = "#%&?!@*"
+
+
+_VECTOR_DIRECCION = {
+    "north": (0, -1), "south": (0, 1), "east": (1, 0), "west": (-1, 0),
+    "north-east": (0.707, -0.707), "north-west": (-0.707, -0.707),
+    "south-east": (0.707, 0.707), "south-west": (-0.707, 0.707),
+}
 
 
 def _d(a, b):
@@ -74,7 +83,7 @@ class Cambiaformas(Alien):
         self.huir_al_despertar = False
         self.rafaga_ms = 0
         self.transformando_ms = 0
-        self.calma_ms = ESPERA_INICIAL_MS   # al empezar se toma su tiempo
+        self.calma_ms = int(self._ajuste("cf_espera_ms", ESPERA_INICIAL_MS))  # al empezar se toma su tiempo
         self.revisando = None               # el casillero que está revisando
         self.expuesto_ms = 0
         self.punto_huida = None
@@ -85,10 +94,20 @@ class Cambiaformas(Alien):
         self.siguiendo = None            # el jugador que se lo lleva creyendo que es un prisionero
         self.siguiendo_solo_ms = 0
         self.burbuja, self.burbuja_ms = None, 0
-        self.trampa_ms = PRIMERA_TRAMPA_MS
+        self.trampa_ms = PRIMERA_TRAMPA_MS * self._ajuste("cf_trampas", 1.0)
         self.susurro_ms = 0
         self.manada_ms = 0
         self._manada_ahora = False
+        # Estudiar a la presa antes de atacar (no es impulsivo).
+        self.conocimiento = {}           # jugador -> ms que lo ha visto de cerca
+        self.necesario = {}              # jugador -> ms que necesita para atacarlo (al azar)
+        self.modo = "ronda"              # "ronda" (lejos) o "pasada" (se acerca a mirarla)
+        self.modo_ms = 0
+        self.punto_ronda = None
+        self.acompanada_ms = 0           # cuánto lleva viendo que la presa no se separa
+        self.yendose_a = None            # se aburrió: a dónde se va antes de merodear
+        self._estudiando = False
+        self._sola = False
         # Para los resultados.
         self.revelaciones = 0
         self.capturas = 0
@@ -96,12 +115,19 @@ class Cambiaformas(Alien):
 
     # -- Lo que ven los demás -------------------------------------------------------
 
+    def _ajuste(self, nombre, por_defecto):
+        """Lo que dice la dificultad (dificultad.py); sin ella, como Difícil."""
+        return dificultad.valor(self.juego, nombre, por_defecto)
+
+    def _calma_tras_cazar(self):
+        return int(self._ajuste("cf_calma_ms", ENFRIAMIENTO_CAZA_MS))
+
     @property
     def alcance_vision(self):
         return 0          # sin cono: nadie tiene que ver por dónde mira
 
     def visible_para(self, jugador):
-        return (_d(self.centro, jugador.hitbox.center) <= VISION
+        return (_d(self.centro, jugador.hitbox.center) <= VISION * self.ajuste_vision
                 and self.juego.mundo.linea_libre(self.centro, jugador.hitbox.center))
 
     def _alguien_lo_ve(self):
@@ -149,10 +175,14 @@ class Cambiaformas(Alien):
             if llegando:
                 self.presa = min(llegando, key=lambda j: _d(j.hitbox.center, self.centro))
                 self.calma_ms = 0
+                # Era su plan: a este lo atacó sin tener que estudiarlo más.
+                self.conocimiento[self.presa] = self._necesario(self.presa)
         if (self.presa is None and self.descanso_ms == 0 and self.huida_ms == 0
                 and self.calma_ms == 0):
             self.presa = self._elegir_presa(jugadores)
             self.pista_ms = 0
+            if self.presa is not None:
+                self.yendose_a = None      # ya volvió a cazar
         presa = self.presa
         ve_presa = False
         if presa is not None:
@@ -215,6 +245,12 @@ class Cambiaformas(Alien):
         self.objetivo = presa if revelado and ve_presa else None
         self._manada_ahora = (self.disfrazado and ve_presa and not sola
                               and distancia <= DISTANCIA_REVELARSE)
+        self._estudiando = (presa is not None and self.disfrazado and ve_presa
+                            and distancia <= RADIO_ESTUDIO)
+        self._sola = sola
+        la_conoce = presa is not None and self.conocimiento.get(presa, 0) >= self._necesario(presa)
+        momento = (la_conoce and ve_presa and sola and distancia <= DISTANCIA_REVELARSE
+                   and (self.expuesto_ms > 0 or self.desprevenida(presa)))
         return {
             "recuperandose": self.descanso_ms > 0,
             "huyendo": self.huida_ms > 0,
@@ -222,9 +258,10 @@ class Cambiaformas(Alien):
             "revelado": revelado and presa is not None and not presa.escondido,
             "presa_al_alcance": (revelado and ve_presa and distancia <= DISTANCIA_ATRAPAR),
             "presa_escondida": self.escondite_objetivo is not None,
-            "presa_cerca": ((self.disfrazado or self.expuesto_ms > 0) and ve_presa and sola
-                            and distancia <= DISTANCIA_REVELARSE),
+            "presa_cerca": (self.disfrazado or self.expuesto_ms > 0) and momento,
             "tiene_presa": presa is not None,
+            "se_aburrio": presa is not None and self.acompanada_ms >= ABURRIRSE_MS,
+            "toca_estudiar": self.modo == "pasada",
             "hay_cebo": self._cebo() is not None,
         }
 
@@ -260,6 +297,7 @@ class Cambiaformas(Alien):
         if self.apariencia is not None:
             self.apariencia.animar(self.hitbox.centerx - antes[0], self.hitbox.centery - antes[1])
         self.burbuja_ms = max(0, self.burbuja_ms - dt)
+        self._aprender(dt)
         self._susurrar(dt)
         if self._manada_ahora:
             self.manada_ms += dt
@@ -267,8 +305,53 @@ class Cambiaformas(Alien):
                 logro(self.juego, "en_manada")
         self.trampa_ms -= dt
         if self.trampa_ms <= 0:
-            self.trampa_ms = self.rng.uniform(*TRAMPA_CADA_MS)
+            self.trampa_ms = self.rng.uniform(*TRAMPA_CADA_MS) * self._ajuste("cf_trampas", 1.0)
             self.suplantar()
+
+    def _aprender(self, dt):
+        """Lo que estudia de su presa y la paciencia que le tiene al grupo."""
+        self.modo_ms = max(0, self.modo_ms - dt)
+        presa = self.presa
+        if presa is None:
+            self.acompanada_ms = 0
+            return
+        if self._estudiando:
+            self.conocimiento[presa] = self.conocimiento.get(presa, 0) + dt
+        # Si la presa nunca se separa del grupo, se aburre de mirarla.
+        if self.disfrazado and not self._sola and _d(presa.hitbox.center, self.centro) <= VISION:
+            self.acompanada_ms += dt
+        elif self._sola:
+            self.acompanada_ms = max(0, self.acompanada_ms - dt)
+
+    def _necesario(self, jugador):
+        if jugador not in self.necesario:
+            self.necesario[jugador] = (self.rng.uniform(*ESTUDIO_NECESARIO_MS)
+                                       * self._ajuste("cf_estudio", 1.0))
+        return self.necesario[jugador]
+
+    def desprevenida(self, jugador):
+        """Cuando menos se lo espera: ocupada (celular, nota, panel, una consola
+        o la cápsula) o de espaldas a él."""
+        if jugador.ocupado or getattr(jugador, "progreso", None) is not None:
+            return True
+        mira = getattr(getattr(jugador, "personaje", None), "direccion", None)
+        vector = _VECTOR_DIRECCION.get(mira)
+        if vector is None:
+            return False
+        dx, dy = self.centro[0] - jugador.hitbox.centerx, self.centro[1] - jugador.hitbox.centery
+        d = math.hypot(dx, dy) or 1
+        coseno = (dx * vector[0] + dy * vector[1]) / d
+        return coseno < math.cos(math.radians(DE_ESPALDAS))
+
+    def _olvidar(self, jugador, parte):
+        """Después de atacar (o fallar), tiene que volver a estudiarla."""
+        if jugador is None:
+            return
+        self.conocimiento[jugador] = self.conocimiento.get(jugador, 0) * (1 - parte)
+        self.necesario.pop(jugador, None)
+        self.modo, self.modo_ms = "ronda", self.rng.uniform(*RONDA_MS)
+        self.punto_ronda = None
+        self.acompanada_ms = 0
 
     def _susurrar(self, dt):
         """Disfrazado, al que tiene cerca le llega un susurro (sin saber de quién)."""
@@ -325,6 +408,10 @@ class Cambiaformas(Alien):
                 self.rafaga_ms = 0
                 if presa is not None and not presa.preso:
                     logro(self.juego, "sobreviviente", presa)
+                # Falló: ahora la presa lo conoce a él. Tiene que volver a
+                # estudiarla y deja pasar un rato antes de intentarlo.
+                self._olvidar(presa, OLVIDA_TRAS_FALLAR)
+                self.calma_ms = max(self.calma_ms, CALMA_TRAS_FALLAR_MS)
                 self.descanso_ms = DESCANSO_TRAS_FALLAR_MS
                 self.huir_al_despertar = True
                 return
@@ -337,11 +424,12 @@ class Cambiaformas(Alien):
             if al_atrapar is not None:
                 al_atrapar(presa, self)
             self.capturas += 1
+            self._olvidar(presa, 1.0)
             self.descanso_ms = DURACION_DESCANSO_MS
             self.huir_al_despertar = True
             self.rafaga_ms = 0
             self.presa = None
-            self.calma_ms = ENFRIAMIENTO_CAZA_MS   # satisfecho... por un rato
+            self.calma_ms = self._calma_tras_cazar()   # satisfecho... por un rato
             return
         if accion == "REVISAR_ESCONDITE":
             esc = self.escondite_objetivo
@@ -355,35 +443,77 @@ class Cambiaformas(Alien):
             self.revisando = esc
             super()._ejecutar("REVISAR_ESCONDITE", dt, factor, mundo, al_atrapar, al_revisar)
             return
-        if accion == "ACECHAR":
-            self._acechar(dt, factor, mundo)
+        if accion == "ESTUDIAR":
+            self._estudiar(dt, factor, mundo)
+            return
+        if accion == "RONDAR":
+            self._rondar(dt, factor, mundo)
+            return
+        if accion == "ALEJARSE":
+            self._alejarse()
             return
         if accion == "ESPERAR_EN_CEBO":
             cebo = self._cebo()
             if cebo is not None and _d(self.centro, cebo) > 90:
                 self._ir_por_camino(cebo, self.datos["vel_patrulla"] * 1.3 * factor, dt, mundo)
             return
-        # MERODEAR: camina como un prisionero más.
+        # MERODEAR: camina como un prisionero más (si se aburrió de un grupo,
+        # primero se va lejos de ellos).
+        if self.yendose_a is not None:
+            if self._ir_por_camino(self.yendose_a, self.datos["vel_patrulla"] * 1.2 * factor, dt, mundo) \
+                    or _d(self.centro, self.yendose_a) < 40:
+                self.yendose_a = None
+            return
         npcs.caminar(self, dt, self.juego, self.juego.npcs.puntos if self.juego.npcs else
                      [self.centro], self.datos["vel_patrulla"],
                      getattr(mundo, "colisiona_alien", None))
 
     # -- Acciones ---------------------------------------------------------------------------
 
-    def _acechar(self, dt, factor, mundo):
-        """Disfrazado, se acerca a su presa sin correr; si tiene compañía, espera."""
+    def _estudiar(self, dt, factor, mundo):
+        """Una "pasada": se acerca a su presa sin correr, como un prisionero
+        más, para mirarla de cerca. Al llegar (o si tarda mucho) se va a rondar.
+        Si ya la conoce, se queda cerca esperando a que se descuide."""
         presa, destino = self.presa, self.punto_presa
         if destino is None:
+            self.modo, self.modo_ms = "ronda", self.rng.uniform(*RONDA_MS)
             return
-        sola = not any(o is not presa and not o.preso
-                       and _d(o.hitbox.center, presa.hitbox.center) < DISTANCIA_COMPANIA
-                       for o in self.juego.jugadores)
         distancia = _d(self.centro, destino)
-        if not sola and distancia < DISTANCIA_ACECHO:
-            return      # se queda quieto, como un prisionero más, esperando
-        if distancia > (40 if sola else DISTANCIA_ACECHO):
-            velocidad = self.datos["vel_patrulla"] * (1.6 if distancia > 500 else 1.15)
+        la_conoce = self.conocimiento.get(presa, 0) >= self._necesario(presa)
+        cerca = DISTANCIA_REVELARSE * 0.85 if la_conoce and self._sola else DISTANCIA_PASADA
+        if distancia > cerca:
+            velocidad = self.datos["vel_patrulla"] * (1.6 if distancia > 600 else 1.1)
             self._ir_por_camino(destino, velocidad * factor, dt, mundo)
+        elif not (la_conoce and self._sola):
+            self.modo_ms = 0          # ya la vio de cerca: se va
+        if self.modo_ms == 0:
+            self.modo, self.modo_ms = "ronda", self.rng.uniform(*RONDA_MS)
+            self.punto_ronda = None
+
+    def _rondar(self, dt, factor, mundo):
+        """Lejos de su presa, pero no tanto: camina por ahí un rato y después
+        vuelve a pasar cerca. Así no parece que la sigue."""
+        presa = self.presa
+        if self.modo_ms == 0:
+            self.modo, self.modo_ms = "pasada", PASADA_MAX_MS
+            return
+        if self.punto_ronda is None:
+            centro = presa.hitbox.center if presa is not None else self.centro
+            puntos = self.juego.npcs.puntos if self.juego.npcs else [self.centro]
+            lo, hi = RONDA_DISTANCIA
+            opciones = [p for p in puntos if lo <= _d(p, centro) <= hi] or puntos
+            self.punto_ronda = self.rng.choice(opciones)
+        if _d(self.centro, self.punto_ronda) > 40:
+            self._ir_por_camino(self.punto_ronda, self.datos["vel_patrulla"] * factor, dt, mundo)
+
+    def _alejarse(self):
+        """La presa nunca se separa del grupo: deja de mirarla, se va lejos y
+        vuelve a cazar dentro de un rato (puede que a otro)."""
+        self.yendose_a = self._escondrijo()
+        self._olvidar(self.presa, 0.0)
+        self.presa = None
+        self.punto_presa = None
+        self.calma_ms = int(self.rng.uniform(*ALEJARSE_CALMA_MS))
 
     def _seguir(self, dt, factor, mundo):
         """Lo llevan creyendo que es un prisionero: lo sigue demasiado pegado y
@@ -405,7 +535,8 @@ class Cambiaformas(Alien):
             self.siguiendo_solo_ms = 0
             return
         self.siguiendo_solo_ms += dt
-        if self.siguiendo_solo_ms >= TRAICION_SOLO_MS and self.visible_para(guia):
+        if (self.siguiendo_solo_ms >= self._ajuste("cf_traicion_ms", TRAICION_SOLO_MS)
+                and self.visible_para(guia)):
             self.presa, self.punto_presa = guia, guia.hitbox.center
             self.siguiendo = None
             self.calma_ms = 0
@@ -442,7 +573,7 @@ class Cambiaformas(Alien):
         if hasattr(self.juego, "decir"):
             self.juego.decir("sabotaje", getattr(guia, "rol", None))
         self.presa = None
-        self.calma_ms = ENFRIAMIENTO_CAZA_MS
+        self.calma_ms = self._calma_tras_cazar()
         self._empezar_huida()
 
     def pedir_que_siga(self, jugador):
@@ -561,7 +692,7 @@ class Cambiaformas(Alien):
         self.revisando = None
         self.presa = None
         self.rafaga_ms = 0
-        self.calma_ms = ENFRIAMIENTO_CAZA_MS
+        self.calma_ms = self._calma_tras_cazar()
         if not self.disfrazado:
             self._empezar_huida()
 
@@ -569,11 +700,12 @@ class Cambiaformas(Alien):
         """Ganó el minijuego: abre el casillero (el juego atrapa al de adentro)."""
         super().entrar_al_escondite()
         self.capturas += 1
+        self._olvidar(self.presa, 1.0)
         self.revisando = None
         self.presa = None
         self.rafaga_ms = 0
         self.huir_al_despertar = True
-        self.calma_ms = ENFRIAMIENTO_CAZA_MS
+        self.calma_ms = self._calma_tras_cazar()
 
     def enterarse(self, jugador):
         """Alguien delató dónde está ese jugador (foto con ubicación, un

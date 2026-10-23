@@ -7,8 +7,8 @@ menú de EmpatiaQuest.
 
 import pygame
 
-from assets import dibujar_fondo_o_color
-from fuentes import fuente
+from juego.assets import dibujar_fondo_o_color
+from juego.fuentes import fuente
 
 
 OPCIONES_MENU = [

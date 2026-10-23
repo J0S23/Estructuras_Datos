@@ -33,7 +33,7 @@ import pygame
 pygame.init()
 pygame.display.set_mode((10, 10))
 
-from fuentes import fuente_de_tamano, ruta_fuente
+from juego.fuentes import fuente_de_tamano, ruta_fuente
 
 # Carpetas que no son del juego. Editores/ viene de EmpatiaQuest y usa flechas
 # en sus propias pantallas; no se toca aquí.

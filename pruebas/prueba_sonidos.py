@@ -20,7 +20,9 @@ import pygame; pygame.init()
 
 # ---------- 1 y 2: lo que se pide y lo que hay ----------
 codigo = ""
-for ruta in glob.glob("*.py") + glob.glob("screens/*.py"):
+for ruta in (glob.glob("*.py") + glob.glob("screens/*.py")
+             + [r for carpeta in ("juego", "entidades", "misiones", "redes")
+                for r in glob.glob(f"{carpeta}/*.py")]):
     codigo += open(ruta, encoding="utf-8").read()
 # Las palabras entre comillas dentro de cada llamada a sonar(...) / bucle(...)
 # (incluye `"acierto" if ok else "fallo"` y `_sonar(juego, "curar", 0.7)`).
@@ -36,9 +38,9 @@ assert not sobran, f"sonidos que nadie usa: {sorted(sobran)}"
 print(f"{len(hay)} sonidos: todos existen y todos se usan")
 
 # ---------- 3: en una partida ----------
-import App
-import objetos_mapa
-from audio_manager import audio_manager
+from juego import app as App
+from juego import objetos_mapa
+from juego.audio_manager import audio_manager
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 

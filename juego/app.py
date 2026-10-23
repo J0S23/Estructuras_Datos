@@ -26,46 +26,49 @@ import sys
 
 import pygame
 
-from config import DEFAULT_FPS
-from transition_manager import TransitionManager
+from juego.config import DEFAULT_FPS
+from juego.transition_manager import TransitionManager
 
-from fuentes import construir_fuentes
-from ui_components import construir_botones
+from juego.fuentes import construir_fuentes
+from juego.ui_components import construir_botones
 
-from mundo import Mundo
-from jugador import Jugador, TECLAS_POR_PUESTO, NOMBRE_CONTROLES
+from juego.mundo import Mundo
+from entidades.jugador import Jugador, TECLAS_POR_PUESTO, NOMBRE_CONTROLES
 from Movimiento.Personaje import Personaje, CONTROLES_WASD, CONTROLES_FLECHAS
 
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 
-from alien import Alien
-import acciones_rol
-from minijuego_latidos import MinijuegoLatidos
-from mision import Mision, Equipo, DURACION_MISION_S
-from ambiente import Ambiente
-from ia_nave import Narrador
-from mandos import Mandos, tecla_virtual, PUESTOS_CON_MANDO
-from tutorial import Tutorial
-from pausa import MenuPausa, mover_en_logros
-from audio_manager import audio_manager
-from infiltrado import CasoInfiltrado
-from nexus import RedNexus
-import celular
-from npcs import GestorNPCs, Apariencia
-from cambiaformas import Cambiaformas
+from entidades.alien import Alien
+from entidades import acciones_rol
+from entidades.minijuego_latidos import MinijuegoLatidos
+from misiones.mision import Mision, Equipo, DURACION_MISION_S
+from juego.ambiente import Ambiente
+from misiones.ia_nave import Narrador
+from juego.mandos import Mandos, tecla_virtual, PUESTOS_CON_MANDO
+from juego.tutorial import Tutorial
+from juego.pausa import MenuPausa, mover_en_logros
+from juego.audio_manager import audio_manager
+from misiones.infiltrado import CasoInfiltrado
+from redes.nexus import RedNexus
+from redes import celular
+from entidades.npcs import GestorNPCs, Apariencia
+from juego import dificultad
+from juego import navegacion
+from entidades.alien import sprites_de
+from juego.dificultad import Dificultad
+from entidades.cambiaformas import Cambiaformas
 from data.npcs import NPCS_POR_PARTIDA
-from logros import GestorLogros
-from eventos import GestorEventos, crear_cajas
-import puertas
-
+from misiones.logros import GestorLogros
+from misiones.eventos import GestorEventos, crear_cajas
+from misiones import puertas
 from data.roles import ROLES, MINIMO_JUGADORES
 from data.comportamiento_alien import ARBOL_ALIEN
 from data.escondites import ANCHO_ENTRADA, ALTO_ENTRADA
-import objetos_mapa
-
+from juego import objetos_mapa
 from screens.menu import render_menu, OPCIONES_MENU
 from screens.partida import render_partida, calcular_viewports
-from screens.seleccion import render_cantidad, render_roles, OPCIONES
+from screens.seleccion import render_cantidad, render_roles, render_dificultad, OPCIONES
+from data.dificultad import DIFICULTADES, POR_DEFECTO as DIFICULTAD_POR_DEFECTO
 from screens.arbol_alien import render_arbol_alien
 from screens.panel_habilidades import precargar_iconos
 from screens.resultados import render_resultados, opciones_resultados
@@ -146,6 +149,7 @@ class Game:
         # Pasos previos a la partida.
         self.cantidad_jugadores = MINIMO_JUGADORES
         self.cantidad_seleccionada = 0   # índice en screens.seleccion.OPCIONES
+        self.dificultad_seleccionada = 0  # índice en data/dificultad.DIFICULTADES
         self.seleccion_roles = []
         self.zonas = []          # zonas del mapa ya convertidas a píxeles
         self.mostrar_hitboxes = False
@@ -158,6 +162,8 @@ class Game:
         self.infiltrado = None  # misión secundaria del infiltrado de NEXUS (infiltrado.py)
         self.nexus = None       # la red social del celular (nexus.py)
         self.npcs = None        # los prisioneros que caminan (npcs.py)
+        self.dificultad = None  # dificultad.Dificultad; None = como Difícil (pruebas)
+        self.tiempo_total_ms = DURACION_RONDA_S * 1000
         self.cambiaformas = None  # el alien que se disfraza de ellos (cambiaformas.py)
         self.logros = None      # árbol de logros de la partida (logros.py)
         self.puertas_dobles, self.compuertas = [], []   # puertas.py
@@ -225,12 +231,26 @@ class Game:
 
     def confirmar_cantidad(self):
         self.cantidad_jugadores = OPCIONES[self.cantidad_seleccionada]
-        self.abrir_seleccion_roles()
+        self.abrir_seleccion_roles(ir=False)
+        self.abrir_dificultad()
+
+    # -- Paso 1.5: la dificultad (dificultad.py) -----------------------------------
+
+    def abrir_dificultad(self):
+        claves = [d["clave"] for d in DIFICULTADES]
+        actual = self.dificultad.clave if self.dificultad is not None else DIFICULTAD_POR_DEFECTO
+        self.dificultad_seleccionada = claves.index(actual)
+        self.transitions.request(self, "dificultad")
+
+    def confirmar_dificultad(self):
+        self.dificultad = Dificultad(DIFICULTADES[self.dificultad_seleccionada]["clave"])
+        self.transitions.request(self, "roles")
 
     # -- Paso 2: qué rol juega cada uno ------------------------------------------
 
-    def abrir_seleccion_roles(self):
-        """Prepara el estado de la selección, uno por jugador."""
+    def abrir_seleccion_roles(self, ir=True):
+        """Prepara el estado de la selección, uno por jugador (y, si `ir`, pasa
+        a esa pantalla)."""
         self.seleccion_roles = []
         for puesto in range(self.cantidad_jugadores):
             teclas = TECLAS_POR_PUESTO[puesto]
@@ -247,7 +267,8 @@ class Game:
                                 else f"{_nombre(teclas['arriba'][0])}/{_nombre(teclas['abajo'][0])}"),
                 "tecla_ok": "A" if self.mandos.hay_mando(puesto) else _nombre(teclas["interactuar"][0]),
             })
-        self.transitions.request(self, "roles")
+        if ir:
+            self.transitions.request(self, "roles")
 
     def _tecla_en_seleccion(self, key):
         """Reparte la tecla entre los jugadores que están escogiendo rol."""
@@ -285,6 +306,8 @@ class Game:
     def iniciar_partida(self):
         """Carga el mapa, arma los árboles y crea a los jugadores."""
         self.pausa = None
+        if self.dificultad is not None:
+            self.dificultad = Dificultad(self.dificultad.clave)    # el director arranca de cero
         nombre_mapa = objetos_mapa.mapa_activo()
         if self.mundo is None or self.mundo.nombre_mapa != nombre_mapa:
             self.mundo = Mundo(nombre_mapa)
@@ -335,6 +358,12 @@ class Game:
         self.terminales, self.paneles, self.piezas = acciones_rol.preparar_estaciones(self.mundo, self.objetos)
         self.senuelos, self.senales = [], []
         self._crear_aliens()
+        # Las hojas de sprites de los aliens se cargan aquí, mientras carga el
+        # mapa: antes se cargaban la primera vez que uno salía en pantalla y
+        # el juego se congelaba ~0.3 s a mitad de partida.
+        for alien in self.aliens:
+            sprites_de(alien.tipo)
+        audio_manager.precargar()
 
         self.equipo = Equipo()
         for jugador in self.jugadores:
@@ -349,6 +378,16 @@ class Game:
         self.logros = GestorLogros(self)     # uno nuevo cada partida: se reinician solos
         if self.mision.activa:
             self.tiempo_restante_ms = DURACION_MISION_S * 1000
+        # La dificultad (dificultad.py): más tiempo y más vidas en los fáciles.
+        if self.dificultad is not None:
+            self.tiempo_restante_ms = int(self.tiempo_restante_ms * self.dificultad.tiempo)
+            for jugador in self.jugadores:
+                jugador.vidas = jugador.vidas_max = self.dificultad.vidas
+                jugador.vidas_infinitas = self.dificultad.vidas_infinitas
+            if self.nexus is not None:
+                self.nexus.umbral_planos = self.dificultad.umbral_planos
+        self.tiempo_total_ms = self.tiempo_restante_ms
+        if self.mision.activa:
             self.eventos = GestorEventos(self, cajas=crear_cajas(self.objetos, self.mundo))
             if TUTORIAL_ACTIVO:
                 self.tutorial = Tutorial(self.jugadores)
@@ -541,6 +580,8 @@ class Game:
         donde = jugador.hitbox.center
         if self.logros is not None:
             self.logros.al_atrapar(jugador)
+        if self.dificultad is not None:
+            self.dificultad.al_atrapar()
         jugador.atrapado()
         self.ambiente.susto(jugador)
         if jugador.vidas <= 0:
@@ -682,7 +723,15 @@ class Game:
         for escondite in self.escondites:
             escondite["enfriamiento_ms"] = max(0, escondite["enfriamiento_ms"] - dt)
 
+        navegacion.siguiente_cuadro()
         if not en_tutorial:
+            if self.dificultad is not None:
+                self.dificultad.actualizar(dt, self)
+            vel = dificultad.valor(self, "vel_aliens", 1.0)
+            vision = dificultad.valor(self, "vision_aliens", 1.0)
+            oido = dificultad.valor(self, "oido_aliens", 1.0)
+            for alien in self.aliens:
+                alien.ajuste_vel, alien.ajuste_vision, alien.ajuste_oido = vel, vision, oido
             for alien in self.aliens:
                 alien.actualizar(dt, self.mundo, self.jugadores, self._atrapar,
                                  self.escondites, self._alien_revisa)
@@ -734,6 +783,7 @@ class Game:
             "nexus": self.nexus,
             "npcs": self.npcs.npcs if self.npcs is not None else (),
             "escolta": self.npcs.escoltado if self.npcs is not None else None,
+            "dificultad": self.dificultad,
         }
 
     def _actualizar_pulsos(self, dt):
@@ -1111,7 +1161,7 @@ class Game:
             return
         if self.transitions.active:
             return
-        if self.current_screen in ("menu", "cantidad", "roles", "resultados") or (
+        if self.current_screen in ("menu", "cantidad", "dificultad", "roles", "resultados") or (
                 self.current_screen == "partida" and self.pausa is not None):
             if key in TECLAS_MOVER_MENU:
                 self.sonar("menu_mover", 0.5)
@@ -1138,9 +1188,19 @@ class Game:
             elif key == pygame.K_ESCAPE:
                 self.transitions.request(self, "menu")
 
+        elif self.current_screen == "dificultad":
+            if key in (pygame.K_UP, pygame.K_w):
+                self.dificultad_seleccionada = (self.dificultad_seleccionada - 1) % len(DIFICULTADES)
+            elif key in (pygame.K_DOWN, pygame.K_s):
+                self.dificultad_seleccionada = (self.dificultad_seleccionada + 1) % len(DIFICULTADES)
+            elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                self.confirmar_dificultad()
+            elif key == pygame.K_ESCAPE:
+                self.transitions.request(self, "cantidad")
+
         elif self.current_screen == "roles":
             if key == pygame.K_ESCAPE:
-                self.transitions.request(self, "cantidad")
+                self.abrir_dificultad()
             else:
                 self._tecla_en_seleccion(key)
 
@@ -1249,6 +1309,19 @@ class Game:
         if self.current_screen == "resultados" and not self.transitions.active:
             self._click_resultados(pos)
             return
+        # Cuántos juegan y la dificultad también se escogen con el mouse.
+        if self.current_screen in ("cantidad", "dificultad") and not self.transitions.active:
+            for i, rect in enumerate(getattr(self, "rects_opciones", ())):
+                if rect.collidepoint(pos):
+                    self.sonar("menu_ok", 0.6)
+                    if self.current_screen == "cantidad":
+                        self.cantidad_seleccionada = i
+                        self.confirmar_cantidad()
+                    else:
+                        self.dificultad_seleccionada = i
+                        self.confirmar_dificultad()
+                    return
+            return
         if self.current_screen != "menu" or self.transitions.active:
             return
         for i, boton in enumerate(self.menu_buttons):
@@ -1277,7 +1350,9 @@ class Game:
         if self.current_screen == "menu":
             render_menu(self.screen, self.menu_buttons, self.menu_selected)
         elif self.current_screen == "cantidad":
-            render_cantidad(self.screen, self.cantidad_seleccionada)
+            self.rects_opciones = render_cantidad(self.screen, self.cantidad_seleccionada)
+        elif self.current_screen == "dificultad":
+            self.rects_opciones = render_dificultad(self.screen, self.dificultad_seleccionada)
         elif self.current_screen == "roles":
             viewports = calcular_viewports(self.ancho, self.alto, self.cantidad_jugadores)
             render_roles(self.screen, viewports, self.seleccion_roles)
@@ -1303,7 +1378,7 @@ class Game:
                 self.resultados_rects = render_resultados(
                     self.screen, self.jugadores, self.font, self.small_font, self.mision,
                     self.equipo, self.infiltrado, self.logros, self.resultados_sel,
-                    self.nexus, self.cambiaformas, self.npcs)
+                    self.nexus, self.cambiaformas, self.npcs, self.dificultad)
         elif self.current_screen == "ayuda":
             render_ayuda(self.screen, self.small_font)
         elif self.current_screen == "creditos":

@@ -7,8 +7,8 @@ menú principal.
 
 import pygame
 
-from fuentes import fuente, fuente_de_tamano
-from ui_components import Button
+from juego.fuentes import fuente, fuente_de_tamano
+from juego.ui_components import Button
 from screens.paneles import COLOR_TITULO, COLOR_TENUE, COLOR_INFO
 from screens.logros import render_arbol_logros
 

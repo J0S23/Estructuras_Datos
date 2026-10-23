@@ -30,11 +30,14 @@ Un tipo sin carpeta (el Rastreador) se sigue dibujando con formas.
 
 import os
 
+# La raíz del proyecto (este archivo está en una subcarpeta).
+_RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 import math
 
 import pygame
 
-from fuentes import fuente_de_tamano
+from juego.fuentes import fuente_de_tamano
 from data.tipos_alien import datos_tipo, TIPO_POR_DEFECTO
 from data.nexus import POTENCIA_VELOCIDAD, POTENCIA_VISION
 
@@ -86,7 +89,7 @@ def sprites_de(tipo):
     resultado = None
     if datos is not None and pygame.display.get_surface() is not None:
         carpeta, escala = datos
-        ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Imagenes", "Aliens", carpeta)
+        ruta = os.path.join(_RAIZ_PROYECTO, "Imagenes", "Aliens", carpeta)
         if os.path.isdir(ruta):
             from Movimiento.Personaje import cargar_animaciones
             animaciones = cargar_animaciones(ruta, escala=escala, ancho_ratio=1.0)
@@ -134,6 +137,9 @@ class Alien:
         self.confundido = False           # ...o de que expusieron al infiltrado
         self.alerta = False               # huida final: más rápido y ve más lejos
         self.potencia_nexus = 0.0         # 0-1: cuánto le va ganando el rojo en NEXUS
+        # La dificultad (dificultad.py) multiplica velocidad, visión y oído;
+        # el juego los pone cada frame. 1.0 = Difícil (como era el juego).
+        self.ajuste_vel = self.ajuste_vision = self.ajuste_oido = 1.0
         self.atascado_ms = 0
         self.tiempo_ms = 0                # reloj propio, para animaciones
         self.persecucion_ms = 0           # cuánto lleva persiguiendo (el Cazador se cansa)
@@ -175,7 +181,7 @@ class Alien:
     def alcance_vision(self):
         """Ve más lejos en la huida y mientras el rojo le gana al verde en NEXUS."""
         return (self.datos["alcance_vision"] * (1.3 if self.alerta else 1.0)
-                * (1 + POTENCIA_VISION * self.potencia_nexus))
+                * (1 + POTENCIA_VISION * self.potencia_nexus) * self.ajuste_vision)
 
     @staticmethod
     def escondite_disponible(escondite, alien=None):
@@ -202,7 +208,7 @@ class Alien:
             for jugador in jugadores:
                 if not jugador.cazable:
                     continue
-                if _distancia(self.centro, jugador.hitbox.center) > jugador.radio_ruido * self.datos["oido"]:
+                if _distancia(self.centro, jugador.hitbox.center) > jugador.radio_ruido * self.datos["oido"] * self.ajuste_oido:
                     continue
                 if jugador.escondido:
                     if not self.escondite_disponible(jugador.escondite, self):
@@ -253,7 +259,7 @@ class Alien:
         factor = min(3.0, dt / (1000 / 60)) if dt else 1.0
         if self.alerta:
             factor *= 1.25
-        factor *= 1 + POTENCIA_VELOCIDAD * self.potencia_nexus
+        factor *= (1 + POTENCIA_VELOCIDAD * self.potencia_nexus) * self.ajuste_vel
         self.descanso_ms = max(0, self.descanso_ms - dt)
         if self.descanso_ms == 0:
             self.aturdido = False
@@ -419,7 +425,7 @@ class Alien:
         self._recalcular_ms = max(0, self._recalcular_ms - dt)
         if not hasattr(mundo, "paredes_base"):
             return self._ir_hacia(destino, velocidad, dt, mundo)
-        import navegacion
+        from juego import navegacion
         nav = navegacion.de_mundo(mundo, self.hitbox.width, self.hitbox.height)
         movido = (self._destino_ruta is None or
                   _distancia(self._destino_ruta, destino) > 64)

@@ -5,7 +5,7 @@ como una pantalla que tape todo: mientras uno lee una nota o usa una terminal,
 los demás tienen que poder seguir caminando por su parte. Por eso estos paneles
 se dibujan recortados al viewport de su dueño y nada más.
 
-Un panel es un diccionario, no una clase: lo arma la lógica (App.py, mision.py,
+Un panel es un diccionario, no una clase: lo arma la lógica (juego/app.py, mision.py,
 infiltrado.py...) y aquí solo se dibuja. Campos que entiende:
 
     tipo      "opciones" | "resultado" | "habilidades" | "aviso"
@@ -19,7 +19,7 @@ import math
 
 import pygame
 
-from fuentes import fuente_de_tamano
+from juego.fuentes import fuente_de_tamano
 
 
 COLOR_FONDO = (22, 24, 42, 238)
@@ -213,42 +213,93 @@ def _formato_reloj(segundos):
     return f"{segundos // 60}:{segundos % 60:02d}"
 
 
-def render_mensaje(screen, vista, jugador):
+def fila_vidas(vista, jugador, tapado=None):
+    """La fila de debajo del HUD que comparten los corazones, el mensaje y el
+    "Te sigue". Devuelve (rect de los corazones, tamaño de cada corazón).
+
+    `tapado` es lo que ya ocupa esa altura en la pantalla (la barra de
+    confianza, arriba al centro): si los corazones caerían debajo, se corren a
+    la derecha de ella (pasa en la vista de la derecha cuando juegan 2 o 3)."""
+    from entidades.jugador import VIDAS_INICIALES
+    f = _fuente_para(vista)
+    lineas = 3 if jugador.info else 2
+    tam = max(16, min(26, vista.width // 34))
+    maximo = getattr(jugador, "vidas_max", VIDAS_INICIALES)
+    rect = pygame.Rect(vista.x + 8, vista.y + f.get_linesize() * lineas + 14,
+                       maximo * (tam + 6) + 10, tam + 12)
+    if tapado is not None and rect.colliderect(tapado):
+        rect.left = tapado.right + 10
+    return rect, tam
+
+
+def _tramos_libres(desde, hasta, ocupados):
+    """Los pedazos de [desde, hasta] que no tocan ningún (inicio, fin) ocupado."""
+    tramos = [(desde, hasta)]
+    for a, z in ocupados:
+        nuevos = []
+        for t0, t1 in tramos:
+            if z <= t0 or a >= t1:
+                nuevos.append((t0, t1))
+                continue
+            if a > t0:
+                nuevos.append((t0, a))
+            if z < t1:
+                nuevos.append((z, t1))
+        tramos = nuevos
+    return tramos
+
+
+def render_mensaje(screen, vista, jugador, tapado=None):
     """Mensajito flotante de feedback, debajo del HUD."""
     if not jugador.mensaje:
         return
     f = _fuente_para(vista)
-    etiqueta = f.render(jugador.mensaje, True, jugador.mensaje_color)
-    caja = etiqueta.get_rect()
-    caja.centerx = vista.centerx
-    # Debajo de la barra del HUD, que tiene 2 o 3 líneas según el rol.
     lineas = 3 if jugador.info else 2
-    caja.y = vista.y + f.get_linesize() * lineas + 20
-    # Esa fila la comparte con los corazones (render_vidas): el mensaje se
-    # corre a la derecha de ellos, y si así no cabe, se achica la letra. Solo
-    # si ni así cabe va debajo (en la fila de arriba ahí lo tapa el cartel de
-    # la IA de la nave, por eso es el último recurso).
+    y = vista.y + f.get_linesize() * lineas + 20
+    # Esa fila la comparte con los corazones (render_vidas) y, en las vistas
+    # de arriba, con la barra de confianza. El mensaje va centrado en el
+    # pedazo libre más ancho, achicando un poco la letra si hace falta.
+    ocupados = []
+    corazones = None
     if getattr(jugador, "vidas", None) is not None:
-        from jugador import VIDAS_INICIALES
-        tam = max(16, min(26, vista.width // 34))
-        fin_corazones = vista.x + 14 + VIDAS_INICIALES * (tam + 6) + 10
-        if caja.left - 10 < fin_corazones + 8:
-            disponible = vista.right - 18 - (fin_corazones + 18)
-            for px in range(f.get_height() - 1, 10, -1):
-                if etiqueta.get_width() <= disponible:
-                    break
-                etiqueta = fuente_de_tamano(px).render(jugador.mensaje, True, jugador.mensaje_color)
-            alto_fila = caja.height
-            caja = etiqueta.get_rect(left=fin_corazones + 18,
-                                     centery=caja.y + alto_fila // 2)
-            if caja.right + 10 > vista.right - 8:
-                caja.centerx = vista.centerx
-                caja.y = vista.y + f.get_linesize() * lineas + 14 + tam + 12 + 14
+        corazones, _ = fila_vidas(vista, jugador, tapado)
+        ocupados.append((corazones.left - 8, corazones.right + 8))
+    fila = pygame.Rect(vista.x + 8, y - 4, vista.width - 16, f.get_height() + 8)
+    if tapado is not None and fila.colliderect(tapado):
+        ocupados.append((tapado.left - 8, tapado.right + 8))
+    t0, t1 = max(_tramos_libres(fila.left, fila.right, ocupados),
+                 key=lambda t: t[1] - t[0], default=(fila.left, fila.left))
+    disponible = t1 - t0 - 20
+    minimo = max(12, f.get_height() - 4)
+    for px in range(f.get_height(), minimo - 1, -1):
+        etiqueta = fuente_de_tamano(px).render(jugador.mensaje, True, jugador.mensaje_color)
+        if etiqueta.get_width() <= disponible:
+            caja = etiqueta.get_rect(centerx=(t0 + t1) // 2, centery=y + f.get_height() // 2)
+            _caja_mensaje(screen, [etiqueta], caja)
+            return
+    # No cabe en esa fila: va debajo de los corazones, partido en renglones,
+    # y sin meterse debajo de la barra ni del cartel de la IA (que va justo
+    # debajo de la barra, al centro).
+    y2 = (corazones.bottom if corazones is not None else y + f.get_height()) + 10
+    ocupados = []
+    if tapado is not None:
+        ocupados.append((tapado.left - 40, tapado.right + 40))   # el cartel es más ancho
+    t0, t1 = max(_tramos_libres(vista.x + 8, vista.right - 8, ocupados),
+                 key=lambda t: t[1] - t[0], default=(vista.x + 8, vista.right - 8))
+    renglones = partir_lineas(jugador.mensaje, f, max(80, t1 - t0 - 20))
+    imgs = [f.render(r, True, jugador.mensaje_color) for r in renglones]
+    caja = pygame.Rect(0, 0, max(i.get_width() for i in imgs), len(imgs) * f.get_linesize())
+    caja.midtop = ((t0 + t1) // 2, y2)
+    _caja_mensaje(screen, imgs, caja)
 
+
+def _caja_mensaje(screen, imgs, caja):
     fondo = pygame.Surface((caja.width + 20, caja.height + 10), pygame.SRCALPHA)
     fondo.fill((14, 15, 28, 215))
     screen.blit(fondo, (caja.x - 10, caja.y - 5))
-    screen.blit(etiqueta, caja.topleft)
+    paso = caja.height // max(1, len(imgs))
+    for k, img in enumerate(imgs):
+        screen.blit(img, img.get_rect(midtop=(caja.centerx, caja.y + k * paso)))
 
 
 def render_pista_zona(screen, vista, jugador):
@@ -378,7 +429,16 @@ def _vineta(tamano):
         for i in range(grosor):
             alfa = int(170 * (1 - i / grosor) ** 2)
             pygame.draw.rect(capa, (200, 20, 30, alfa), (i, i, ancho - 2 * i, alto - 2 * i), 1)
-        _cache_vineta[tamano] = capa
+        # Solo los bordes: el centro es transparente y mezclarlo cada cuadro
+        # era lo más caro del dibujo (una capa del tamaño de la vista).
+        tiras = []
+        for r in ((0, 0, ancho, grosor), (0, alto - grosor, ancho, grosor),
+                  (0, grosor, grosor, alto - 2 * grosor),
+                  (ancho - grosor, grosor, grosor, alto - 2 * grosor)):
+            rect = pygame.Rect(r)
+            if rect.width > 0 and rect.height > 0:
+                tiras.append((capa.subsurface(rect).copy(), rect.topleft))
+        _cache_vineta[tamano] = tiras
     return _cache_vineta[tamano]
 
 
@@ -391,9 +451,9 @@ def render_tension(screen, vista, jugador):
     alfa = int(255 * min(1.0, fuerza * (0.55 + 0.45 * golpe)))
     if alfa <= 0:
         return
-    capa = _vineta(vista.size)
-    capa.set_alpha(alfa)
-    screen.blit(capa, vista.topleft)
+    for tira, (dx, dy) in _vineta(vista.size):
+        tira.set_alpha(alfa)
+        screen.blit(tira, (vista.x + dx, vista.y + dy))
 
 
 # -- Escondites y minijuego ---------------------------------------------------------
@@ -502,23 +562,22 @@ def dibujar_corazon(screen, centro, tam, lleno, color=COLOR_VIDA):
         pygame.draw.circle(screen, (255, 200, 210), (cx - r, cy - r), max(1, r // 3))
 
 
-def render_vidas(screen, vista, jugador):
-    """Las vidas del jugador: tres corazones arriba a la izquierda, debajo del
-    HUD. El que se acaba de perder (o de recuperar) parpadea un momento."""
-    from jugador import VIDAS_INICIALES
+def render_vidas(screen, vista, jugador, tapado=None):
+    """Las vidas del jugador: corazones arriba a la izquierda, debajo del HUD
+    (a la derecha de la barra de confianza si caerían debajo de ella). El que
+    se acaba de perder (o de recuperar) parpadea un momento."""
+    from entidades.jugador import VIDAS_INICIALES
     vidas = getattr(jugador, "vidas", None)
     if vidas is None:
         return
-    f = _fuente_para(vista)
-    lineas = 3 if jugador.info else 2
-    tam = max(16, min(26, vista.width // 34))
-    x = vista.x + 14 + tam // 2
-    y = vista.y + f.get_linesize() * lineas + 14 + tam // 2 + 6
-    fondo = pygame.Surface((VIDAS_INICIALES * (tam + 6) + 10, tam + 12), pygame.SRCALPHA)
+    rect, tam = fila_vidas(vista, jugador, tapado)
+    fondo = pygame.Surface(rect.size, pygame.SRCALPHA)
     fondo.fill((14, 15, 28, 170))
-    screen.blit(fondo, (x - tam // 2 - 6, y - tam // 2 - 6))
+    screen.blit(fondo, rect.topleft)
+    x = rect.x + 6 + tam // 2
+    y = rect.centery
     parpadeo = getattr(jugador, "vida_cambio_ms", 0) > 0 and (pygame.time.get_ticks() // 120) % 2
-    for i in range(VIDAS_INICIALES):
+    for i in range(getattr(jugador, "vidas_max", VIDAS_INICIALES)):
         lleno = i < vidas
         if parpadeo and i == vidas:      # el que se acaba de perder
             dibujar_corazon(screen, (x + i * (tam + 6), y), tam, True, (255, 240, 240))
@@ -534,7 +593,7 @@ def render_eliminado(screen, vista, jugador):
     capa.fill((20, 6, 10, 170))
     screen.blit(capa, vista.topleft)
     f = _fuente_para(vista)
-    from fuentes import fuente_de_tamano
+    from juego.fuentes import fuente_de_tamano
     grande = fuente_de_tamano(max(24, min(48, vista.width // 14)))
     titulo = grande.render("ELIMINADO", True, COLOR_VIDA)
     screen.blit(titulo, titulo.get_rect(center=(vista.centerx, vista.centery - grande.get_linesize())))

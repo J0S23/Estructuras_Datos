@@ -14,7 +14,7 @@ aunque las preguntas sean largas. Los niveles salen del recorrido por niveles
 
 import pygame
 
-from fuentes import fuente_de_tamano
+from juego.fuentes import fuente_de_tamano
 from screens.paneles import partir_lineas
 
 

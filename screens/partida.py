@@ -14,17 +14,17 @@ import os
 
 import pygame
 
-from fuentes import fuente, fuente_de_tamano
-import oscuridad
-import vision
+from juego.fuentes import fuente, fuente_de_tamano
+from juego import oscuridad
+from juego import vision
 from screens.infiltrado_dibujo import dibujar_pruebas
-import puertas
-from eventos import dibujar_cajas, dibujar_brillo_caja
+from misiones import puertas
+from misiones.eventos import dibujar_cajas, dibujar_brillo_caja
 from screens.paneles import (render_panel, render_hud, render_mensaje, render_pista_zona,
                              render_pulso, render_tension, render_minijuego,
                              render_escondido, render_vidas, render_eliminado,
                              render_inventario)
-from ambiente import temblor, dibujar_susto
+from juego.ambiente import temblor, dibujar_susto
 from screens.panel_habilidades import render_panel_habilidades
 from screens import roles as dibujo_roles
 from screens import mision_dibujo
@@ -89,10 +89,15 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
     extras.setdefault("mundo", mundo)
     screen.fill(COLOR_SEPARADOR)
 
+    # La barra de confianza va encima de todas las vistas: lo de cada jugador
+    # que caería debajo de ella se corre (screens/paneles.fila_vidas).
+    barra = (dibujo_celular.rect_confianza(screen, len(jugadores))
+             if extras.get("nexus") is not None else None)
     for indice, jugador in enumerate(jugadores):
         if indice >= len(viewports):
             break
         vista = viewports[indice]
+        tapado = barra if barra is not None and barra.colliderect(vista) else None
         _dibujar_vista(screen, vista, mundo, jugadores, jugador, zonas, mostrar_hitboxes,
                        aliens, escondites, extras)
 
@@ -105,8 +110,8 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
         render_tension(screen, vista, jugador)
         render_hud(screen, vista, jugador, segundos_restantes)
         dibujo_celular.render_aviso_celular(screen, vista, jugador, extras.get("nexus"))
-        render_vidas(screen, vista, jugador)
-        render_escolta(screen, vista, jugador, extras.get("escolta"))
+        render_vidas(screen, vista, jugador, tapado)
+        render_escolta(screen, vista, jugador, extras.get("escolta"), tapado)
         render_pista_zona(screen, vista, jugador)
         if jugador.panel is not None and jugador.panel.get("tipo") == "habilidades":
             render_panel_habilidades(screen, vista, jugador)
@@ -116,7 +121,7 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
             pass    # el celular va al final, encima del inventario y del pulso
         else:
             render_panel(screen, vista, jugador)
-        render_mensaje(screen, vista, jugador)
+        render_mensaje(screen, vista, jugador, tapado)
         render_pulso(screen, vista, jugador)
         render_inventario(screen, vista, jugador)
         dibujo_roles.render_minimapa(screen, vista, jugador, extras)
@@ -272,6 +277,9 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         dibujo_roles.dibujar_encima(screen, offset, camara, dueño, extras, tiempo_ms)
         dibujo_roles.dibujar_flechas(screen, vista, camara, dueño, extras)
         dibujo_celular.dibujar_lugar(screen, vista, camara, dueño, extras.get("nexus"), tiempo_ms)
+        mision_dibujo.dibujar_flecha_objetivo(screen, vista, camara, dueño, extras.get("mision"),
+                                              extras.get("dificultad"), extras.get("nexus"),
+                                              tiempo_ms)
 
     screen.set_clip(clip_previo)
 
@@ -287,7 +295,7 @@ def render_mapa_emision(screen, vista, jugador, mundo):
     hasta dónde se oye la señal. Guarda en el panel el rect y la escala del
     mapa para que el clic del mouse se pueda pasar a coordenadas del mundo.
     """
-    from acciones_rol import RADIO_EMISION
+    from entidades.acciones_rol import RADIO_EMISION
     panel = jugador.panel
     margen = 24
     alto_pie = 28
@@ -382,23 +390,21 @@ def _envolver(texto, f, ancho):
     return lineas
 
 
-def render_escolta(screen, vista, jugador, escoltado):
+def render_escolta(screen, vista, jugador, escoltado, tapado=None):
     """Debajo de las vidas: a quién llevas a la cápsula (npcs.py). Muestra el
     nombre que se ve, aunque sea el Cambiaformas disfrazado."""
     usuario = escoltado(jugador) if escoltado is not None else None
     if not usuario:
         return
-    from screens.paneles import _fuente_para
-    f_hud = _fuente_para(vista)
-    lineas = 3 if jugador.info else 2
-    tam = max(16, min(26, vista.width // 34))
-    y = vista.y + f_hud.get_linesize() * lineas + 14 + tam + 14
+    from screens.paneles import fila_vidas
+    corazones, _ = fila_vidas(vista, jugador, tapado)
+    y = corazones.bottom + 2
     f = fuente_de_tamano(max(13, min(16, vista.width // 50)))
     img = f.render(f"Te sigue: {usuario}  ->  cápsula", True, (120, 230, 150))
     fondo = pygame.Surface((img.get_width() + 16, img.get_height() + 8), pygame.SRCALPHA)
     fondo.fill((14, 15, 28, 170))
-    screen.blit(fondo, (vista.x + 8, y))
-    screen.blit(img, (vista.x + 16, y + 4))
+    screen.blit(fondo, (corazones.x, y))
+    screen.blit(img, (corazones.x + 8, y + 4))
 
 
 def render_tutorial(screen, vista, jugador, tutorial):

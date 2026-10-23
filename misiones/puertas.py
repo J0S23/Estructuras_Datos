@@ -20,7 +20,7 @@ import math
 
 import pygame
 
-from fuentes import fuente
+from juego.fuentes import fuente
 
 
 TIEMPO_ABRIR_S = 1.4          # los dos manteniendo a la vez

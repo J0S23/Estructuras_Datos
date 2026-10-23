@@ -24,8 +24,8 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
+from juego import app as App
+from juego import objetos_mapa
 objetos_mapa.mapa_activo = lambda: "Nave"   # el único mapa del juego
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 from data.comportamiento_alien import ARBOL_ALIEN
@@ -209,7 +209,7 @@ cap("aliens_f_cuatro.png")
 g.jugadores = [j1, j2]
 
 # ---------- 9. Escondites ----------
-from minijuego_latidos import MinijuegoLatidos
+from entidades.minijuego_latidos import MinijuegoLatidos
 alcanzable = g.mundo.area_alcanzable(j1.spawn)
 for e in g.escondites:
     assert not g.mundo.colisiona(e["rect"]), f"el escondite {e['clave']} choca con una pared"

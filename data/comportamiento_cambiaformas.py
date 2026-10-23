@@ -2,9 +2,12 @@
 
 Es otro árbol binario de decisión, con la misma clase que los demás aliens
 (Estructuras/arbol_comportamiento.py) pero con sus propias preguntas: el
-Cambiaformas no patrulla, caza. Escoge a una presa (la que esté más sola),
-la sigue disfrazado de prisionero, se revela de cerca y corre; si falla, huye,
-se vuelve a disfrazar y lo intenta de nuevo con la misma presa.
+Cambiaformas no patrulla, caza. Escoge a una presa (la que esté más sola) y
+no se le tira encima: la estudia. Pasa cerca disfrazado de prisionero, se
+aleja, ronda, vuelve a pasar... y solo cuando ya la conoce y la encuentra
+sola y desprevenida se revela y corre. Si falla, huye, se vuelve a disfrazar
+y tiene que volver a estudiarla. Si la presa nunca se separa del grupo, se
+aburre, se va lejos y vuelve a cazar más tarde (quizá a otro).
 
 Si un jugador se lo lleva creyendo que es un prisionero (rescate, npcs.py),
 lo sigue y lo traiciona: lo ataca si se queda solo o sabotea la cápsula si
@@ -40,13 +43,23 @@ ARBOL_CAMBIAFORMAS = {
                     "condicion": "presa_escondida",
                     "si": {"accion": "REVISAR_ESCONDITE", "texto": "Revisar escondite"},
                     "no": {
-                        "pregunta": "¿La presa está cerca y sola?",
+                        "pregunta": "¿Ya la conoce y está sola y desprevenida?",
                         "condicion": "presa_cerca",
                         "si": {"accion": "REVELARSE", "texto": "Revelarse"},
                         "no": {
                             "pregunta": "¿Tiene una presa?",
                             "condicion": "tiene_presa",
-                            "si": {"accion": "ACECHAR", "texto": "Acechar disfrazado"},
+                            "si": {
+                                "pregunta": "¿El grupo no se separa hace rato?",
+                                "condicion": "se_aburrio",
+                                "si": {"accion": "ALEJARSE", "texto": "Irse lejos y volver después"},
+                                "no": {
+                                    "pregunta": "¿Le toca pasar cerca a estudiarla?",
+                                    "condicion": "toca_estudiar",
+                                    "si": {"accion": "ESTUDIAR", "texto": "Pasar cerca a estudiarla"},
+                                    "no": {"accion": "RONDAR", "texto": "Rondar a distancia"},
+                                },
+                            },
                             "no": {
                                 "pregunta": "¿Tiene una carnada (rumor o suplantación)?",
                                 "condicion": "hay_cebo",

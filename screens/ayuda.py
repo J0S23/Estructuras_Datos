@@ -8,7 +8,7 @@ Se dibuja en dos columnas para que quepa completa sin recortarse: a la
 izquierda la historia y cómo se juega, a la derecha las estructuras.
 """
 
-from fuentes import fuente_de_tamano
+from juego.fuentes import fuente_de_tamano
 
 
 # (nombre, líneas de explicación). Se corresponde con Estructuras/ y navegacion.py.
@@ -22,6 +22,11 @@ ARBOLES = [
         "Cada rol escoge una de dos ramas; la otra se cierra para",
         "toda la ronda. Por niveles (BFS) para dibujarlo.",
     ]),
+    ("Árbol de comportamiento del Cambiaformas", [
+        "Otro árbol binario con sus propias preguntas: ¿lo escoltan?,",
+        "¿ya conoce a su presa y está sola y desprevenida?, ¿se aburrió",
+        "del grupo? Hojas: estudiar, rondar, revelarse, alejarse...",
+    ]),
     ("Árbol N-ario de logros", [
         "Cada logro abre otros, como en Minecraft. Al conseguir uno",
         "se sube por los padres hasta la raíz marcando los que falten.",
@@ -33,9 +38,10 @@ ARBOLES = [
         "nivel por nivel (BFS). Rastrear un rumor = camino más corto;",
         "reportar un bot = borrar su nodo. Las barras = % de verdes/rojos.",
     ]),
-    ("Grafo de la nave (BFS)", [
+    ("Grafo de la nave (A*)", [
         "Para ir a un ruido, el alien busca camino por una",
         "cuadrícula del mapa (cada celda es un nodo) y rodea paredes.",
+        "A* = un BFS que prueba primero las celdas que van hacia la meta.",
     ]),
 ]
 
@@ -72,7 +78,14 @@ def render_ayuda(screen, font=None, small_font=None):
         (COLOR_TEXTO, "Los aliens oyen tu corazón: entre más asustado, más"),
         (COLOR_TEXTO, "ruido. Camina en sigilo, escóndete en los casilleros y"),
         (COLOR_TEXTO, "no te dejes ver. Si te atrapan vas a una celda y un"),
-        (COLOR_TEXTO, "compañero te saca. Tienes 3 vidas."),
+        (COLOR_TEXTO, "compañero te saca. Las vidas y el tiempo dependen de la"),
+        (COLOR_TEXTO, "dificultad (en Fácil y Normal también sales solo)."),
+        (None, ""),
+        (COLOR_TITULO, "El Cambiaformas"),
+        (COLOR_TEXTO, "Se disfraza de prisionero y estudia a su presa antes de"),
+        (COLOR_TEXTO, "atacar. No habla, se te pega y su nombre falla. No te"),
+        (COLOR_TEXTO, "quedes solo ni de espaldas. A los prisioneros verdes"),
+        (COLOR_TEXTO, "puedes llevarlos a la cápsula (\"¿vienes conmigo?\")."),
         (None, ""),
         (COLOR_TITULO, "Los roles"),
         (COLOR_TENUE, "Tecnomante: terminales, hackeo y consolas."),

@@ -16,8 +16,8 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
+from juego import app as App
+from juego import objetos_mapa
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 
@@ -77,7 +77,7 @@ g.ambiente.ultimos.clear()
 g._atrapar(j1, alien)
 assert j1.susto_ms > 0 and ("captura", 1.0) in g.ambiente.ultimos
 assert g.narrador.dichas[-1][0] == "atrapado"
-from ambiente import temblor
+from juego.ambiente import temblor
 assert temblor(j1, 1234) != (0, 0)
 g.narrador.restante_ms = 0
 for _ in range(6):

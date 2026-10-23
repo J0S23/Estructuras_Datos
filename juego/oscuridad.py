@@ -27,7 +27,7 @@ import math
 
 import pygame
 
-from vision import RADIO_VISION
+from juego.vision import RADIO_VISION
 
 
 OPACIDAD = 175               # fuera del campo de visión, con luz (255 = negro)
@@ -48,6 +48,7 @@ ANGULO_DIRECCION = {
 }
 
 _capas = {}
+_ultimo = {}          # vista.topleft -> (clave, mapa de luz ya agrandado)
 _halos = {}
 
 
@@ -110,6 +111,17 @@ def dibujar(screen, vista, camara, dueño, jugadores, apagon=False, vision=None)
     y afuera queda en penumbra. En un apagón la luz es la de la linterna y los
     halos, pero igual recortada por el polígono: no alumbra tras las paredes.
     """
+    # Con luz y sin que nada se haya movido (cámara, dueño, su campo de
+    # visión), el mapa de luz es el mismo del cuadro anterior: se reusa.
+    clave = None
+    if not apagon:
+        clave = (vista.size, tuple(camara.topleft), dueño.hitbox.center, dueño.escondido,
+                 id(vision), len(vision) if vision else 0, vision[0] if vision else None)
+        guardado = _ultimo.get(vista.topleft)
+        if guardado is not None and guardado[0] == clave:
+            screen.blit(guardado[1], vista.topleft, special_flags=pygame.BLEND_RGB_MULT)
+            return
+
     e = ESCALA_LUZ
     chico = (max(1, vista.width // e), max(1, vista.height // e))
     luz = _capa(chico)
@@ -172,6 +184,13 @@ def dibujar(screen, vista, camara, dueño, jugadores, apagon=False, vision=None)
     # Lo que no se ve tampoco queda negro del todo: el mapa se adivina.
     luz.fill(_gris(oscuro), special_flags=pygame.BLEND_RGB_MAX)
 
-    grande = _grande(vista.size)
+    if clave is not None:
+        guardado = _ultimo.get(vista.topleft)
+        grande = guardado[1] if guardado is not None and guardado[1].get_size() == vista.size \
+            else pygame.Surface(vista.size)
+        _ultimo[vista.topleft] = (clave, grande)
+    else:
+        _ultimo.pop(vista.topleft, None)
+        grande = _grande(vista.size)
     pygame.transform.smoothscale(luz, vista.size, grande)
     screen.blit(grande, vista.topleft, special_flags=pygame.BLEND_RGB_MULT)

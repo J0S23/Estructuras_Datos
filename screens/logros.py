@@ -9,7 +9,7 @@ recorrido en postorden de ArbolLogros.posiciones().
 import pygame
 
 from data.logros import COLOR_RAMA
-from fuentes import fuente, fuente_de_tamano
+from juego.fuentes import fuente, fuente_de_tamano
 
 COLOR_FONDO_ARBOL = (14, 14, 28)
 COLOR_LINEA = (90, 96, 130)

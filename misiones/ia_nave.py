@@ -13,7 +13,7 @@ import random
 import pygame
 
 from data.ia_nave import FRASES
-from fuentes import fuente_de_tamano
+from juego.fuentes import fuente_de_tamano
 
 
 DURACION_MS = 4800

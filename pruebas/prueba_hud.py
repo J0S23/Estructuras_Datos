@@ -18,8 +18,8 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
+from juego import app as App
+from juego import objetos_mapa
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 NOMBRES = [r["nombre"] for r in App.ROLES]

@@ -13,8 +13,8 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
+from juego import app as App
+from juego import objetos_mapa
 from Estructuras.arbol_logros import ArbolLogros
 from data.logros import ARBOL_LOGROS, COLOR_RAMA
 objetos_mapa.mapa_activo = lambda: "Nave"

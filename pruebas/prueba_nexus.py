@@ -13,11 +13,11 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
-import celular
+from juego import app as App
+from juego import objetos_mapa
+from redes import celular
 from Estructuras.grafo import Grafo
-from nexus import RedNexus, VERDE, ROJO, GRIS
+from redes.nexus import RedNexus, VERDE, ROJO, GRIS
 from data.nexus import UMBRAL_PLANOS, UMBRAL_DERROTA_ROJO, TICK_PROPAGACION_MS, CUENTAS
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
@@ -261,7 +261,7 @@ print(f"rojo >= {UMBRAL_DERROTA_ROJO:.0%}: los aliens tomaron NEXUS (derrota)")
 
 # El mando abre el celular con RB.
 juego3 = nueva_partida()
-from mandos import tecla_virtual
+from juego.mandos import tecla_virtual
 j3 = juego3.jugadores[0]
 j3.teclas = dict(j3.teclas)
 j3.teclas["celular"] = tuple(j3.teclas["celular"]) + (tecla_virtual(2, "celular"),)

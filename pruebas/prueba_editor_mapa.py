@@ -26,7 +26,7 @@ TEMP = os.path.join(tempfile.gettempdir(), "_objetos_prueba_editor.json")
 if os.path.exists(TEMP):
     os.remove(TEMP)
 
-import objetos_mapa
+from juego import objetos_mapa
 from editor_mapa import EditorMapa, HERRAMIENTAS
 
 real = objetos_mapa.ruta_archivo("Nave")
@@ -117,7 +117,7 @@ assert leido["rutas_aliens"] == ed.datos["rutas_aliens"]
 assert len(leido["escondites"]) == len(ed.datos["escondites"])
 print("guardado y leído igual:", TEMP)
 
-import App
+from juego import app as App
 original = objetos_mapa.cargar
 objetos_mapa.cargar = lambda mapa=None, ruta=None: original(ruta=TEMP)
 g = App.Game()

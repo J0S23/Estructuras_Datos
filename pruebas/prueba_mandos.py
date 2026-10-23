@@ -16,9 +16,9 @@ os.chdir(RAIZ)
 import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 
-import App
-import objetos_mapa
-import mandos as M
+from juego import app as App
+from juego import objetos_mapa
+from juego import mandos as M
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 NOMBRES = [r["nombre"] for r in App.ROLES]

@@ -60,10 +60,24 @@ FRASES_ADVIERTE_ESCOLTA = ["¿Por qué vas con {usuario}? Esa no es la persona q
 
 # -- Cambiaformas -----------------------------------------------------------------------
 DISTANCIA_REVELARSE = 165       # se revela cuando su presa está así de cerca (y lo ve)
-DISTANCIA_ACECHO = 320          # disfrazado, la sigue a esta distancia
 DISTANCIA_COMPANIA = 260        # si la presa tiene un compañero así de cerca, espera
 VISION = 650                    # ve en todas direcciones (no tiene cono)
 ESPERA_INICIAL_MS = 40000       # al empezar la partida merodea un rato antes de cazar
+# No es impulsivo: antes de atacar "estudia" a su presa. Pasa cerca (como un
+# prisionero más), se aleja, ronda, vuelve a pasar... y solo cuando ya la
+# conoce y la encuentra sola y desprevenida (con el celular, en una consola,
+# leyendo, de espaldas a él) se revela.
+ESTUDIO_NECESARIO_MS = (14000, 24000)   # cuánto tiene que haberla visto de cerca (al azar)
+RADIO_ESTUDIO = 300             # a esta distancia (y viéndola) la está estudiando
+DISTANCIA_PASADA = 120          # en una "pasada" se acerca hasta aquí y se va
+PASADA_MAX_MS = 9000            # si no logra acercarse en este tiempo, vuelve a rondar
+RONDA_MS = (5000, 11000)        # cuánto ronda lejos entre una pasada y otra
+RONDA_DISTANCIA = (350, 750)    # a qué distancia de la presa ronda
+DE_ESPALDAS = 110               # grados: más que esto entre a dónde mira y él = de espaldas
+ABURRIRSE_MS = 20000            # si la presa no se queda sola en este rato, se va lejos
+ALEJARSE_CALMA_MS = (25000, 40000)   # y se olvida de cazar este tiempo
+OLVIDA_TRAS_FALLAR = 0.5        # si se revela y falla, olvida esta parte de lo aprendido
+CALMA_TRAS_FALLAR_MS = 15000    # y espera esto antes de volver a cazar
 ENFRIAMIENTO_CAZA_MS = 25000    # después de atrapar a alguien, descansa de cazar
 TRANSFORMARSE_MS = 750          # el susto: se transforma ahí y le da ese tiempo a la presa
 RAFAGA_MS = 4200                # cuánto dura su carrera después de revelarse

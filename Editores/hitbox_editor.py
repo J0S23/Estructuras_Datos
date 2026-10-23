@@ -144,8 +144,7 @@ def build_dummy_from_game_logic(project_root, img_rect, tamano_nativo=None):
         if project_root not in sys.path:
             sys.path.insert(0, project_root)
         from Movimiento.Personaje import Personaje, detectar_hojas
-        import mundo as mundo_juego
-
+        from juego import mundo as mundo_juego
         personajes_dir = os.path.join(project_root, "Imagenes", "Personajes")
         carpeta = None
         for nombre in sorted(os.listdir(personajes_dir)):

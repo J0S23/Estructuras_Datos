@@ -6,7 +6,7 @@ del viewport, porque varias cosas solo las ve un rol: las piezas solo el
 Forjador, el pulso de los demás solo la Biomante, las flechas hacia los aliens
 solo la Resonante.
 
-`extras` es el diccionario que arma App.py con todo lo del mapa: terminales,
+`extras` es el diccionario que arma juego/app.py con todo lo del mapa: terminales,
 paneles, piezas, senuelos, senales, aliens, jugadores y mundo.
 """
 
@@ -14,7 +14,7 @@ import math
 
 import pygame
 
-from fuentes import fuente, fuente_de_tamano
+from juego.fuentes import fuente, fuente_de_tamano
 
 
 COLOR_SOMBRA = (12, 11, 23)
@@ -184,15 +184,19 @@ def dibujar_encima(screen, offset, camara, dueño, extras, tiempo_ms):
     if "intercepcion" in getattr(dueño, "efectos", {}):
         f = fuente_de_tamano(14)
         for alien in extras.get("aliens", ()):
-            puntos = [(x - offset[0], y - offset[1]) for x, y in alien.ruta]
+            if getattr(alien, "disfrazado", False):
+                continue      # el Cambiaformas disfrazado no se delata así
+            ruta = alien.ruta if getattr(alien, "tipo", "") != "cambiaformas" else []
+            puntos = [(x - offset[0], y - offset[1]) for x, y in ruta]
             if len(puntos) >= 2:
                 pygame.draw.lines(screen, COLOR_RESONANTE, len(puntos) > 2, puntos, 2)
             for p in puntos:
                 pygame.draw.circle(screen, COLOR_RESONANTE, p, 5)
-            siguiente = alien.ruta[alien.indice_ruta]
-            pygame.draw.line(screen, (255, 214, 64),
-                             (alien.centro[0] - offset[0], alien.centro[1] - offset[1]),
-                             (siguiente[0] - offset[0], siguiente[1] - offset[1]), 1)
+            if ruta and 0 <= alien.indice_ruta < len(ruta):
+                siguiente = ruta[alien.indice_ruta]
+                pygame.draw.line(screen, (255, 214, 64),
+                                 (alien.centro[0] - offset[0], alien.centro[1] - offset[1]),
+                                 (siguiente[0] - offset[0], siguiente[1] - offset[1]), 1)
             decision = alien.camino[-1].texto if alien.camino else ""
             _texto(screen, decision, alien.centro[0] - offset[0],
                    alien.hitbox.top - offset[1] - 92, COLOR_RESONANTE, f)

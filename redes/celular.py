@@ -14,7 +14,7 @@ Pantallas ("vista"):
     mensaje    el resultado de lo que hizo
 """
 
-from nexus import COLOR_BIEN, COLOR_MAL
+from redes.nexus import COLOR_BIEN, COLOR_MAL
 
 
 def abrir(juego, jugador):
@@ -178,7 +178,7 @@ def lineas_estado(juego):
     if red.planos:
         lineas.append("Ya tienen los planos de la cápsula.")
     else:
-        falta = max(0, int(round((UMBRAL_PLANOS - verde) * 100)))
+        falta = max(0, int(round((getattr(red, "umbral_planos", UMBRAL_PLANOS) - verde) * 100)))
         lineas.append(f"Planos de la cápsula: les falta {falta}% de confianza.")
     activos = red.rumores_activos()
     if activos:
@@ -219,7 +219,7 @@ def _panel_tema(jugador, titulo, parrafos, zona):
 
 def confirmar_ayuda(juego, jugador):
     from data.nexus import AYUDA_TEMAS
-    from tutorial import pasos_con_teclas, con_teclas
+    from juego.tutorial import pasos_con_teclas, con_teclas
     panel = jugador.panel
     zona = panel.get("zona")
     if panel["accion"] == "ayuda_tema":

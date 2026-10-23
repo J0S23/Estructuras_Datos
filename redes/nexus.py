@@ -32,15 +32,16 @@ Cómo se juega:
   los aliens se vuelven más rápidos y ven más; con UMBRAL_DERROTA_ROJO los
   aliens toman NEXUS y se pierde (ahí irá una cinemática).
 
-El celular se dibuja en screens/celular.py; App.py lo abre con la tecla de
+El celular se dibuja en screens/celular.py; juego/app.py lo abre con la tecla de
 celular de cada jugador y le pasa las teclas.
 """
 
+from juego import dificultad
 import math
 import random
 
 from Estructuras.grafo import Grafo
-from logros import logro
+from misiones.logros import logro
 from data.nexus import (
     CUENTAS, BOTS, RUMORES, NORMALES,
     SEGUIDORES_PRISIONERO, SEGUIDORES_BOT, SEGUIDORES_JUGADOR, SIGUE_CADA_JUGADOR,
@@ -117,6 +118,7 @@ class RedNexus:
         self.stats = {}             # jugador -> contadores para los resultados
         self.tiempo_celular_ms = {}
         self.reloj_rumor_ms = PRIMER_RUMOR_S * 1000
+        self.umbral_planos = UMBRAL_PLANOS     # la dificultad lo cambia (App.iniciar_partida)
         self.reloj_normal_ms = self.rng.uniform(*NORMAL_CADA_S) * 1000
         self.reloj_bot_ms = NUEVO_BOT_CADA_S * 1000
         self._bots_usados = 0
@@ -218,7 +220,8 @@ class RedNexus:
         if not en_tutorial:
             self.reloj_rumor_ms -= dt
             if self.reloj_rumor_ms <= 0:
-                self.reloj_rumor_ms = self.rng.uniform(*RUMOR_CADA_S) * 1000
+                self.reloj_rumor_ms = (self.rng.uniform(*RUMOR_CADA_S) * 1000
+                                       * dificultad.valor(self.juego, "rumor_cada", 1.0))
                 self.lanzar_rumor()
             self.reloj_normal_ms -= dt
             if self.reloj_normal_ms <= 0:
@@ -274,7 +277,7 @@ class RedNexus:
             if tipo == "preso":
                 # No todos se creen lo que les llega: cada uno decide (al azar).
                 if (prop.color == ROJO and self.color(nodo) == GRIS
-                        and self.rng.random() < PROB_CREER_RUMOR):
+                        and self.rng.random() < dificultad.valor(self.juego, "prob_creer", PROB_CREER_RUMOR)):
                     g.datos[nodo]["color"] = ROJO
                 elif prop.color == VERDE and self.rng.random() < prop.prob:
                     g.datos[nodo]["color"] = VERDE
@@ -577,7 +580,7 @@ class RedNexus:
 
     def _revisar_umbrales(self):
         verde, rojo = self.barras()
-        if not self.planos and verde >= UMBRAL_PLANOS:
+        if not self.planos and verde >= self.umbral_planos:
             self.desbloquear_planos()
         if not self.derrota and rojo >= UMBRAL_DERROTA_ROJO:
             self.derrota = True

@@ -18,8 +18,8 @@ os.chdir(RAIZ)
 import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas", "seleccion")
 os.makedirs(OUT, exist_ok=True)
-import App
-import objetos_mapa
+from juego import app as App
+from juego import objetos_mapa
 objetos_mapa.mapa_activo = lambda: "Nave"   # el único mapa del juego
 from data.roles import ROLES
 

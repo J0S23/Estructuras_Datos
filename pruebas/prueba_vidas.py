@@ -14,10 +14,10 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
-import acciones_rol
-from jugador import VIDAS_INICIALES
+from juego import app as App
+from juego import objetos_mapa
+from entidades import acciones_rol
+from entidades.jugador import VIDAS_INICIALES
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 

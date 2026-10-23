@@ -11,8 +11,7 @@ import os, sys
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 import pygame
-import mandos
-
+from juego import mandos
 pygame.init()
 pantalla = pygame.display.set_mode((720, 420))
 pygame.display.set_caption("Probar mando")

@@ -25,7 +25,9 @@ import math
 
 
 RADIO_VISION = 640           # hasta dónde ve un jugador, en píxeles del mundo
-RAYOS = 120                  # rayos repartidos parejo (más las esquinas)
+RAYOS = 90                   # rayos repartidos parejo (más las esquinas)
+PASO_ORIGEN = 6              # el origen se redondea a esta rejilla: caminando, el
+                             # campo se recalcula cada 2 cuadros y no en cada uno
 ROCE_ESQUINA = 0.0008        # cuánto se desvía el rayo que roza una esquina
 # Las paredes se ven "de frente" (vista 3/4): el dibujo de la pared sobresale
 # hacia arriba de su hitbox. Para que la cara de la pared no quede negra, el
@@ -74,6 +76,35 @@ def _choque(cajas, c, s):
     return mejor
 
 
+def _info_caja(caja):
+    """Para descartar rápido una caja: su distancia más corta al origen y el
+    abanico de ángulos que ocupa vista desde ahí (centro y mitad del ancho)."""
+    x0, y0, x1, y1 = caja
+    dx = max(x0, 0, -x1)
+    dy = max(y0, 0, -y1)
+    cerca = math.hypot(dx, dy)
+    angulos = [math.atan2(y, x) for x, y in ((x0, y0), (x1, y0), (x0, y1), (x1, y1))]
+    centro = math.atan2((y0 + y1) / 2, (x0 + x1) / 2)
+    mitad = max(abs((a - centro + math.pi) % (2 * math.pi) - math.pi) for a in angulos)
+    return cerca, centro, mitad
+
+
+def _choque_rapido(info, a, c, s):
+    """Como _choque, pero mirando solo las cajas que el rayo de ángulo `a` puede
+    tocar, de la más cercana a la más lejana, y parando cuando ya ninguna puede
+    quedar más cerca que el choque encontrado. Da lo mismo que _choque."""
+    mejor = math.inf
+    for cerca, centro, mitad, caja in info:
+        if cerca >= mejor:
+            break
+        if abs((a - centro + math.pi) % (2 * math.pi) - math.pi) > mitad + 0.003:
+            continue
+        d = _choque((caja,), c, s)
+        if d < mejor:
+            mejor = d
+    return mejor
+
+
 def _alcance(dist, s, radio):
     """Dónde termina el rayo: en la pared (metiéndose un poco) o en el radio."""
     if dist >= radio:
@@ -108,11 +139,13 @@ class Campo:
                 a = math.atan2(ey, ex)
                 angulos += (a - ROCE_ESQUINA, a + ROCE_ESQUINA)
         angulos.sort(key=lambda a: a % (2 * math.pi))
+        self.info = sorted((_info_caja(caja) + (caja,) for caja in self.cajas),
+                           key=lambda i: i[0])
 
         self.puntos = []
         for a in angulos:
             c, s = math.cos(a), math.sin(a)
-            dist = _alcance(_choque(self.cajas, c, s), s, radio)
+            dist = _alcance(_choque_rapido(self.info, a, c, s), s, radio)
             self.puntos.append((ox + c * dist, oy + s * dist))
 
     def ve_punto(self, p):
@@ -128,7 +161,7 @@ class Campo:
         if d < 1:
             return True
         c, s = dx / d, dy / d
-        return d <= _alcance(_choque(self.cajas, c, s), s, self.radio)
+        return d <= _alcance(_choque_rapido(self.info, math.atan2(dy, dx), c, s), s, self.radio)
 
     def ve_a(self, rect):
         """True si algo de `rect` (la hitbox de un personaje) se ve.
@@ -150,7 +183,9 @@ def campo_de(origen, rects, radio=RADIO_VISION):
     Un jugador quieto (escondido, preso, leyendo un panel) no vuelve a lanzar
     sus rayos cada cuadro mientras no se muevan él ni las puertas.
     """
-    clave = (tuple(origen), radio, tuple(tuple(r) for r in rects))
+    origen = (round(origen[0] / PASO_ORIGEN) * PASO_ORIGEN,
+              round(origen[1] / PASO_ORIGEN) * PASO_ORIGEN)
+    clave = (origen, radio, tuple(tuple(r) for r in rects))
     campo = _recientes.get(clave)
     if campo is None:
         if len(_recientes) > 16:
