@@ -16,12 +16,12 @@ todos), izquierda sube al padre y derecha baja al primer hijo.
 
 La clase no dibuja nada (eso es screens/pausa.py) ni toca el juego
 directamente: `tecla()` y `activar()` devuelven una acción ("continuar",
-"terminar", "pantalla_completa"...) y App.py la ejecuta.
+"terminar", "pantalla_completa"...) y juego/app.py la ejecuta.
 """
 
 import pygame
 
-from audio_manager import audio_manager
+from juego.audio_manager import audio_manager
 
 
 OPCIONES_PAUSA = [
@@ -148,7 +148,7 @@ class MenuPausa:
         self.nodo = mover_en_logros(self.arbol, self.nodo, key)
 
     def tecla(self, key):
-        """Procesa una tecla. Devuelve la acción para App.py, o None."""
+        """Procesa una tecla. Devuelve la acción para juego/app.py, o None."""
         if self.vista == "logros":
             self._tecla_logros(key)
             return None

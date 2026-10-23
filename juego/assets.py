@@ -11,6 +11,9 @@ acertarle al nombre exacto para que su imagen aparezca en el juego.
 
 import os
 
+# La raíz del proyecto (este archivo está en una subcarpeta).
+_RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 import pygame
 
 _CACHE = {}
@@ -36,7 +39,7 @@ def _resolver_ruta(ruta_relativa):
     if ruta_relativa in _RESUELTAS:
         return _RESUELTAS[ruta_relativa]
 
-    raiz = os.path.dirname(__file__)
+    raiz = _RAIZ_PROYECTO
     ruta_exacta = os.path.join(raiz, ruta_relativa)
     resultado = None
 

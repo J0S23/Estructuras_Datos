@@ -124,7 +124,7 @@ class GestorLogros:
                 self.conseguir("sin_rumbo")
             self.capturas_fase = 0
         self.fase = mision.fase
-        from mision import PIEZAS_NECESARIAS
+        from misiones.mision import PIEZAS_NECESARIAS
         if mision.piezas_entregadas >= PIEZAS_NECESARIAS:
             self.conseguir("chatarrero")
 

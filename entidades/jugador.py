@@ -18,8 +18,8 @@ import pygame
 from Estructuras.arbol_habilidades import construir_arbol
 from data.habilidades import ARBOLES_POR_ROL
 from data.roles import ROLES_POR_NOMBRE
-from oscuridad import Linterna
-from mandos import tecla_virtual, es_virtual, NOMBRE_BOTON
+from juego.oscuridad import Linterna
+from juego.mandos import tecla_virtual, es_virtual, NOMBRE_BOTON
 
 
 # Teclas de cada PUESTO, no de cada rol: el rol se escoge al empezar la
@@ -216,6 +216,8 @@ class Jugador:
         self.pista_mision = None
         self.susto_ms = 0            # cuánto le queda al susto de ser atrapado
         self.vidas = VIDAS_INICIALES
+        self.vidas_max = VIDAS_INICIALES     # la dificultad lo cambia (dificultad.py)
+        self.vidas_infinitas = False         # dificultad Tutorial: atrapar no quita vidas
         self.eliminado = False       # sin vidas: fuera de la partida
         self.vida_cambio_ms = 0      # para que el corazón que cambia parpadee
         self.curacion_ms = 0         # recarga de la curación de la Biomante
@@ -368,7 +370,8 @@ class Jugador:
         """Lo atrapó un alien: pierde una vida y vuelve a su punto de inicio
         (después la misión lo mete en una celda)."""
         self.veces_atrapado += 1
-        self.vidas = max(0, self.vidas - 1)
+        if not self.vidas_infinitas:
+            self.vidas = max(0, self.vidas - 1)
         self.vida_cambio_ms = 1200
         self.invulnerable_ms = INVULNERABLE_MS
         self.pulso = 45.0
@@ -391,7 +394,7 @@ class Jugador:
         if self.eliminado:
             return 0
         antes = self.vidas
-        self.vidas = min(VIDAS_INICIALES, self.vidas + cantidad)
+        self.vidas = min(self.vidas_max, self.vidas + cantidad)
         if self.vidas != antes:
             self.vida_cambio_ms = 1200
         return self.vidas - antes

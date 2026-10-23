@@ -30,7 +30,7 @@ import random
 import pygame
 
 from data.notas import NOTAS, NOTA_CODIGO
-from logros import logro
+from misiones.logros import logro
 
 
 PIEZAS_NECESARIAS = 3
@@ -159,6 +159,7 @@ class Mision:
                            if any(pygame.Rect(c[0], c[1], 48, 19).colliderect(n["rect"].inflate(40, 40))
                                   for c in celdas)] or alcanzables
         con_codigo = self.rng.choice(alcanzables)
+        self.notas_alcanzables = [self.notas[i] for i in alcanzables]   # para la flecha
         lore = list(NOTAS)
         for i, nota in enumerate(self.notas):
             if i == con_codigo:
@@ -197,6 +198,65 @@ class Mision:
             return TEXTO_FASE["reparar"] if self.hay_planos() else TEXTO_FASE["planos"]
         return TEXTO_FASE.get(self.fase, "")
 
+    def punto_objetivo(self, jugador):
+        """A dónde debería ir ahora este jugador, para la flecha de las
+        dificultades fáciles (dificultad.py). Devuelve (punto, texto) o None."""
+        if not self.activa or jugador.preso or getattr(jugador, "eliminado", False):
+            return None
+        c = jugador.hitbox.center
+
+        def cerca(cosas, punto=lambda x: x):
+            return min(cosas, key=lambda x: math.dist(punto(x), c), default=None)
+
+        # Primero, sacar a un compañero de su celda.
+        celda = cerca([cd for cd in self.celdas if cd["preso"] is not None], lambda cd: cd["punto"])
+        if celda is not None and self.fase != "prision":
+            return celda["punto"], "Rescata a tu compañero"
+        if self.fase == "huida":
+            return self.capsula.center, "¡A la cápsula!"
+        if self.fase == "prision":
+            leyo = any(jugador in n["leida_por"] and self.codigo in n["texto"] for n in self.notas)
+            if leyo or not self.notas:
+                return self.puerta.center, "Abre la puerta con el código"
+            nota = cerca([n for n in getattr(self, "notas_alcanzables", self.notas)
+                          if jugador not in n["leida_por"]],
+                         lambda n: n["rect"].center)
+            if nota is not None:
+                return nota["rect"].center, "Lee las notas: una tiene el código"
+            return self.puerta.center, "Abre la puerta"
+        if self.fase == "sabotaje":
+            consola = cerca([k for k in self.consolas if k["progreso"] < 1], lambda k: k["rect"].center)
+            if consola is not None:
+                return consola["rect"].center, "Apaga esta consola"
+        red = getattr(self.juego, "nexus", None)
+        if self.fase == "capsula":
+            if getattr(jugador, "piezas", 0) > 0 and self.piezas_entregadas < PIEZAS_NECESARIAS:
+                return self.capsula.center, "Lleva la pieza a la cápsula"
+            puede_recoger = jugador.rol == "Forjador" or self.piezas_para_todos
+            if self.piezas_entregadas < PIEZAS_NECESARIAS and puede_recoger:
+                pieza = cerca([p for p in getattr(self.juego, "piezas", []) if not p["recogida"]],
+                              lambda p: p["rect"].center)
+                if pieza is not None:
+                    return pieza["rect"].center, "Recoge esta pieza"
+            if not self.hay_planos() and red is not None:
+                nodo = red.nodo_de(jugador)
+                rumor = cerca([p for p in red.rumores_activos()
+                               if p.lugar is not None and nodo in p.alcanzados
+                               and p not in red.evidencias.get(jugador, ())],
+                              lambda p: p.lugar)
+                if rumor is not None:
+                    return rumor.lugar, "Desmiente este rumor (foto)"
+                # Sin rumores a la mano: la central de ayuda dice cómo va la confianza.
+                terminal = cerca([z for z in getattr(self.juego, "zonas", ()) if z.get("tipo") == "nexus"],
+                                 lambda z: z["rect"].center)
+                if terminal is not None:
+                    return terminal["rect"].center, "Faltan los planos: revisa NEXUS aquí"
+            if self.piezas_entregadas >= PIEZAS_NECESARIAS and self.hay_planos():
+                return self.capsula.center, "Repara la cápsula"
+            if self.piezas_entregadas < PIEZAS_NECESARIAS:
+                return self.capsula.center, "Ayuda con la cápsula"
+        return None
+
     def hay_planos(self):
         """Los planos de la cápsula se ganan en NEXUS. Sin NEXUS no hacen falta."""
         red = getattr(self.juego, "nexus", None)
@@ -219,7 +279,12 @@ class Mision:
 
     def pista(self, jugador):
         """Texto de "presiona E para..." según lo que tenga cerca, o None."""
-        if not self.activa or jugador.preso:
+        if not self.activa:
+            return None
+        if jugador.preso:
+            fuga = jugador.preso.get("fuga_ms")
+            if fuga is not None:
+                return f"Forzando la reja... sales en {max(1, int(fuga // 1000) + 1)} s"
             return None
         c = jugador.hitbox.center
         for celda in self.celdas:
@@ -417,9 +482,17 @@ class Mision:
             return False
         libres = [c for c in self.celdas if c["preso"] is None] or self.celdas
         celda = libres[0]
-        if celda["preso"] is not None and celda["preso"] is not jugador:
-            celda["preso"].preso = None
+        anterior = celda["preso"]
+        if anterior is not None and anterior is not jugador:
+            # Todas las celdas llenas (4 jugadores, 3 celdas): el que estaba sale
+            # para hacerle espacio. Antes solo se le quitaba "preso" y se quedaba
+            # dentro de la pared de la celda, sin poder moverse.
+            self._sacar_de_celda(anterior, celda)
+            anterior.avisar(f"Los aliens te sacaron para encerrar al {jugador.rol}. ¡Corre!", COLOR_BIEN)
         celda["preso"] = jugador
+        # Dificultades fáciles: sale solo después de un rato (dificultad.py).
+        dif = getattr(self.juego, "dificultad", None)
+        celda["fuga_ms"] = dif.fuga_ms if dif is not None else None
         jugador.preso = celda
         jugador.personaje.hitbox.center = celda["punto"]
         jugador.personaje.sync_sprite_from_hitbox()
@@ -428,11 +501,18 @@ class Mision:
                 otro.avisar(f"¡Encerraron al {jugador.rol}! Vayan a sacarlo.", COLOR_MAL)
         return True
 
-    def liberar(self, celda, rescatador):
+    def fugarse(self, celda):
+        """Se le acabó la espera (dificultades fáciles): fuerza la reja y sale."""
         preso = celda["preso"]
-        celda["preso"] = None
         if preso is None:
             return
+        celda["preso"] = None
+        celda["fuga_ms"] = None
+        self._sacar_de_celda(preso, celda)
+        preso.avisar("Forzaste la reja: ¡estás libre!", COLOR_BIEN)
+        self._sonar("puerta", 0.6)
+
+    def _sacar_de_celda(self, preso, celda):
         preso.preso = None
         x, y = celda["punto"]
         libre = self.juego.mundo.punto_libre((x, y + 90), preso.personaje.hitbox_w,
@@ -440,6 +520,14 @@ class Mision:
         preso.personaje.hitbox.topleft = (int(libre[0]), int(libre[1]))
         preso.personaje.sync_sprite_from_hitbox()
         preso.invulnerable_ms = 2500
+
+    def liberar(self, celda, rescatador):
+        preso = celda["preso"]
+        celda["preso"] = None
+        celda["fuga_ms"] = None
+        if preso is None:
+            return
+        self._sacar_de_celda(preso, celda)
         rescatador.sumar_puntos(PUNTOS_RESCATE)
         if rescatador.rol == "Biomante":
             preso.pulso = min(preso.pulso, 20.0)
@@ -533,7 +621,14 @@ class Mision:
                 self.resultado = "derrota"     # los atraparon a todos 3 veces
                 return
             jugadores = self.juego.jugadores
-        if jugadores and all(j.preso for j in jugadores):
+        for celda in self.celdas:
+            if celda["preso"] is not None and celda.get("fuga_ms") is not None:
+                celda["fuga_ms"] -= dt
+                if celda["fuga_ms"] <= 0:
+                    self.fugarse(celda)
+        # Todos encerrados = derrota, salvo que alguien pueda fugarse solo.
+        if (jugadores and all(j.preso for j in jugadores)
+                and not any(j.preso.get("fuga_ms") is not None for j in jugadores)):
             self.resultado = "derrota"
             return
         if self.fase == "sabotaje" and self.consolas and all(c["progreso"] >= 1 for c in self.consolas):

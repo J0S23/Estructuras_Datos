@@ -13,13 +13,13 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
+from juego import app as App
+from juego import objetos_mapa
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 from data.comportamiento_cambiaformas import ARBOL_CAMBIAFORMAS
 from data.npcs import (NPCS_POR_PARTIDA, DISTANCIA_REVELARSE, TRANSFORMARSE_MS,
                        ESPERA_INICIAL_MS, EXPUESTO_MS)
-from nexus import VERDE, ROJO
+from redes.nexus import VERDE, ROJO
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 
@@ -35,7 +35,8 @@ pygame.key.get_pressed = lambda: Teclas()
 arbol = ArbolComportamiento(ARBOL_CAMBIAFORMAS)
 hojas = {h.accion for h in arbol.hojas()}
 assert hojas == {"DESCANSAR", "HUIR", "SEGUIR", "ATRAPAR", "PERSEGUIR", "REVISAR_ESCONDITE",
-                 "REVELARSE", "ACECHAR", "ESPERAR_EN_CEBO", "MERODEAR"}, hojas
+                 "REVELARSE", "ESTUDIAR", "RONDAR", "ALEJARSE", "ESPERAR_EN_CEBO",
+                 "MERODEAR"}, hojas
 base = {c: False for c in arbol.condiciones()}
 casos = {
     "DESCANSAR": {"recuperandose": True},
@@ -45,7 +46,9 @@ casos = {
     "PERSEGUIR": {"revelado": True},
     "REVISAR_ESCONDITE": {"presa_escondida": True, "tiene_presa": True},
     "REVELARSE": {"presa_cerca": True, "tiene_presa": True},
-    "ACECHAR": {"tiene_presa": True},
+    "ALEJARSE": {"tiene_presa": True, "se_aburrio": True},
+    "ESTUDIAR": {"tiene_presa": True, "toca_estudiar": True},
+    "RONDAR": {"tiene_presa": True},
     "ESPERAR_EN_CEBO": {"hay_cebo": True},
     "MERODEAR": {},
 }
@@ -122,18 +125,45 @@ assert cf.calma_ms > 0 and cf.presa is None and cf.accion in ("MERODEAR", "ESPER
 assert cf not in g._aliens_a_la_vista()
 
 # ================= Caza =================
-cf.calma_ms = 0
-puntos = g.npcs.puntos
-lejos = max(puntos, key=lambda p: math.dist(p, puntos[0]))
-poner(j2, lejos)
-poner(j1, puntos[0])
-cf.hitbox.center = (j1.hitbox.centerx + 260, j1.hitbox.centery)
-if g.mundo.colisiona(cf.hitbox) or not g.mundo.linea_libre(cf.centro, j1.hitbox.center):
-    cf.hitbox.center = (j1.hitbox.centerx, j1.hitbox.centery + 230)
-cf.presa = j1
+from redes import celular
+from data.npcs import ABURRIRSE_MS
+
+
+def preparar_caza(g):
+    cf = g.cambiaformas
+    j1, j2 = g.jugadores
+    cf.calma_ms = 0
+    puntos = g.npcs.puntos
+    lejos = max(puntos, key=lambda p: math.dist(p, puntos[0]))
+    poner(j2, lejos)
+    poner(j1, puntos[0])
+    cf.hitbox.center = (j1.hitbox.centerx + 260, j1.hitbox.centery)
+    if g.mundo.colisiona(cf.hitbox) or not g.mundo.linea_libre(cf.centro, j1.hitbox.center):
+        cf.hitbox.center = (j1.hitbox.centerx, j1.hitbox.centery + 230)
+    cf.presa = j1
+    return cf, j1, j2
+
+
+# No es impulsivo: aunque la presa esté sola y con el celular abierto, primero
+# la estudia (pasa cerca, se va, ronda, vuelve).
+cf, j1, j2 = preparar_caza(g)
+celular.abrir(g, j1)
+acciones = []
+for f in range(60 * 10):
+    g._actualizar_partida(DT)
+    if cf.accion not in acciones:
+        acciones.append(cf.accion)
+    assert cf.accion != "REVELARSE", "no ataca sin conocerla"
+assert "ESTUDIAR" in acciones and "RONDAR" in acciones, acciones
+assert cf.conocimiento.get(j1, 0) > 0, "la estuvo mirando de cerca"
+print(f"no es impulsivo: {' > '.join(acciones)}; la estudió {cf.conocimiento[j1] / 1000:.1f} s "
+      f"de {cf._necesario(j1) / 1000:.1f} s")
+
+# Ya la conoce y está desprevenida (celular abierto): ahí ataca.
+cf.conocimiento[j1] = cf._necesario(j1)
 acciones = []
 revelo_en = None
-for f in range(60 * 30):
+for f in range(60 * 40):
     g._actualizar_partida(DT)
     if cf.accion not in acciones:
         acciones.append(cf.accion)
@@ -146,11 +176,31 @@ for f in range(60 * 30):
         assert math.dist(cf.centro, pos_revelo) < 4, "al transformarse no se mueve (tiempo para huir)"
     if j1.veces_atrapado:
         break
-assert "ACECHAR" in acciones and "REVELARSE" in acciones and j1.veces_atrapado == 1, acciones
+assert "REVELARSE" in acciones and j1.veces_atrapado == 1, acciones
 print("caza:", " > ".join(acciones), f"(atrapó a {j1.rol})")
 assert cf.calma_ms > 0, "después de atrapar descansa de cazar"
+assert cf.conocimiento.get(j1, 0) == 0, "después de atraparla tiene que volver a estudiarla"
 
-# Con compañía no se revela.
+# La conoce, pero la presa lo está mirando de frente: espera. De espaldas: ataca.
+g = nueva_partida()
+cf, j1, j2 = preparar_caza(g)
+cf.conocimiento[j1] = cf._necesario(j1)
+j1.personaje.direccion = "east" if cf.centro[0] > j1.hitbox.centerx + 100 else "south"
+for _ in range(60 * 4):
+    g._actualizar_partida(DT)
+    assert cf.accion != "REVELARSE", "lo están mirando: no se arriesga"
+assert cf.disfrazado and j1.veces_atrapado == 0
+j1.personaje.direccion = "west" if j1.personaje.direccion == "east" else "north"
+revelo = False
+for _ in range(60 * 20):
+    g._actualizar_partida(DT)
+    if cf.accion == "REVELARSE":
+        revelo = True
+        break
+assert revelo, "de espaldas, cuando menos se lo espera, ataca"
+print("de frente no ataca; de espaldas, sí")
+
+# Si el grupo no se separa, se aburre: se va lejos y vuelve a cazar después.
 g = nueva_partida()
 cf = g.cambiaformas
 j1, j2 = g.jugadores
@@ -161,9 +211,18 @@ if g.mundo.colisiona(j2.hitbox):
     poner(j2, (p[0], p[1] + 50))
 cf.hitbox.center = (p[0] + 140, p[1] + 10)
 cf.presa = j1
-frames(g, 60 * 5)
+cf.conocimiento[j1] = cf._necesario(j1)        # aunque ya la conozca
+celular.abrir(g, j1)
+se_fue = False
+for _ in range(int((ABURRIRSE_MS + 6000) / DT)):
+    g._actualizar_partida(DT)
+    assert cf.accion != "REVELARSE"
+    if cf.accion == "ALEJARSE":
+        se_fue = True
+assert se_fue and cf.calma_ms > 0, (cf.accion, cf.acompanada_ms)
 assert cf.disfrazado and j1.veces_atrapado == 0 and j2.veces_atrapado == 0
-print("con un compañero al lado no se revela: espera disfrazado")
+print(f"en grupo no se revela; a los {ABURRIRSE_MS // 1000} s se aburre y se va "
+      f"(vuelve en {cf.calma_ms / 1000:.0f} s)")
 
 # Hackeo: lo aturde, le quita el disfraz y al despertar huye y se vuelve a disfrazar.
 cf.aturdir(1500)
@@ -299,7 +358,7 @@ g.npcs.rng = random.Random(1)
 import data.npcs as datos_npcs
 viejo = datos_npcs.FRASES_ROJO
 g.cambiaformas.presa = None
-import npcs as modulo_npcs
+from entidades import npcs as modulo_npcs
 modulo_npcs.FRASES_ROJO = ["¡Aquí está {usuario}! ¡Aliens, aquí!"]
 modulo_npcs.PROB_DELATAR = 1.0
 frames(g, 2)
@@ -441,7 +500,7 @@ assert g.npcs.escoltado(j1) == npc.usuario, "el HUD dice a quién llevas"
 # Lo lleva a la cápsula.
 # Ya casi llegan (puntos caminables cerca de la cápsula): el jugador junto a
 # ella y el prisionero unos pasos atrás, que camina solo hasta ahí.
-from npcs import distancia_a_rect
+from entidades.npcs import distancia_a_rect
 def libre(q):
     r = j1.hitbox.copy(); r.center = q
     return not g.mundo.colisiona(r)

@@ -7,10 +7,10 @@ de nuevo, y una vez que las líneas se iban por abajo no volvían nunca.
 
 Ahora sube (como cualquier rollo de créditos), arranca desde abajo del todo y
 al terminar vuelve a empezar solo. `reiniciar_scroll()` da el valor inicial, y
-App.py lo llama cada vez que se entra a la pantalla.
+juego/app.py lo llama cada vez que se entra a la pantalla.
 """
 
-from fuentes import fuente_de_tamano
+from juego.fuentes import fuente_de_tamano
 
 
 COLOR_FONDO = (15, 15, 25)

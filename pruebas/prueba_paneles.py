@@ -19,7 +19,7 @@ import pygame; pygame.init(); pygame.display.set_mode((100,100))
 OUT = os.path.join(RAIZ, "pruebas", "capturas", "paneles")
 os.makedirs(OUT, exist_ok=True)
 
-from jugador import Jugador
+from entidades.jugador import Jugador
 from Movimiento.Personaje import Personaje, CONTROLES_FLECHAS
 from screens.panel_habilidades import render_panel_habilidades, precargar_iconos
 from screens.paneles import render_panel

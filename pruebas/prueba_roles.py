@@ -21,10 +21,10 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
+from juego import app as App
+from juego import objetos_mapa
 objetos_mapa.mapa_activo = lambda: "Nave"   # el único mapa del juego
-import acciones_rol
+from entidades import acciones_rol
 from data.habilidades import ARBOLES_POR_ROL
 from data.roles import ROLES
 from Estructuras.arbol_habilidades import construir_arbol
@@ -227,7 +227,7 @@ assert p2["reparado"], "después del Impulso sí"
 print("Reparación: tiene recarga; el Impulso de la Biomante la deja lista")
 
 # Regeneración ayudando a alguien escondido que está en el minijuego.
-from minijuego_latidos import MinijuegoLatidos
+from entidades.minijuego_latidos import MinijuegoLatidos
 rol(j1, "Biomante", "REGENERACION")
 # El escondite más cerca de la terminal: más abajo se hackea desde ella.
 escondite = min(g.escondites, key=lambda e: math.dist(e["rect"].center, terminal["rect"].center))

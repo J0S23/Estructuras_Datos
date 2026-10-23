@@ -13,10 +13,10 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
-import mandos as M
-from audio_manager import audio_manager
+from juego import app as App
+from juego import objetos_mapa
+from juego import mandos as M
+from juego.audio_manager import audio_manager
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 

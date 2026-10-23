@@ -9,7 +9,7 @@ import math
 
 import pygame
 
-from fuentes import fuente
+from juego.fuentes import fuente, fuente_de_tamano
 
 
 COLOR_SOMBRA = (12, 11, 23)
@@ -41,6 +41,58 @@ def _barra(screen, x, y, ancho, valor, color):
     pygame.draw.rect(screen, (200, 205, 225), (x, y, ancho, 8), 1)
 
 
+COLOR_FLECHA = (255, 214, 64)
+
+
+def dibujar_flecha_objetivo(screen, vista, camara, dueño, mision, dificultad, red, tiempo_ms):
+    """Dificultades fáciles (dificultad.py): una flecha amarilla hacia lo que
+    toca hacer (Mision.punto_objetivo). Si ya va a verificar un rumor en NEXUS,
+    manda esa flecha (la azul) y esta no sale."""
+    if mision is None or dificultad is None or not dificultad.flecha:
+        return
+    if red is not None and red.investigando.get(dueño) is not None:
+        return
+    objetivo = mision.punto_objetivo(dueño)
+    if objetivo is None:
+        return
+    (x, y), texto = objetivo
+    f = fuente_de_tamano(14)
+    if camara.collidepoint(x, y):
+        centro = (int(x - camara.x + vista.x), int(y - camara.y + vista.y))
+        radio = 34 + int(5 * math.sin(tiempo_ms / 180))
+        pygame.draw.circle(screen, COLOR_FLECHA, centro, radio, 2)
+        img = f.render(texto, True, COLOR_FLECHA)
+        fondo = pygame.Surface((img.get_width() + 10, img.get_height() + 4), pygame.SRCALPHA)
+        fondo.fill((14, 15, 28, 180))
+        r = fondo.get_rect(midbottom=(centro[0], centro[1] - radio - 4))
+        r.clamp_ip(vista.inflate(-8, -8))
+        screen.blit(fondo, r)
+        screen.blit(img, img.get_rect(center=r.center))
+        return
+    c = dueño.hitbox.center
+    dx, dy = x - c[0], y - c[1]
+    distancia = math.hypot(dx, dy) or 1
+    ux, uy = dx / distancia, dy / distancia
+    margen = 70
+    mitad_w, mitad_h = vista.width / 2 - margen, vista.height / 2 - margen
+    escala = min(mitad_w / abs(ux) if ux else 1e9, mitad_h / abs(uy) if uy else 1e9)
+    px, py = vista.centerx + ux * escala, vista.centery + uy * escala
+    angulo = math.atan2(uy, ux)
+    tam = 14
+    punta = (px + math.cos(angulo) * tam, py + math.sin(angulo) * tam)
+    izq = (px + math.cos(angulo + 2.5) * tam, py + math.sin(angulo + 2.5) * tam)
+    der = (px + math.cos(angulo - 2.5) * tam, py + math.sin(angulo - 2.5) * tam)
+    pygame.draw.polygon(screen, COLOR_FLECHA, [punta, izq, der])
+    pygame.draw.polygon(screen, COLOR_SOMBRA, [punta, izq, der], 2)
+    img = f.render(texto, True, COLOR_FLECHA)
+    fondo = pygame.Surface((img.get_width() + 10, img.get_height() + 4), pygame.SRCALPHA)
+    fondo.fill((14, 15, 28, 180))
+    r = fondo.get_rect(center=(px - ux * 34, py - uy * 26))
+    r.clamp_ip(vista.inflate(-8, -8))
+    screen.blit(fondo, r)
+    screen.blit(img, img.get_rect(center=r.center))
+
+
 def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
     if mision is None or not mision.activa:
         return
@@ -64,7 +116,7 @@ def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
         pygame.draw.rect(screen, COLOR_CAPSULA, r, 3, border_radius=10)
         _texto(screen, "Cápsula de escape", r.centerx, r.top - 40, COLOR_CAPSULA)
         if mision.fase in ("capsula", "huida"):
-            from mision import PIEZAS_NECESARIAS
+            from misiones.mision import PIEZAS_NECESARIAS
             estado = (f"Piezas {mision.piezas_entregadas}/{PIEZAS_NECESARIAS}"
                       if mision.piezas_entregadas < PIEZAS_NECESARIAS else "Reparación")
             _texto(screen, estado, r.centerx, r.top - 20, (230, 235, 250))

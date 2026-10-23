@@ -12,13 +12,16 @@ se calla en los apagones. Su volumen sigue al de los efectos.
 
 import os
 
+# La raíz del proyecto (este archivo está en una subcarpeta).
+_RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 import pygame
 
 
 class AudioManager:
     def __init__(self):
         self.sfx_volume = 0.7
-        self._sfx_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Audio", "SFX")
+        self._sfx_dir = os.path.join(_RAIZ_PROYECTO, "Audio", "SFX")
         self._sonidos = {}   # nombre -> pygame.mixer.Sound (o None si no hay archivo)
         self._canal_bucle = None
         self._bucle = None         # nombre del sonido en bucle que está sonando
@@ -43,6 +46,20 @@ class AudioManager:
             ruta = self._resolve_audio_path(self._sfx_dir, nombre)
             self._sonidos[nombre] = pygame.mixer.Sound(ruta) if ruta is not None else None
         return self._sonidos[nombre]
+
+    def precargar(self):
+        """Carga de una vez todos los efectos de Audio/SFX/ (al empezar la
+        partida). Si no, el primer susto o la primera alarma se cargaban del
+        disco en ese momento y el juego daba un tirón."""
+        try:
+            if pygame.mixer.get_init() is None or not os.path.isdir(self._sfx_dir):
+                return
+            for archivo in os.listdir(self._sfx_dir):
+                nombre, extension = os.path.splitext(archivo)
+                if extension.lower() in (".ogg", ".wav", ".mp3"):
+                    self._sonido(nombre)
+        except Exception:
+            pass
 
     # -- Sonido de fondo en bucle -------------------------------------------------
 

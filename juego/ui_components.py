@@ -7,8 +7,8 @@ con el teclado.
 
 import pygame
 
-from config import CARD, CARD_HOVER, CARD_BORDER, TEXT_MAIN
-from fuentes import fuente, fuente_de_tamano
+from juego.config import CARD, CARD_HOVER, CARD_BORDER, TEXT_MAIN
+from juego.fuentes import fuente, fuente_de_tamano
 
 
 COLOR_SOMBRA = (12, 11, 23)

@@ -14,9 +14,9 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
-import vision
+from juego import app as App
+from juego import objetos_mapa
+from juego import vision
 objetos_mapa.mapa_activo = lambda: "Nave"
 
 # ================= Campo sin juego: una pared sola =================
@@ -33,7 +33,9 @@ print("Campo: la pared tapa lo de atrás")
 
 # El mismo origen con las mismas paredes reusa el cálculo.
 assert vision.campo_de((0, 0), [pared], 500) is vision.campo_de((0, 0), [pared], 500)
-assert vision.campo_de((0, 0), [pared], 500) is not vision.campo_de((1, 0), [pared], 500)
+# Moverse menos que la rejilla (PASO_ORIGEN) no lo recalcula; más, sí.
+assert vision.campo_de((0, 0), [pared], 500) is vision.campo_de((1, 0), [pared], 500)
+assert vision.campo_de((0, 0), [pared], 500) is not vision.campo_de((vision.PASO_ORIGEN, 0), [pared], 500)
 
 
 # ================= En la partida =================

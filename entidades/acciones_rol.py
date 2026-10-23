@@ -177,7 +177,7 @@ def _usar_terminal(juego, jugador, terminal):
         alien.aturdir(DURACION_HACKEO_MS)
     terminal["recarga_ms"] = RECARGA_HACKEO_MS
     if apagados:
-        from logros import logro
+        from misiones.logros import logro
         logro(juego, "apagado", jugador)
         _sonar(juego, "hackeo", 0.8)
         jugador.sumar_puntos(PUNTOS_HACKEO)
@@ -298,7 +298,7 @@ def _regeneracion(juego, jugador):
                 curados.append(otro)
                 otro.avisar("La Biomante te devolvió una vida.", COLOR_BIEN)
         if curados:
-            from logros import logro
+            from misiones.logros import logro
             logro(juego, "medico", jugador)
             _sonar(juego, "curar", 0.7)
             jugador.curacion_ms = RECARGA_CURACION_MS
@@ -400,7 +400,7 @@ def poner_emision(juego, jugador, punto=None):
     juego.senales.append({"pos": punto, "ms": DURACION_SENAL_MS, "duracion": DURACION_SENAL_MS})
     _sonar(juego, "senal", 0.7)
     if atraidos:
-        from logros import logro
+        from misiones.logros import logro
         logro(juego, "titiritero", jugador)
         jugador.sumar_puntos(PUNTOS_AYUDA)
     jugador.avisar(f"Señal falsa: {len(atraidos)} alien(s) van a revisarla.", COLOR_AVISO)

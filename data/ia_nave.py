@@ -10,13 +10,21 @@ Eventos que usa el juego (ia_nave.py):
     poco_tiempo, ambiente, tutorial, despertar, apagon, alarma, compuerta,
     fin_evento, puerta_doble, luz, sello, eliminado, curacion,
     prueba, infiltrado_expuesto, acusacion_falsa, rumor, desmentido, planos, cambiaformas,
-    sabotaje, prisionero_rescatado
+    sabotaje, prisionero_rescatado, dificultad_sube, dificultad_baja
 """
 
 FRASES = {
     "cambiaformas": [
         "Sorpresa. No todos los prisioneros son lo que parecen, {rol}.",
         "Te dije que no confiaras en cualquier perfil.",
+    ],
+    "dificultad_sube": [
+        "Se están confiando. Despertaré a los aliens un poco más.",
+        "Demasiado fácil para ustedes, ¿no? Arreglemos eso.",
+    ],
+    "dificultad_baja": [
+        "Qué pena me dan. Les daré un respiro... uno pequeño.",
+        "Mis aliens se aburren de ganar. Que descansen un poco.",
     ],
     "sabotaje": [
         "¿Lo trajiste hasta la cápsula, {rol}? Qué amable. Gracias por el paseo.",

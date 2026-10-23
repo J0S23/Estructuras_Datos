@@ -27,7 +27,7 @@ import random
 
 import pygame
 
-from logros import logro
+from misiones.logros import logro
 from data.infiltrado import (CUENTAS, RASGOS, PRUEBAS, SOSPECHOSOS_POR_PARTIDA,
                              PUNTOS_SUBIR_PRUEBA, PUNTOS_EXPONER, PUNTOS_ACUSACION_FALSA,
                              CONFUSION_MS)

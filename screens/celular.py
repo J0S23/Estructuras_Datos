@@ -17,7 +17,7 @@ import zlib
 
 import pygame
 
-from fuentes import fuente_de_tamano
+from juego.fuentes import fuente_de_tamano
 from screens.paneles import partir_lineas
 from data.nexus import NOMBRE_LUGAR, UMBRAL_PLANOS
 
@@ -56,7 +56,7 @@ def _tiempo(ms):
 
 # -- La barra de confianza ------------------------------------------------------------------
 
-def _barra_ponderada(screen, rect, verde, rojo):
+def _barra_ponderada(screen, rect, verde, rojo, umbral=UMBRAL_PLANOS):
     """Una sola barra: verde desde la izquierda, roja desde la derecha y gris en
     medio (los que no deciden). Cada parte mide lo que pesa en la tripulación.
     La raya blanca marca cuánto verde hace falta para los planos."""
@@ -71,7 +71,7 @@ def _barra_ponderada(screen, rect, verde, rojo):
         pygame.draw.rect(screen, COLOR_ROJO, (rect.right - ancho_rojo, rect.y, ancho_rojo, rect.height),
                          border_top_right_radius=rect.height // 2,
                          border_bottom_right_radius=rect.height // 2)
-    x = rect.x + int(rect.width * UMBRAL_PLANOS)
+    x = rect.x + int(rect.width * umbral)
     pygame.draw.line(screen, (255, 255, 255), (x, rect.y - 3), (x, rect.bottom + 2), 2)
     pygame.draw.rect(screen, (20, 20, 32), rect, 1, border_radius=rect.height // 2)
 
@@ -121,14 +121,14 @@ def render_confianza(screen, red, cantidad):
                         caja.width - izq.get_width() - der.get_width() - 36, alto_barra)
     screen.blit(izq, (caja.x + 10, barra.centery - izq.get_height() // 2))
     screen.blit(der, (caja.right - der.get_width() - 10, barra.centery - der.get_height() // 2))
-    _barra_ponderada(screen, barra, verde, rojo)
+    _barra_ponderada(screen, barra, verde, rojo, getattr(red, "umbral_planos", UMBRAL_PLANOS))
 
     if red.planos:
         texto, color = "Confianza de la tripulación  ·  ¡planos listos!", COLOR_VERDE
     elif rojo > verde:
         texto, color = "Los aliens van ganando: están más rápidos y ven más", (245, 150, 140)
     else:
-        texto, color = f"Confianza de la tripulación  ·  planos al {int(UMBRAL_PLANOS * 100)}%", \
+        texto, color = f"Confianza de la tripulación  ·  planos al {int(getattr(red, 'umbral_planos', UMBRAL_PLANOS) * 100)}%", \
             (190, 196, 230)
     img = f.render(texto, True, color)
     screen.blit(img, img.get_rect(midbottom=(caja.centerx, caja.bottom - 5)))
@@ -229,7 +229,7 @@ def render_celular(screen, vista, jugador, red):
         screen.blit(img, (cab.right - img.get_width() - 12, cab.y + 9))
     verde, rojo = red.barras()
     barra = pygame.Rect(cab.x + 12, cab.bottom - 20, cab.width - 24, 10)
-    _barra_ponderada(screen, barra, verde, rojo)
+    _barra_ponderada(screen, barra, verde, rojo, getattr(red, "umbral_planos", UMBRAL_PLANOS))
 
     cuerpo = pygame.Rect(pantalla.x + 8, cab.bottom + 8, pantalla.width - 16,
                          pantalla.bottom - cab.bottom - 8 - f.get_linesize() - 10)

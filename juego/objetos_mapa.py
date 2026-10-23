@@ -18,8 +18,11 @@ import copy
 import json
 import os
 
+# La raíz del proyecto (este archivo está en una subcarpeta).
+_RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-RAIZ = os.path.dirname(os.path.abspath(__file__))
+
+RAIZ = _RAIZ_PROYECTO
 CARPETA = os.path.join(RAIZ, "Hitboxes")
 ARCHIVO_MAPA_ACTIVO = os.path.join(CARPETA, "mapa_activo.json")
 MAPA_POR_DEFECTO = "Nave"

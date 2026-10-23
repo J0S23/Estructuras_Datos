@@ -7,10 +7,13 @@ corriendo igual.
 
 import os
 
+# La raíz del proyecto (este archivo está en una subcarpeta).
+_RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 import pygame
 
 
-CARPETA_FUENTES = os.path.join(os.path.dirname(__file__), "Fuentes")
+CARPETA_FUENTES = os.path.join(_RAIZ_PROYECTO, "Fuentes")
 
 ARCHIVOS_FUENTE = (
     "DeterminationMonoWebRegular-Z5oq.ttf",

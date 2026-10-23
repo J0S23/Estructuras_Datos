@@ -140,6 +140,31 @@ si te quedas solo con el, se revela; si llega con el grupo a la capsula, la
 sabotea (arranca una pieza o deshace parte de la reparacion). Los verdes te
 advierten si vas con el.
 
+### Dificultad
+
+Despues de escoger cuantos juegan se elige la dificultad (numeros en
+`data/dificultad.py`):
+
+| | Tiempo | Vidas | Aliens | Planos | Flecha | Fuga de la celda |
+|---|---|---|---|---|---|---|
+| **Tutorial** | 14 min | no se pierden | 70% de velocidad/vision/oido | 60% | si | 8 s |
+| **Facil** | 10.5 min | 5 | 82% | 70% | si | 20 s |
+| **Normal** | 8.75 min | 4 | 92% | 75% | si | 40 s |
+| **Dificil** | 7 min | 3 | 100% (como era el juego) | 80% | no | no |
+| **Inteligente** | 8.75 min | 4 | se ajusta solo | 75% | mientras va facil | segun el nivel |
+
+Tambien cambian cuanto espera el Cambiaformas para cazar, cuanto descansa, cuanto
+tarda en traicionar y cada cuanto suplanta, y cada cuanto salen rumores y que tan
+facil se los creen. La **flecha** amarilla señala lo que toca hacer (notas,
+puerta, consolas, piezas, rumores, capsula o un compañero encerrado). Con **fuga**,
+el encerrado sale solo despues de ese tiempo y que esten todos presos no es derrota.
+
+**Inteligente** tiene un "director" (`dificultad.py`): cada 4 s mira como va el
+equipo (avance de la mision contra el reloj, confianza en NEXUS, capturas
+recientes, vidas) y sube o baja un nivel continuo entre Facil y "Pesadilla" (mas
+que Dificil). La IA de la nave avisa cuando cambia. En los resultados sale hasta
+donde llego.
+
 ### La mision (mapa de la nave)
 
 Cuatro prisioneros escapan de una nave alienigena en tres fases: abrir la
@@ -184,6 +209,8 @@ python pruebas/prueba_sorpresas.py # oscuridad, aliens, sigilo, eventos, puertas
 python pruebas/prueba_vision.py    # campo de vision: las paredes tapan
 python pruebas/prueba_nexus.py     # NEXUS: grafo, rumores, celular, barras y planos
 python pruebas/prueba_cambiaformas.py # prisioneros que caminan y el Cambiaformas
+python pruebas/prueba_dificultad.py   # las 5 dificultades, la flecha, la fuga y el director
+python pruebas/prueba_victoria.py     # una partida ganada en Normal (NEXUS, planos y Cambiaformas)
 python pruebas/prueba_infiltrado.py # mision secundaria del infiltrado de NEXUS
 python pruebas/prueba_logros.py    # arbol de logros y cuando se consigue cada uno
 python pruebas/prueba_sonidos.py   # que todo sonido pedido exista y suene donde va
@@ -211,14 +238,24 @@ python pruebas/prueba_editor_mapa.py  # el editor y que el juego use lo guardado
 
 ## Estructura del repositorio
 
-- `Estructuras/` -- los arboles y sus nodos.
-- `jugador.py` -- un jugador: su personaje, rol, puntos y arbol de habilidades.
-- `pruebas/` -- pruebas que corren sin abrir ventana.
+- `main.py` -- arranca el juego (`python main.py`).
+- `juego/` -- el motor: el loop (`app.py`), el mapa (`mundo.py`), la navegacion
+  de los aliens (grafo de la nave), el campo de vision y la oscuridad, la pausa,
+  el tutorial, la dificultad, el audio, las fuentes y los mandos.
+- `entidades/` -- los que se mueven: jugadores, aliens, el Cambiaformas, los
+  prisioneros (NPCs), las habilidades de cada rol y el minijuego del casillero.
+- `misiones/` -- la mision por fases, los eventos, las puertas para dos, el caso
+  del Cambiaformas, los logros y la IA de la nave.
+- `redes/` -- NEXUS: el grafo de cuentas y rumores (`nexus.py`) y el celular.
+- `Estructuras/` -- los arboles y el grafo (con sus nodos).
+- `screens/` -- lo que se dibuja: menu, seleccion, partida, paneles, resultados...
+- `data/` -- datos editables sin tocar codigo: roles, habilidades, aliens, logros,
+  NEXUS, prisioneros, dificultad, notas, frases de la IA...
 - `Movimiento/` -- carga de sprites, animaciones y movimiento de personajes.
-- `screens/` -- las pantallas del juego (menu, seleccion, partida, paneles, ayuda...).
-- `Editores/` -- herramientas para hitboxes y calibracion de personajes.
+- `Editores/` -- herramientas para hitboxes, el mapa y calibracion de personajes.
+- `pruebas/` -- pruebas que corren sin abrir ventana y el simulador de bots.
 - `Imagenes/` -- assets: `Fondos/` (la nave y el menu), `Personajes/<Rol>/`
   (`<Rol>_<animacion>_<direccion>.png`), `Aliens/` y `Objetos/`.
 - `Hitboxes/` -- los JSON que generan los editores (paredes, objetos del mapa,
   hitbox de cada rol). La nave es el unico mapa.
-- `data/` -- datos del juego: roles, habilidades, aliens, logros, infiltrado, notas...
+- `Audio/`, `Fuentes/` -- efectos de sonido y la tipografia.

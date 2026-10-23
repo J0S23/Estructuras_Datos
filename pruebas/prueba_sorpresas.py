@@ -17,11 +17,11 @@ import pygame; pygame.init()
 OUT = os.path.join(RAIZ, "pruebas", "capturas")
 os.makedirs(OUT, exist_ok=True)
 
-import App
-import objetos_mapa
-import puertas
-import tutorial as T
-from eventos import GestorEventos
+from juego import app as App
+from juego import objetos_mapa
+from misiones import puertas
+from juego import tutorial as T
+from misiones.eventos import GestorEventos
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 
@@ -327,7 +327,7 @@ assert k1.hitbox.centerx < g3.mision.puerta.left, "debe cruzar la puerta abierta
 print("segunda ronda: la puerta de la prisión se abre y deja pasar")
 
 # ================= Sellos del Forjador =================
-import acciones_rol
+from entidades import acciones_rol
 g4 = nueva_partida(("Tecnomante", "Forjador"))
 g4.tutorial.activo = False; g4._terminar_tutorial()
 for a in g4.aliens:

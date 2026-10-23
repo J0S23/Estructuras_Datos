@@ -13,7 +13,7 @@ import os
 import pygame
 
 from data.habilidades import ARBOLES_POR_ROL
-from fuentes import fuente_de_tamano
+from juego.fuentes import fuente_de_tamano
 
 
 CARPETA_ICONOS = os.path.join("Imagenes", "UI", "Habilidades")

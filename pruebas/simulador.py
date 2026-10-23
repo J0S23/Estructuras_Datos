@@ -4,6 +4,7 @@
     python pruebas/simulador.py 30           (30 partidas)
     python pruebas/simulador.py 5 Biomante Resonante
     python pruebas/simulador.py 3 --desde 10   (partidas 10, 11 y 12)
+    python pruebas/simulador.py 6 --dificultad facil   (tutorial, facil, normal, dificil, inteligente)
 
 Sirve para dos cosas:
 - **Encontrar bugs**: si algo revienta, si un bot se queda trabado (no puede
@@ -27,10 +28,10 @@ sys.path.insert(0, RAIZ)
 os.chdir(RAIZ)
 import pygame; pygame.init()
 
-import App
-import objetos_mapa
-import puertas
-from mision import RADIO_RESCATE, PIEZAS_NECESARIAS
+from juego import app as App
+from juego import objetos_mapa
+from misiones import puertas
+from misiones.mision import RADIO_RESCATE, PIEZAS_NECESARIAS
 objetos_mapa.mapa_activo = lambda: "Nave"
 App.Narrador.decir = lambda self, *a, **k: True   # sin banners (más rápido)
 DT = 1000 // 60
@@ -52,8 +53,14 @@ MOVER = [
 ]
 
 
+DIFICULTAD = None     # --dificultad facil|normal|... (sin eso: como Difícil)
+
+
 def nueva_partida(roles):
     g = App.Game()
+    if DIFICULTAD:
+        from juego.dificultad import Dificultad
+        g.dificultad = Dificultad(DIFICULTAD)
     def avanzar():
         for _ in range(80):
             if g.transitions.is_idle(): break
@@ -435,6 +442,7 @@ def jugar(roles, semilla, max_s=520):
              "aliens_pegados": Counter(), "error": None, "donde": Counter()}
     g = nueva_partida(roles)
     g.eventos.rng = random.Random(semilla)
+    max_s = max(max_s, g.tiempo_total_ms / 1000 + 5)   # las dificultades fáciles duran más
     mapa = Mapa(g)
     bots = [Bot(g, j, mapa) for j in g.jugadores[:2]]
     original = g._atrapar
@@ -486,6 +494,10 @@ def jugar(roles, semilla, max_s=520):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+    if "--dificultad" in args:
+        i = args.index("--dificultad")
+        DIFICULTAD = args[i + 1]
+        del args[i:i + 2]
     desde = 0
     if "--desde" in args:
         i = args.index("--desde")

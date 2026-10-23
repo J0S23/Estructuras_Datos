@@ -5,7 +5,7 @@ Si no hay surface disponible, falla silenciosamente.
 """
 
 import pygame
-from config import TRANSITION_DURATION_MS
+from juego.config import TRANSITION_DURATION_MS
 
 
 class TransitionManager:

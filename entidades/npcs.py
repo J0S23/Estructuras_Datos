@@ -25,8 +25,8 @@ import random
 
 import pygame
 
-import navegacion
-from fuentes import fuente_de_tamano
+from juego import navegacion
+from juego.fuentes import fuente_de_tamano
 from Movimiento.Personaje import direccion_desde_vector
 from data.npcs import (ESTILOS, VELOCIDAD_NPC, ESPERA_NPC_MS, RADIO_CHARLA,
                        ENFRIAMIENTO_CHARLA_MS, DURACION_BURBUJA_MS, PROB_DELATAR,
@@ -38,6 +38,13 @@ from data.npcs import (ESTILOS, VELOCIDAD_NPC, ESPERA_NPC_MS, RADIO_CHARLA,
 LIENZO_W, LIENZO_H, ESCALA = 48, 72, 2    # el muñeco se dibuja a 48x72 y se agranda x2
 COLOR_ESTADO = {"verde": (90, 210, 120), "gris": (170, 172, 185), "rojo": (230, 80, 80)}
 ANCHO_HITBOX, ALTO_HITBOX = 34, 20
+
+_poses = {}       # (estilo, número, dirección, paso) -> (imagen agrandada, alto de la cabeza)
+_carteles = {}    # letrero -> imagen con su fondo
+
+
+VECINOS_PASEO = 6     # entre cuántos puntos cercanos escoge a dónde ir
+
 
 class Apariencia:
     """Cómo se ve un prisionero: un muñeco simple dibujado con formas
@@ -65,11 +72,15 @@ class Apariencia:
         else:
             self.fase = 0.0
 
+    def _paso(self):
+        # Entero: así hay pocas poses distintas y se pueden guardar ya dibujadas.
+        return round(math.sin(self.fase) * 5) if self.moviendose else 0
+
     def _cuerpo(self, screen, x, pies):
         e = self.estilo
         overol, piel, pelo = e["overol"], e["piel"], e["pelo"]
         oscuro = tuple(max(0, c - 50) for c in overol)
-        paso = math.sin(self.fase) * 5 if self.moviendose else 0
+        paso = self._paso()
         mira = self.direccion
         de_lado = "east" in mira or "west" in mira
         hacia = 1 if "east" in mira else (-1 if "west" in mira else 0)
@@ -120,24 +131,35 @@ class Apariencia:
         return centro[1] - 14
 
     def dibujar(self, screen, centro_pies, offset, letrero=None, color_estado=None, burbuja=None):
-        # Se dibuja chico y se agranda (pixelado) para que mida como los jugadores.
-        lienzo = pygame.Surface((LIENZO_W, LIENZO_H), pygame.SRCALPHA)
-        arriba = self._cuerpo(lienzo, LIENZO_W // 2, LIENZO_H - 6)
-        grande = pygame.transform.scale(lienzo, (LIENZO_W * ESCALA, LIENZO_H * ESCALA))
+        # Se dibuja chico y se agranda (pixelado) para que mida como los
+        # jugadores. Cada pose queda guardada: redibujarla con formas en cada
+        # cuadro (y en cada pantalla) era de lo más caro del dibujo.
+        clave = (tuple(sorted(self.estilo.items())), self.numero, self.direccion, self._paso())
+        pose = _poses.get(clave)
+        if pose is None:
+            lienzo = pygame.Surface((LIENZO_W, LIENZO_H), pygame.SRCALPHA)
+            arriba = self._cuerpo(lienzo, LIENZO_W // 2, LIENZO_H - 6)
+            pose = _poses[clave] = (pygame.transform.scale(lienzo, (LIENZO_W * ESCALA, LIENZO_H * ESCALA)),
+                                    arriba)
+        grande, arriba = pose
         x = int(centro_pies[0] - offset[0])
         pies = int(centro_pies[1] - offset[1] + 6)
         screen.blit(grande, (x - LIENZO_W * ESCALA // 2, pies - (LIENZO_H - 6) * ESCALA))
         cabeza = (x, pies - (LIENZO_H - 6 - arriba) * ESCALA - 2)
         if letrero:
-            f = fuente_de_tamano(12)
-            img = f.render(letrero, True, (235, 236, 245))
-            caja = img.get_rect(midbottom=cabeza).inflate(18, 4)
-            fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
-            fondo.fill((10, 10, 20, 150))
-            screen.blit(fondo, caja.topleft)
+            cartel = _carteles.get(letrero)
+            if cartel is None:
+                if len(_carteles) > 200:
+                    _carteles.clear()
+                img = fuente_de_tamano(12).render(letrero, True, (235, 236, 245))
+                cartel = pygame.Surface((img.get_width() + 18, img.get_height() + 4), pygame.SRCALPHA)
+                cartel.fill((10, 10, 20, 150))
+                cartel.blit(img, (14, 2))
+                _carteles[letrero] = cartel
+            caja = cartel.get_rect(midbottom=(cabeza[0], cabeza[1] + 2))
+            screen.blit(cartel, caja.topleft)
             if color_estado:
                 pygame.draw.circle(screen, color_estado, (caja.x + 7, caja.centery), 3)
-            screen.blit(img, (caja.x + 14, caja.y + 2))
             cabeza = (cabeza[0], caja.y - 2)
         if burbuja:
             _burbuja(screen, cabeza, burbuja)
@@ -221,7 +243,8 @@ class NPC:
         if d > DISTANCIA_SEGUIR:
             if not self.ruta or math.dist(self.ruta[-1], guia.hitbox.center) > 80:
                 nav = navegacion.de_mundo(juego.mundo, self.hitbox.width, self.hitbox.height)
-                self.ruta = list(nav.camino(self.centro, guia.hitbox.center, parcial=True) or [])
+                self.ruta = list(nav.camino(self.centro, guia.hitbox.center, parcial=True,
+                                            puede_esperar=True) or [])
                 self.espera_ms = 0
             if self.ruta:
                 caminar(self, dt, juego, [guia.hitbox.center], 3.4)
@@ -248,11 +271,15 @@ def caminar(quien, dt, juego, puntos, velocidad, choca=None):
         return
     mundo = juego.mundo
     if not quien.ruta:
-        destino = quien.rng.choice(puntos)
+        # A uno de los puntos más cercanos (no al otro lado de la nave): así
+        # pasea como alguien de verdad y el camino sale barato de calcular.
+        cerca = sorted(puntos, key=lambda p: math.dist(p, quien.hitbox.center))[1:VECINOS_PASEO + 1]
+        destino = quien.rng.choice(cerca or puntos)
         nav = navegacion.de_mundo(mundo, quien.hitbox.width, quien.hitbox.height)
-        camino = nav.camino(quien.hitbox.center, destino)
+        camino = nav.camino(quien.hitbox.center, destino, puede_esperar=True)
         if not camino:
-            quien.espera_ms = 400
+            # Sin camino, espera un rato; si solo era su turno, poquito.
+            quien.espera_ms = 50 if nav.ocupada else 400
             return
         quien.ruta = list(camino)
     objetivo = quien.ruta[0]
@@ -417,7 +444,7 @@ class GestorNPCs:
             guia.sumar_puntos(PUNTOS_RESCATE)
             guia.avisar(f"¡{npc.usuario} está a salvo en la cápsula! +{PUNTOS_RESCATE}",
                         COLOR_ESTADO["verde"])
-            from logros import logro
+            from misiones.logros import logro
             logro(self.juego, "rescate", guia)
             if hasattr(self.juego, "decir"):
                 self.juego.decir("prisionero_rescatado", getattr(guia, "rol", None))
@@ -472,13 +499,13 @@ class GestorNPCs:
             if (cf is not None and cf.siguiendo is not None and cf.apariencia is not None
                     and math.dist(cf.centro, npc.centro) < 350):
                 return rng.choice(FRASES_ADVIERTE_ESCOLTA).format(usuario=cf.apariencia.usuario)
-            if (cf is not None and cf.disfrazado and cf.apariencia is not None
-                    and math.dist(cf.centro, npc.centro) < 600 and rng.random() < 0.6):
-                return rng.choice(FRASES_VERDE_CAMBIAFORMAS).format(usuario=cf.apariencia.usuario)
             if jugador not in self.avisados_rescate:
                 # La primera vez, que se entere de que puede llevárselo.
                 self.avisados_rescate.add(jugador)
                 return FRASE_PIDE_RESCATE
+            if (cf is not None and cf.disfrazado and cf.apariencia is not None
+                    and math.dist(cf.centro, npc.centro) < 600 and rng.random() < 0.6):
+                return rng.choice(FRASES_VERDE_CAMBIAFORMAS).format(usuario=cf.apariencia.usuario)
             aliens = [a for a in juego.aliens if not getattr(a, "disfrazado", False)]
             if aliens and rng.random() < 0.6:
                 alien = min(aliens, key=lambda a: math.dist(a.centro, npc.centro))

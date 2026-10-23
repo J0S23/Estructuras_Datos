@@ -18,7 +18,7 @@ import os
 import pygame
 
 from data.roles import ROLES, MINIMO_JUGADORES, MAXIMO_JUGADORES
-from fuentes import fuente_de_tamano
+from juego.fuentes import fuente_de_tamano
 
 
 COLOR_FONDO = (26, 28, 48)
@@ -64,12 +64,14 @@ def render_cantidad(screen, seleccionado):
     alto_opcion = linea * 2 + 16
     separacion = 26
     y = int(alto * 0.42)
+    rects = []
 
     for i, cantidad in enumerate(OPCIONES):
         elegido = (i == seleccionado)
         ancho_caja = min(int(ancho * 0.6), 560)
         caja = pygame.Rect(0, 0, ancho_caja, alto_opcion)
         caja.center = (ancho // 2, y + alto_opcion // 2)
+        rects.append(caja)
 
         if elegido:
             pygame.draw.rect(screen, COLOR_SELECCION_FONDO, caja)
@@ -87,6 +89,7 @@ def render_cantidad(screen, seleccionado):
     pie = f.render("[W/S] o flechas para elegir    [ENTER] continuar    [ESC] volver al menú",
                    True, (194, 216, 248))
     screen.blit(pie, pie.get_rect(center=(ancho // 2, alto - 40)))
+    return rects
 
 
 OPCIONES = list(range(MINIMO_JUGADORES, MAXIMO_JUGADORES + 1))
@@ -96,6 +99,69 @@ DESCRIPCION = {
     3: "dos arriba y uno abajo, a lo ancho",
     4: "pantalla partida en cuatro",
 }
+
+
+# --------------------------------------------------------------------------
+# Paso 1.5: la dificultad (data/dificultad.py)
+# --------------------------------------------------------------------------
+
+COLOR_DIFICULTAD = {
+    "tutorial": (120, 190, 255),
+    "facil": (96, 210, 120),
+    "normal": (255, 214, 64),
+    "dificil": (245, 110, 100),
+    "inteligente": (190, 150, 255),
+}
+
+
+def render_dificultad(screen, seleccionado):
+    """Las cinco dificultades en columna y, abajo, qué cambia la elegida."""
+    from data.dificultad import DIFICULTADES
+    from screens.paneles import partir_lineas
+    screen.fill(COLOR_FONDO)
+    ancho, alto = screen.get_size()
+    f_titulo = fuente_de_tamano(max(22, min(40, ancho // 38)))
+    f = fuente_de_tamano(max(15, min(24, ancho // 62)))
+
+    titulo = f_titulo.render("DIFICULTAD", True, COLOR_TEXTO)
+    screen.blit(titulo, titulo.get_rect(center=(ancho // 2, int(alto * 0.14))))
+
+    linea = f.get_linesize()
+    alto_opcion = linea + 16
+    separacion = 12
+    ancho_caja = min(int(ancho * 0.5), 460)
+    y = int(alto * 0.14) + 48
+    rects = []
+    for i, d in enumerate(DIFICULTADES):
+        elegido = i == seleccionado
+        color = COLOR_DIFICULTAD.get(d["clave"], COLOR_TITULO)
+        caja = pygame.Rect(0, 0, ancho_caja, alto_opcion)
+        caja.midtop = (ancho // 2, y)
+        rects.append(caja)
+        if elegido:
+            pygame.draw.rect(screen, COLOR_SELECCION_FONDO, caja)
+            pygame.draw.rect(screen, color, caja, 2)
+        pygame.draw.circle(screen, color, (caja.x + 22, caja.centery), 7)
+        texto = f.render(d["nombre"], True, color if elegido else COLOR_TEXTO)
+        screen.blit(texto, texto.get_rect(center=caja.center))
+        y += alto_opcion + separacion
+
+    # Qué trae la elegida.
+    d = DIFICULTADES[seleccionado]
+    ancho_desc = min(int(ancho * 0.7), 720)
+    renglones = partir_lineas(d["descripcion"], f, ancho_desc - 32)
+    caja = pygame.Rect(0, 0, ancho_desc, len(renglones) * linea + 24)
+    caja.midtop = (ancho // 2, y + 14)
+    pygame.draw.rect(screen, (34, 37, 62), caja, border_radius=6)
+    pygame.draw.rect(screen, COLOR_DIFICULTAD.get(d["clave"], COLOR_BORDE), caja, 1, border_radius=6)
+    for k, renglon in enumerate(renglones):
+        img = f.render(renglon, True, COLOR_TENUE)
+        screen.blit(img, img.get_rect(midtop=(ancho // 2, caja.y + 12 + k * linea)))
+
+    pie = f.render("[W/S] o flechas para elegir    [ENTER] continuar    [ESC] volver",
+                   True, (194, 216, 248))
+    screen.blit(pie, pie.get_rect(center=(ancho // 2, alto - 40)))
+    return rects
 
 
 # --------------------------------------------------------------------------

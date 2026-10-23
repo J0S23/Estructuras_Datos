@@ -17,7 +17,7 @@ Los sonidos se piden por nombre a audio_manager; si no hay audio, no pasa nada.
 import math
 import random
 
-from audio_manager import audio_manager
+from juego.audio_manager import audio_manager
 
 
 DURACION_SUSTO_MS = 750

@@ -27,10 +27,10 @@ import pygame
 
 pygame.init()
 
-import App
-import objetos_mapa
+from juego import app as App
+from juego import objetos_mapa
 objetos_mapa.mapa_activo = lambda: "Nave"   # el único mapa del juego
-from jugador import TECLAS_POR_PUESTO
+from entidades.jugador import TECLAS_POR_PUESTO
 
 CONFIRMAR = [pygame.K_e, pygame.K_RETURN, pygame.K_o, pygame.K_y]
 
