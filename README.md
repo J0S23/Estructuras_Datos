@@ -83,7 +83,12 @@ python Editores/visor_personajes.py  # revisar que sprites y config tiene cada p
 
 Cada jugador tiene NEXUS en su celular. Los aliens (el Cambiaformas, con cuentas
 falsas que parecen prisioneros) riegan **rumores falsos** sobre lugares de la nave
-("la capsula exploto", "las celdas tienen gas"...). Con el celular se puede:
+("la capsula exploto", "las celdas tienen gas"...). El celular tiene tres pestanas
+(se cambian con A/D, las flechas o la cruceta): **Misiones** (lo que hay que ir a
+verificar, con su estado: por verificar, vas para alla, foto lista, desmentido),
+**Equipo** (lo que publican tus companeros) y **Red** (lo demas). Cada jugador tiene
+como maximo 3 cosas por verificar a la vez (si le llega otra estando lleno, no le
+aparece). Con el celular se puede:
 
 - **Ir a verificarlo**: una flecha lleva al lugar; al llegar se saca una foto sola.
 - **Desmentir** con la foto: la verdad corre por la red y la tripulacion confia en
@@ -137,7 +142,9 @@ preguntas "¿vienes conmigo?". Los verdes te siguen, los grises dudan y los rojo
 no. Llevarlo a la capsula da puntos y publica un testimonio que riega confianza.
 Ojo: el Cambiaformas disfrazado tambien acepta (sin decir nada) y te traiciona:
 si te quedas solo con el, se revela; si llega con el grupo a la capsula, la
-sabotea (arranca una pieza o deshace parte de la reparacion). Los verdes te
+sabotea: arranca una pieza, la tira lejos y deshace parte de la reparacion. Si la
+capsula ya estaba lista, deja de estarlo: hay que traer la pieza y repararla de
+nuevo para poder escapar. Los verdes te
 advierten si vas con el.
 
 ### Dificultad
@@ -211,6 +218,7 @@ python pruebas/prueba_nexus.py     # NEXUS: grafo, rumores, celular, barras y pl
 python pruebas/prueba_cambiaformas.py # prisioneros que caminan y el Cambiaformas
 python pruebas/prueba_dificultad.py   # las 5 dificultades, la flecha, la fuga y el director
 python pruebas/prueba_victoria.py     # una partida ganada en Normal (NEXUS, planos y Cambiaformas)
+python pruebas/prueba_vista_grafo.py  # la vista de los grafos (Pausa > Opciones > Grafo)
 python pruebas/prueba_infiltrado.py # mision secundaria del infiltrado de NEXUS
 python pruebas/prueba_logros.py    # arbol de logros y cuando se consigue cada uno
 python pruebas/prueba_sonidos.py   # que todo sonido pedido exista y suene donde va

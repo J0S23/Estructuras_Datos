@@ -33,6 +33,7 @@ class Navegacion:
     cuadro = 0                # lo sube el juego en cada cuadro (siguiente_cuadro)
     ultimo_cuadro = -1        # en qué cuadro se calculó el último camino nuevo
     ocupada = False
+    ultima_busqueda = None    # {"explorados": celdas que revisó el A*, "camino": ...}
     def __init__(self, mundo, ancho, alto, paso=PASO):
         self.mundo = mundo
         self.ancho, self.alto, self.paso = ancho, alto, paso
@@ -174,12 +175,16 @@ class Navegacion:
             return None
         resultado = self._camino(desde, hasta, parcial, extra)
         Navegacion.ultimo_cuadro = Navegacion.cuadro
+        # La última búsqueda nueva, para la vista del grafo de la nave.
+        Navegacion.ultima_busqueda = {"explorados": self._explorados, "camino": resultado,
+                                      "desde": desde, "hasta": hasta, "nav": self}
         if len(self._guardados) > 2000:
             self._guardados.clear()
         self._guardados[clave] = (resultado, self.ultimo_parcial)
         return list(resultado) if resultado is not None else None
 
     def _camino(self, desde, hasta, parcial, extra):
+        self._explorados = set()
         tapadas = self._tapadas(extra)
         libre = self.libre
         w, h = self.ancho, self.alto
@@ -227,6 +232,7 @@ class Navegacion:
                     previo[v] = c
                     orden += 1
                     heappush(abiertos, (nuevo + PESO_ESTIMADO * estimado(v), orden, v))
+        self._explorados = set(previo)
         llego = meta in previo and hasta is not None
         if meta not in previo or hasta is None:
             if not parcial or len(previo) <= 1:

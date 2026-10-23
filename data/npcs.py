@@ -100,6 +100,7 @@ DESENMASCARADO_MS = 20000       # al reportar la suplantación, este rato sin di
 DISTANCIA_SEGUIR_CF = 38        # camina demasiado pegado (una pista)
 TRAICION_SOLO_MS = 3500         # si quien lo lleva se queda solo este rato, ataca
 RADIO_SABOTAJE = 120            # a esta distancia del borde de la cápsula, la sabotea
+DANIO_SABOTAJE = 0.4            # cuánto de la reparación deshace al sabotear (0-1)
 SUSURRO_RADIO = 240             # disfrazado, se le oye un susurro a esta distancia
 SUSURRO_CADA_MS = 5000
 MANADA_MS = 2500                # cuánto tiene que esperar por verlos juntos (logro)

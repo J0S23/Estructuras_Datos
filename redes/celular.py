@@ -6,8 +6,16 @@ pasa en la red (rumores, desmentidos, el grafo) está en nexus.py; aquí solo
 se arman las pantallas y se resuelve la opción elegida. El dibujo está en
 screens/celular.py.
 
+El inicio tiene tres pestañas (se cambian con izquierda/derecha):
+    misiones   lo que hay que ir a verificar: rumores sin desmentir y pedidos
+               de ayuda (la trampa del Cambiaformas). Nunca más de 3 a la vez
+               (nexus.MAX_POR_VERIFICAR). Arriba, el que está haciendo.
+    equipo     lo que publicaron los jugadores (desmentidos, compartidos) y los
+               prisioneros rescatados.
+    red        lo demás: la charla de los prisioneros.
+
 Pantallas ("vista"):
-    feed       lo que le llegó por NEXUS, lo más nuevo arriba
+    feed       el inicio, con la pestaña elegida
     post       una publicación, con lo que se puede hacer con ella
     origen     de dónde vino un rumor (camino más corto desde quien lo empezó)
     ubicacion  publicar la foto tal cual (se ve dónde estás) o recortada
@@ -15,6 +23,11 @@ Pantallas ("vista"):
 """
 
 from redes.nexus import COLOR_BIEN, COLOR_MAL
+from data.nexus import NOMBRE_LUGAR
+
+PESTANAS = [("misiones", "Misiones"), ("equipo", "Equipo"), ("red", "Red")]
+CLAVES_PESTANAS = [c for c, _ in PESTANAS]
+MAX_HECHAS = 2        # misiones terminadas que se siguen viendo (abajo, en gris)
 
 
 def abrir(juego, jugador):
@@ -27,58 +40,174 @@ def abrir(juego, jugador):
 
 
 def volver(juego, jugador):
-    """La tecla de celular con el celular abierto: atrás, o cerrar desde el feed."""
+    """La tecla de celular con el celular abierto: atrás, o cerrar desde el inicio."""
     panel = jugador.panel or {}
     if panel.get("vista") in (None, "feed"):
+        marcar_vistas(juego, jugador)
         jugador.cerrar_panel()
     else:
         jugador.abrir_panel(_feed(juego, jugador))
 
 
-def opciones_feed(juego, jugador):
-    """Primero las fotos que tiene para publicar; después el feed."""
+# -- Qué va en cada pestaña --------------------------------------------------------------------
+
+def nombre_lugar(pub):
+    """El nombre del lugar del que habla una publicación (o None)."""
+    if pub.rumor is not None:
+        return NOMBRE_LUGAR.get(pub.rumor.get("lugar"), "un lugar de la nave")
+    return getattr(pub, "nombre_lugar", None)
+
+
+def es_mision_activa(red, pub):
+    """Algo que todavía hay que ir a verificar."""
+    if pub.tipo == "rumor":
+        return not pub.desmentida
+    if pub.tipo == "trampa":
+        return not pub.reportada and pub is red.trampa_activa()
+    return False
+
+
+def estado_mision(red, jugador, pub):
+    """"foto" (ya la tiene), "en_curso", "pendiente", "hecha" o "reportada"."""
+    if pub.tipo == "rumor" and pub.desmentida:
+        return "hecha"
+    if pub.tipo == "trampa" and pub.reportada:
+        return "reportada"
+    if pub in red.evidencias.get(jugador, []):
+        return "foto"
+    if red.investigando.get(jugador) is pub:
+        return "en_curso"
+    return "pendiente"
+
+
+def misiones(red, jugador):
+    nodo = red.nodo_de(jugador)
+    yendo = red.investigando.get(jugador)
+    activas = [p for p in reversed(red.publicaciones)
+               if p.tipo in ("rumor", "trampa") and (nodo in p.alcanzados or p is yendo)
+               and es_mision_activa(red, p)]
+    orden = {"en_curso": 0, "foto": 1, "pendiente": 2}
+    activas.sort(key=lambda p: orden.get(estado_mision(red, jugador, p), 3))
+    hechas = [p for p in reversed(red.publicaciones)
+              if p.tipo in ("rumor", "trampa") and nodo in p.alcanzados
+              and not es_mision_activa(red, p)][:MAX_HECHAS]
+    return activas + hechas
+
+
+def _es_de_jugador(red, nodo):
+    return str(nodo).startswith("jugador_")
+
+
+def equipo(red, jugador):
+    return [p for p in red.feed(jugador)
+            if (p.tipo in ("desmentido", "compartido") and _es_de_jugador(red, p.autor))
+            or p.tipo == "testimonio"]
+
+
+def charla(red, jugador):
+    del_equipo = set(id(p) for p in equipo(red, jugador))
+    return [p for p in red.feed(jugador)
+            if p.tipo not in ("rumor", "trampa") and id(p) not in del_equipo]
+
+
+def contenido(red, jugador, pestana):
+    if pestana == "misiones":
+        return misiones(red, jugador)
+    if pestana == "equipo":
+        return equipo(red, jugador)
+    return charla(red, jugador)
+
+
+def avisos(red, jugador):
+    """Lo que dice la etiqueta de NEXUS en el HUD: (misiones por hacer, nuevos)."""
+    por_hacer = [p for p in misiones(red, jugador) if es_mision_activa(red, p)]
+    vistas = red.vistas[jugador]
+    nuevos = sum(1 for p in por_hacer + equipo(red, jugador) if p.id not in vistas)
+    return len(por_hacer), nuevos
+
+
+def sin_ver(red, jugador, pestana):
+    vistas = red.vistas[jugador]
+    return sum(1 for p in contenido(red, jugador, pestana) if p.id not in vistas
+               and (pestana != "misiones" or es_mision_activa(red, p)))
+
+
+def pestana_de(red, jugador):
+    return red.pestanas.get(jugador, "misiones")
+
+
+def marcar_vistas(juego, jugador):
+    """Lo de las pestañas Equipo y Red se da por visto al mirarlo."""
     red = juego.nexus
-    opciones = [("foto", rumor) for rumor in red.evidencias.get(jugador, [])]
-    opciones += [("post", pub) for pub in red.feed(jugador)]
-    return opciones
+    panel = jugador.panel or {}
+    if red is None or panel.get("vista") != "feed":
+        return
+    pestana = panel.get("pestana")
+    if pestana in ("equipo", "red"):
+        red.vistas[jugador].update(p.id for p in contenido(red, jugador, pestana))
+
+
+def cambiar_pestana(juego, jugador, paso):
+    red = juego.nexus
+    panel = jugador.panel or {}
+    if red is None or panel.get("tipo") != "celular" or panel.get("vista") != "feed":
+        return False
+    marcar_vistas(juego, jugador)
+    i = CLAVES_PESTANAS.index(pestana_de(red, jugador))
+    red.pestanas[jugador] = CLAVES_PESTANAS[(i + paso) % len(CLAVES_PESTANAS)]
+    jugador.abrir_panel(_feed(juego, jugador))
+    return True
+
+
+def opciones_feed(juego, jugador):
+    red = juego.nexus
+    return [("post", pub) for pub in contenido(red, jugador, pestana_de(red, jugador))]
 
 
 def _feed(juego, jugador):
-    return {"tipo": "celular", "vista": "feed", "opciones": opciones_feed(juego, jugador)}
+    red = juego.nexus
+    return {"tipo": "celular", "vista": "feed", "pestana": pestana_de(red, jugador),
+            "opciones": opciones_feed(juego, jugador)}
 
+
+# -- Una publicación ------------------------------------------------------------------------
 
 def _post(juego, jugador, pub, camino=None):
     red = juego.nexus
     red.vistas[jugador].add(pub.id)
     acciones = []
+    estado = estado_mision(red, jugador, pub) if pub.tipo in ("rumor", "trampa") else None
+    # Primero lo principal: lo que hay que hacer con esta misión.
     if pub.tipo == "rumor" and not pub.desmentida:
-        if pub in red.evidencias.get(jugador, []):
-            acciones.append(("Desmentir con mi foto", "desmentir"))
-        elif red.investigando.get(jugador) is not pub:
+        if estado == "foto":
+            acciones.append(("Publicar mi foto y desmentirlo", "desmentir"))
+        elif estado == "en_curso":
+            acciones.append(("Dejar de verificarlo", "no_investigar"))
+        else:
             acciones.append(("Ir a verificarlo", "investigar"))
-        else:
-            acciones.append(("Dejar de investigarlo", "no_investigar"))
-    if pub.tipo == "trampa" and not pub.reportada:
-        if red.investigando.get(jugador) is not pub:
-            acciones.append(("Ir allá", "investigar"))
-        else:
+    if pub.tipo == "trampa" and es_mision_activa(red, pub):
+        if estado == "en_curso":
             acciones.append(("Dejar de ir", "no_investigar"))
-    if pub.autor != red.nodo_de(jugador):
-        acciones.append(("Compartir", "compartir"))
+        else:
+            acciones.append(("Ir a ayudar", "investigar"))
     if pub.tipo in ("rumor", "trampa"):
+        acciones.append(("¿De dónde salió esto?", "rastrear"))
         via = red.via(jugador, pub)
         if via in red.grafo and via != red.nodo_de(jugador):
             acciones.append((f"Reportar a {red.usuario(via)}", "reportar_via"))
-        acciones.append(("¿De dónde salió esto?", "rastrear"))
+    if pub.autor != red.nodo_de(jugador):
+        acciones.append(("Compartir", "compartir"))
     acciones.append(("Volver", "volver"))
     return {"tipo": "celular", "vista": "post", "pub": pub, "opciones": acciones,
-            "camino": camino}
+            "camino": camino, "estado": estado}
 
 
-def _mensaje(texto, puntos, color=None):
+def _mensaje(texto, puntos, color=None, cerrar=False):
+    opciones = [("Cerrar el celular", "cerrar")] if cerrar else []
+    opciones.append(("Volver al inicio", "volver"))
     return {"tipo": "celular", "vista": "mensaje", "texto": texto, "puntos": puntos,
             "color": color or (COLOR_BIEN if puntos >= 0 else COLOR_MAL),
-            "opciones": [("Volver al inicio", "volver")]}
+            "opciones": opciones}
 
 
 def confirmar(juego, jugador):
@@ -97,19 +226,17 @@ def confirmar(juego, jugador):
     vista = panel["vista"]
 
     if vista == "feed":
-        tipo, dato = eleccion
-        if tipo == "foto":
-            jugador.abrir_panel({"tipo": "celular", "vista": "ubicacion", "rumor": dato,
-                                 "opciones": [("Publicar la foto tal cual", "tal_cual"),
-                                              ("Recortar el fondo y publicar", "recortada"),
-                                              ("Volver", "volver")]})
-        else:
-            jugador.abrir_panel(_post(juego, jugador, dato))
+        _tipo, pub = eleccion
+        marcar_vistas(juego, jugador)
+        jugador.abrir_panel(_post(juego, jugador, pub))
         return
 
     accion = eleccion[1]
     if accion == "volver":
         jugador.abrir_panel(_feed(juego, jugador))
+        return
+    if accion == "cerrar":
+        jugador.cerrar_panel()
         return
 
     if vista == "ubicacion":
@@ -129,8 +256,11 @@ def confirmar(juego, jugador):
 
     pub = panel["pub"]
     if accion == "investigar":
-        texto = red.investigar(jugador, pub)
-        jugador.abrir_panel(_mensaje(texto, 0, (120, 190, 255)))
+        red.investigar(jugador, pub)
+        lugar = nombre_lugar(pub) or "el lugar"
+        jugador.abrir_panel(_mensaje(
+            f"¡Vamos a {lugar}! Sigue la flecha azul. Al llegar, la foto se saca sola "
+            "y después la publicas desde Misiones.", 0, (120, 190, 255), cerrar=True))
     elif accion == "no_investigar":
         red.investigando.pop(jugador, None)
         jugador.abrir_panel(_post(juego, jugador, pub))

@@ -479,6 +479,25 @@ g2.cambiaformas.disfrazado = True
 g2.cambiaformas.pedir_que_siga(g2.jugadores[0])
 g2.cambiaformas.sabotear()
 assert abs(g2.mision.reparacion - 0.3) < 1e-6
+# Con la cápsula ya reparada (huida): arranca una pieza, daña la reparación y
+# ya no se puede escapar hasta volver a traerla y repararla.
+from misiones.mision import PIEZAS_NECESARIAS
+g3 = nueva_partida()
+m3 = g3.mision
+m3.fase, m3.piezas_entregadas, m3.reparacion = "capsula", PIEZAS_NECESARIAS, 1.0
+m3.empezar_huida()
+assert m3.fase == "huida" and all(a.alerta for a in g3.aliens)
+g3.cambiaformas.disfrazado = True
+g3.cambiaformas.pedir_que_siga(g3.jugadores[0])
+g3.cambiaformas.sabotear()
+assert m3.fase == "capsula", m3.fase
+assert m3.piezas_entregadas == PIEZAS_NECESARIAS - 1 and abs(m3.reparacion - 0.6) < 1e-6
+assert not any(a.alerta for a in g3.aliens)
+for j in g3.jugadores:                       # todos en la cápsula: igual no ganan
+    j.hitbox.center = m3.capsula.center
+m3.actualizar(16)
+assert m3.resultado is None
+print("sabotaje con la cápsula lista: vuelve a fase cápsula (falta 1 pieza, reparación al 60%)")
 
 # ================= Rescatar prisioneros =================
 g = nueva_partida()

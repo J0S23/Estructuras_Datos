@@ -13,20 +13,30 @@ números en TUTORIAL.
 # Lo que se ve en la pantalla de elegir dificultad.
 DIFICULTADES = [
     {"clave": "tutorial", "nombre": "Tutorial",
-     "descripcion": "Para aprender. Mucho tiempo, aliens lentos, no se pierden vidas "
-                    "y una flecha te dice a dónde ir."},
+     "descripcion": "Tu primera vez en la nave. Los aliens son lentos y despistados, "
+                    "y si te atrapan no pierdes vidas: sales solito de la celda en un "
+                    "momento. Una flecha te dice a dónde ir y hay tiempo de sobra para "
+                    "explorar, leer NEXUS y aprender cómo funciona todo."},
     {"clave": "facil", "nombre": "Fácil",
-     "descripcion": "Más tiempo, 5 vidas, aliens más lentos y distraídos. "
-                    "Los planos salen al 70% de confianza."},
+     "descripcion": "Para relajarse. Los aliens se mueven más lento y les cuesta verte "
+                    "y oírte. Tienen muchas vidas, bastante tiempo y la flecha los "
+                    "guía. El Cambiaformas tarda en aparecer y es paciente. Si te "
+                    "encierran, al rato logras escapar por tu cuenta."},
     {"clave": "normal", "nombre": "Normal",
-     "descripcion": "Para jugar con amigos: 4 vidas, un poco más de tiempo "
-                    "y la flecha al objetivo."},
+     "descripcion": "La experiencia recomendada para jugar con amigos. Los aliens son "
+                    "una amenaza de verdad, pero hay margen para equivocarse: algo más "
+                    "de tiempo, una vida extra y la flecha al objetivo. Si te "
+                    "encierran, tus compañeros deberían ir por ti... o esperar un buen rato."},
     {"clave": "dificil", "nombre": "Difícil",
-     "descripcion": "Como estaba el juego: 3 vidas, sin flecha y el Cambiaformas "
-                    "caza desde temprano."},
+     "descripcion": "Para los que ya conocen la nave. Sin flecha, con poco tiempo y "
+                    "pocas vidas. Los aliens ven y oyen todo, el Cambiaformas caza "
+                    "desde temprano y los rumores se riegan rápido. Si atrapan a todo "
+                    "el equipo a la vez, se acabó."},
     {"clave": "inteligente", "nombre": "Inteligente",
-     "descripcion": "Se ajusta solo: si les va bien, se pone más difícil (incluso más "
-                    "que Difícil); si les va mal, afloja."},
+     "descripcion": "La nave los observa. Empieza como Normal y se va ajustando según "
+                    "cómo jueguen: si avanzan rápido y nadie cae, los aliens se ponen "
+                    "más listos y agresivos (incluso más que en Difícil); si les va "
+                    "mal, les da un respiro. Nunca se juega igual dos veces."},
 ]
 POR_DEFECTO = "normal"       # el que sale marcado al abrir la pantalla
 

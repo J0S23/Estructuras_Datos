@@ -35,7 +35,7 @@ import pygame
 from entidades.alien import Alien, DISTANCIA_ATRAPAR, DISTANCIA_REVISAR, DURACION_DESCANSO_MS
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 from data.comportamiento_cambiaformas import ARBOL_CAMBIAFORMAS
-from data.npcs import (DISTANCIA_REVELARSE, DISTANCIA_COMPANIA, VISION,
+from data.npcs import (DANIO_SABOTAJE, DISTANCIA_REVELARSE, DISTANCIA_COMPANIA, VISION,
                        RAFAGA_MS, PISTA_PRESA_MS, RECUERDA_ESCONDITE_MS, HUIDA_MAX_MS,
                        EXPUESTO_MS, DESCANSO_TRAS_FALLAR_MS, GLITCH_CADA_MS, GLITCH_DURA_MS,
                        TRANSFORMARSE_MS, ESPERA_INICIAL_MS, ENFRIAMIENTO_CAZA_MS,
@@ -381,8 +381,9 @@ class Cambiaformas(Alien):
         if not opciones:
             return None
         tipo, lugar = self.rng.choice(opciones)
-        texto = self.rng.choice(TRAMPAS).format(lugar=NOMBRE_LUGAR.get(tipo, "la nave"))
-        return red.publicar_trampa(self.apariencia.usuario, texto, lugar)
+        nombre = NOMBRE_LUGAR.get(tipo, "la nave")
+        texto = self.rng.choice(TRAMPAS).format(lugar=nombre)
+        return red.publicar_trampa(self.apariencia.usuario, texto, lugar, nombre)
 
     def _ejecutar(self, accion, dt, factor, mundo, al_atrapar, al_revisar=None):
         presa = self.presa
@@ -550,6 +551,9 @@ class Cambiaformas(Alien):
         self.siguiendo = None
         self.sabotajes += 1
         quien = self.apariencia.usuario if self.apariencia else "Ese prisionero"
+        # Arranca una pieza Y daña la reparación: si ya estaba lista, deja de
+        # estarlo y hay que volver a repararla (antes se podía escapar igual).
+        danios = []
         if mision.piezas_entregadas > 0:
             mision.piezas_entregadas -= 1
             from data.estaciones import TAMANO_PIEZA
@@ -558,12 +562,15 @@ class Cambiaformas(Alien):
             rect = pygame.Rect(0, 0, *TAMANO_PIEZA)
             rect.center = lejos
             self.juego.piezas.append({"rect": rect, "recogida": False})
-            danio = "arrancó una pieza y la tiró lejos"
-        elif mision.reparacion > 0:
-            mision.reparacion = max(0.0, mision.reparacion - 0.4)
-            danio = "deshizo parte de la reparación"
-        else:
-            danio = "rompió lo que pudo"
+            danios.append("arrancó una pieza y la tiró lejos")
+        if mision.reparacion > 0:
+            mision.reparacion = max(0.0, mision.reparacion - DANIO_SABOTAJE)
+            danios.append("dañó la reparación")
+        if mision.fase == "huida":
+            mision.volver_a_reparar()
+            danios.append("¡ya no sirve para escapar!")
+        danio = ", ".join(danios[:-1]) + " y " + danios[-1] if len(danios) > 1 else (
+            danios[0] if danios else "rompió lo que pudo")
         for j in self.juego.jugadores:
             j.avisar(f"¡{quien} era el Cambiaformas! Saboteó la cápsula: {danio}.", (236, 70, 60))
         if guia is not None:

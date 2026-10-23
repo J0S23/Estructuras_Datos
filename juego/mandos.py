@@ -186,7 +186,7 @@ class Mandos:
                 return [(puesto, "arriba")]
             if hy == -1:
                 return [(puesto, "abajo")]
-            # Izquierda/derecha solo se usan en el árbol de logros de la pausa.
+            # Izquierda/derecha: árbol de logros de la pausa y pestañas del celular.
             if hx == -1:
                 return [(puesto, "izquierda")]
             if hx == 1:

@@ -108,7 +108,7 @@ PRIMER_RUMOR_S = 30             # después del tutorial
 RUMOR_CADA_S = (38, 55)         # entre un rumor y el siguiente (al azar)
 NORMAL_CADA_S = (14, 24)        # publicaciones de relleno
 NUEVO_BOT_CADA_S = 75           # el Cambiaformas abre otra cuenta si le borraron
-MAX_RUMORES_ACTIVOS = 3
+MAX_POR_VERIFICAR = 3           # rumores + pedidos de ayuda por ir a ver, a la vez, POR JUGADOR
 
 # Al que le llega un rumor se lo cree con esta probabilidad, y solo si se lo
 # cree lo reenvía (se pone rojo). Con la verdad pasa igual: al que le llega un
