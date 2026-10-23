@@ -70,7 +70,7 @@ def ir_a(jugador, zona):
 nexus = next(z for z in g.zonas if z["tipo"] == "nexus")
 ir_a(tec, nexus)
 g._tecla_en_partida(pygame.K_e)
-assert tec.ocupado and tec.panel["accion"] == "infiltrado_menu"
+assert tec.ocupado and tec.panel["accion"] == "ayuda_menu"
 print("\nNEXUS:", tec.panel["titulo"], "| opciones:", [o["texto"] for o in tec.panel["opciones"]])
 cap("a_nexus.png")
 
@@ -84,6 +84,7 @@ assert (forj.personaje.x, forj.personaje.y) != pos_antes, "el Forjador debía mo
 assert tec.ocupado
 print("el Forjador camina mientras el Tecnomante tiene la terminal abierta")
 cap("b_split.png")
+tec.cursor = len(tec.panel["opciones"]) - 1
 g._tecla_en_partida(pygame.K_e)     # "Salir"
 assert not tec.ocupado
 

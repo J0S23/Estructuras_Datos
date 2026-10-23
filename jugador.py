@@ -31,7 +31,7 @@ from mandos import tecla_virtual, es_virtual, NOMBRE_BOTON
 # delante (I/K/O, T/G/Y...) siguen sirviendo para escoger rol sin mando; sin
 # mando, en partida no se mueven.
 # "habilidades" abre el panel del árbol; "habilidad" USA la habilidad activa
-# que se haya escogido (ver acciones_rol.py).
+# que se haya escogido (ver acciones_rol.py). "celular" abre NEXUS (celular.py).
 TECLAS_PUESTO_1 = {
     "arriba": (pygame.K_w,),
     "abajo": (pygame.K_s,),
@@ -39,6 +39,7 @@ TECLAS_PUESTO_1 = {
     "habilidades": (pygame.K_q,),
     "habilidad": (pygame.K_f,),
     "sigilo": (pygame.K_LSHIFT,),
+    "celular": (pygame.K_TAB,),
 }
 
 TECLAS_PUESTO_2 = {
@@ -53,6 +54,8 @@ TECLAS_PUESTO_2 = {
     # AltGr en los teclados en español (SDL lo reporta como RALT o MODE), o
     # el 0 del teclado numérico, que queda junto a las flechas.
     "sigilo": (pygame.K_RALT, pygame.K_MODE, pygame.K_KP0),
+    # El punto, junto al "-" de la habilidad (o el del teclado numérico).
+    "celular": (pygame.K_PERIOD, pygame.K_KP_PERIOD),
 }
 
 def _con_mando(puesto, teclado):
@@ -67,6 +70,7 @@ TECLAS_PUESTO_3 = _con_mando(2, {
     "habilidades": (pygame.K_u,),
     "habilidad": (pygame.K_p,),
     "sigilo": (),
+    "celular": (pygame.K_j,),
 })
 
 TECLAS_PUESTO_4 = _con_mando(3, {
@@ -76,6 +80,7 @@ TECLAS_PUESTO_4 = _con_mando(3, {
     "habilidades": (pygame.K_r,),
     "habilidad": (pygame.K_v,),
     "sigilo": (),
+    "celular": (pygame.K_b,),
 })
 
 TECLAS_POR_PUESTO = [TECLAS_PUESTO_1, TECLAS_PUESTO_2, TECLAS_PUESTO_3, TECLAS_PUESTO_4]
@@ -258,6 +263,8 @@ class Jugador:
             pygame.K_t: "T", pygame.K_g: "G", pygame.K_y: "Y", pygame.K_r: "R",
             pygame.K_LSHIFT: "SHIFT IZQ", pygame.K_RALT: "ALT GR",
             pygame.K_MINUS: "-", pygame.K_SLASH: "/",
+            pygame.K_TAB: "TAB", pygame.K_PERIOD: ".", pygame.K_KP_PERIOD: ".",
+            pygame.K_j: "J", pygame.K_b: "B",
         }
         return nombres.get(teclas[0], "?")
 

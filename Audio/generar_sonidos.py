@@ -13,6 +13,7 @@ con el mismo nombre (.ogg, .wav o .mp3) y el juego lo usa (audio_manager.py).
     puerta      siseo hidráulico y golpe metálico
     consola     barrido hacia abajo, algo que se apaga
     nota        papel que se arruga
+    susurro     el Cambiaformas disfrazado anda cerca
     acierto     pitido corto que sube
     fallo       zumbido corto que baja
     ia_voz      chirridos robóticos de la IA de la nave
@@ -215,6 +216,22 @@ def generar():
              0.06 * math.sin(2 * math.pi * 330.5 * t) * (1 - lfo))
         zumbido.append(v * lfo)
     guardar("ambiente", zumbido, 0.5)
+    generar_susurro()
+
+
+def generar_susurro():
+    """Un susurro (el Cambiaformas disfrazado está cerca): siseos que suben y
+    bajan, como sílabas que no se entienden."""
+    dur = 1.6
+    siseo = ruido(dur, 1.0, 99, 1)          # agudo: "ssss"
+    aliento = ruido(dur, 0.6, 99, 5)        # más sordo: "hhhh"
+    salida = []
+    for i in range(len(siseo)):
+        t = i / FRECUENCIA
+        silabas = max(0.0, math.sin(math.pi * t * 4.2)) ** 2
+        entrada = min(1.0, t / 0.25) * min(1.0, (dur - t) / 0.4)
+        salida.append((siseo[i] * 0.6 + aliento[i]) * silabas * entrada)
+    guardar("susurro", salida, 0.45)
 
 
 if __name__ == "__main__":

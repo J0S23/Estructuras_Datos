@@ -28,6 +28,11 @@ ARBOLES = [
         "Se dibuja en postorden: cada padre al medio de sus hijos.",
         "Se ve en Pausa > Logros.",
     ]),
+    ("Grafo de NEXUS (la red social)", [
+        "Cada cuenta es un nodo; lo que publica llega a sus seguidores",
+        "nivel por nivel (BFS). Rastrear un rumor = camino más corto;",
+        "reportar un bot = borrar su nodo. Las barras = % de verdes/rojos.",
+    ]),
     ("Grafo de la nave (BFS)", [
         "Para ir a un ruido, el alien busca camino por una",
         "cuadrícula del mapa (cada celda es un nodo) y rodea paredes.",
@@ -58,7 +63,8 @@ def render_ayuda(screen, font=None, small_font=None):
         (COLOR_TITULO, "La misión"),
         (COLOR_TEXTO, "1. Encuentren el código en las notas y abran la puerta."),
         (COLOR_TEXTO, "2. Apaguen las consolas de navegación."),
-        (COLOR_TEXTO, "3. Lleven 3 piezas a la cápsula y repárenla."),
+        (COLOR_TEXTO, "3. Lleven 3 piezas a la cápsula y repárenla"),
+        (COLOR_TEXTO, "   (hacen falta los planos: ver NEXUS)."),
         (COLOR_TEXTO, "4. ¡Alerta! Todos a la cápsula antes de que se acabe"),
         (COLOR_TEXTO, "   el tiempo."),
         (None, ""),
@@ -74,11 +80,11 @@ def render_ayuda(screen, font=None, small_font=None):
         (COLOR_TENUE, "Biomante: siente el pulso, cura y recarga al equipo."),
         (COLOR_TENUE, "Resonante: oye a los aliens y les manda señales falsas."),
         (None, ""),
-        (COLOR_TITULO, "NEXUS"),
-        (COLOR_TEXTO, "La red social de la nave. Uno de los que escriben es"),
-        (COLOR_TEXTO, "un alien disfrazado de prisionero. Busquen las 3"),
-        (COLOR_TEXTO, "pruebas por la nave y súbanlas en una Terminal NEXUS:"),
-        (COLOR_TEXTO, "si lo exponen, los aliens se confunden un rato."),
+        (COLOR_TITULO, "NEXUS (en tu celular)"),
+        (COLOR_TEXTO, "Los aliens riegan rumores falsos. Vayan al lugar,"),
+        (COLOR_TEXTO, "saquen una foto y desmiéntanlos: si la tripulación"),
+        (COLOR_TEXTO, "les cree, les pasan los planos de la cápsula."),
+        (COLOR_TEXTO, "No compartan sin verificar y cuiden su ubicación."),
     ]
 
     derecha = [(COLOR_TITULO, "Estructuras de datos que usa el juego"), (None, "")]

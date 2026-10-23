@@ -44,6 +44,10 @@ def nueva_partida(roles):
     # tutorial abierto la puerta de la prisión no abre).
     if g.tutorial is not None:
         g.tutorial.activo = False; g._terminar_tutorial()
+    # NEXUS se prueba aparte (prueba_nexus.py): aquí no mete rumores ni pide planos.
+    # Y el Cambiaformas también (prueba_cambiaformas.py).
+    g.nexus = None
+    g.quitar_cambiaformas()
     return g
 
 
@@ -155,11 +159,16 @@ g._tecla_en_partida(pygame.K_RETURN)
 assert tec.preso is None and not g.mundo.colisiona(tec.hitbox)
 print("rescate: el Forjador sacó al Tecnomante de la celda")
 
-# NEXUS: la terminal abre el caso del infiltrado (lo único que hay en NEXUS).
+# NEXUS: la terminal es la central de ayuda; desde ahí también se abre el caso.
 nexus = [z for z in g.zonas if z["clave"].startswith("nexus")][0]
 poner(tec, nexus["rect"].center)
 tec.zona_cerca = g.zona_bajo(tec)
 g.interactuar(tec)
+assert tec.panel["accion"] == "ayuda_menu"
+assert any("Confianza" in l for l in tec.panel["cuerpo"]) or g.nexus is None
+cap(g, "mision_d_ayuda.png")
+tec.cursor = next(i for i, (t, _) in enumerate(tec.panel["acciones"]) if t == "infiltrado")
+g.confirmar(tec)
 assert tec.panel["accion"] == "infiltrado_menu" and "Sospechosos:" in tec.panel["cuerpo"]
 print("NEXUS:", tec.panel["titulo"], "|", len(g.infiltrado.sospechosos), "sospechosos")
 cap(g, "mision_d_nexus.png")

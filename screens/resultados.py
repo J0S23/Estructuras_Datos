@@ -1,7 +1,8 @@
 """Pantalla de resultados al terminar la ronda.
 
 A la izquierda, cómo le fue a cada jugador; a la derecha, hasta dónde llegó la
-misión, cómo terminó el caso del infiltrado y cuántos logros consiguieron.
+misión, cómo terminó el caso del infiltrado, cuántos logros consiguieron y
+cómo usaron NEXUS (con un consejo según lo que hicieron).
 Abajo, dos botones: "Ver logros" (el árbol completo, screens/logros.py) y
 "Volver al menú". La lógica de la pantalla está en App._tecla_resultados.
 """
@@ -31,7 +32,8 @@ def opciones_resultados(logros):
 
 
 def render_resultados(screen, jugadores, font=None, small_font=None,
-                      mision=None, equipo=None, infiltrado=None, logros=None, seleccion=0):
+                      mision=None, equipo=None, infiltrado=None, logros=None, seleccion=0,
+                      nexus=None, cambiaformas=None, npcs=None):
     """Dibuja el resumen. Devuelve los rects de los botones (para el mouse)."""
     screen.fill(COLOR_FONDO)
     ancho, alto = screen.get_size()
@@ -43,6 +45,8 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
     if mision is not None and mision.activa:
         if mision.resultado == "victoria":
             titulo, color = "¡ESCAPARON DE LA NAVE!", COLOR_BARRA
+        elif getattr(mision, "motivo", None) == "nexus":
+            titulo, color = "LOS ALIENS TOMARON NEXUS", COLOR_BARRA_MALA
         else:
             titulo, color = "NO LOGRARON ESCAPAR", COLOR_BARRA_MALA
     encabezado = titulo_f.render(titulo, True, color)
@@ -101,9 +105,48 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
         color = COLOR_BARRA if infiltrado.estado == "expuesto" else COLOR_TENUE
         dibujar_texto_ajustado(screen, resumen, f, columna + 40, y + 6, ancho - columna - 60, color)
         y += paso
+    # El Cambiaformas (cambiaformas.py) y los prisioneros rescatados (npcs.py).
+    if cambiaformas is not None:
+        texto = (f"Cambiaformas: se reveló {cambiaformas.revelaciones} veces, "
+                 f"atrapó {cambiaformas.capturas}, saboteó {cambiaformas.sabotajes}")
+        dibujar_texto_ajustado(screen, texto, f, columna + 40, y + 6, ancho - columna - 60,
+                               COLOR_TENUE)
+        y += paso
+    if npcs is not None:
+        rescatados = len(npcs.rescatados)
+        texto = (f"Prisioneros rescatados: {rescatados}" if rescatados
+                 else "Prisioneros rescatados: ninguno")
+        color = COLOR_BARRA if rescatados else COLOR_TENUE
+        dibujar_texto_ajustado(screen, texto, f, columna + 40, y + 6, ancho - columna - 60, color)
+        y += paso
     if logros is not None:
         texto = f"Logros: {logros.arbol.obtenidos()}/{logros.arbol.total()}"
         screen.blit(f.render(texto, True, COLOR_TITULO), (columna + 40, y + 6))
+        y += paso
+
+    # -- Tu uso de NEXUS ------------------------------------------------------------
+    if nexus is not None:
+        y += 14
+        screen.blit(f.render("Su uso de NEXUS", True, COLOR_TITULO), (columna + 40, y))
+        y += paso + 4
+        r = nexus.resumen()
+        verde, rojo = nexus.barras()
+        lineas = [
+            f"Confianza al final: {int(verde * 100)}% en ustedes, {int(rojo * 100)}% en los aliens",
+            f"Rumores desmentidos: {r['desmentidos']}   Compartidos sin verificar: {r['compartidos_falsos']}",
+            f"Bots reportados: {r['bots_reportados']}   Suplantaciones: {r.get('suplantaciones', 0)}   "
+            f"Reportes a gente real: {r['reportes_injustos']}",
+            f"Fotos con ubicación: {r['fotos_ubicacion']}   Recortadas: {r['fotos_recortadas']}",
+            f"Tiempo en el celular: {r['minutos_celular']:.1f} min",
+        ]
+        for linea in lineas:
+            dibujar_texto_ajustado(screen, linea, f, columna + 60, y, ancho - columna - 80, COLOR_TEXTO)
+            y += paso
+        from screens.paneles import partir_lineas
+        y += 4
+        for renglon in partir_lineas(r["consejo"], f, ancho - columna - 80):
+            screen.blit(f.render(renglon, True, COLOR_BARRA), (columna + 60, y))
+            y += paso
 
     # -- Botones ------------------------------------------------------------------
     opciones = opciones_resultados(logros)

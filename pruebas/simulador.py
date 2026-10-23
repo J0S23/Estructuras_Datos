@@ -72,6 +72,9 @@ def nueva_partida(roles):
                 g.tutorial.siguiente(j)
         if not g.en_tutorial:
             g._terminar_tutorial()
+    # Los bots no usan el celular: sin NEXUS la cápsula no pide los planos y
+    # los aliens no se potencian. Así el simulador mide la misión de siempre.
+    g.nexus = None
     return g
 
 

@@ -36,6 +36,7 @@ import pygame
 
 from fuentes import fuente_de_tamano
 from data.tipos_alien import datos_tipo, TIPO_POR_DEFECTO
+from data.nexus import POTENCIA_VELOCIDAD, POTENCIA_VISION
 
 
 # Velocidad, visión y oído de cada tipo de alien: data/tipos_alien.py.
@@ -132,6 +133,7 @@ class Alien:
         self.aturdido = False             # el descanso viene de un hackeo
         self.confundido = False           # ...o de que expusieron al infiltrado
         self.alerta = False               # huida final: más rápido y ve más lejos
+        self.potencia_nexus = 0.0         # 0-1: cuánto le va ganando el rojo en NEXUS
         self.atascado_ms = 0
         self.tiempo_ms = 0                # reloj propio, para animaciones
         self.persecucion_ms = 0           # cuánto lleva persiguiendo (el Cazador se cansa)
@@ -171,7 +173,9 @@ class Alien:
 
     @property
     def alcance_vision(self):
-        return self.datos["alcance_vision"] * (1.3 if self.alerta else 1.0)
+        """Ve más lejos en la huida y mientras el rojo le gana al verde en NEXUS."""
+        return (self.datos["alcance_vision"] * (1.3 if self.alerta else 1.0)
+                * (1 + POTENCIA_VISION * self.potencia_nexus))
 
     @staticmethod
     def escondite_disponible(escondite, alien=None):
@@ -249,6 +253,7 @@ class Alien:
         factor = min(3.0, dt / (1000 / 60)) if dt else 1.0
         if self.alerta:
             factor *= 1.25
+        factor *= 1 + POTENCIA_VELOCIDAD * self.potencia_nexus
         self.descanso_ms = max(0, self.descanso_ms - dt)
         if self.descanso_ms == 0:
             self.aturdido = False

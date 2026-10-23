@@ -47,6 +47,7 @@ def nueva_partida(roles=("Tecnomante", "Forjador")):
     g.seleccion_roles[0]["cursor"] = nombres.index(roles[0]); g._manejar_tecla(pygame.K_e)
     g.seleccion_roles[1]["cursor"] = nombres.index(roles[1]); g._manejar_tecla(pygame.K_RETURN)
     avanzar(); g.current_screen = "partida"
+    g.quitar_cambiaformas()      # lo prueba pruebas/prueba_cambiaformas.py
     return g
 
 
@@ -310,7 +311,7 @@ ev.restaurar_luz()
 # tenía dos puertas en el mismo sitio: el código quitaba una y la otra,
 # invisible, no dejaba pasar.
 g3 = nueva_partida()
-g3.iniciar_partida()
+g3.iniciar_partida(); g3.quitar_cambiaformas()
 assert g3.mundo.paredes.count(g3.mision.puerta) == 1
 g3.tutorial.activo = False; g3._terminar_tutorial()
 for a in g3.aliens:
@@ -372,7 +373,7 @@ poner(forj, otro["rect"].center)
 acciones_rol.usar_estacion(g4, forj, otro)
 assert not otro["reparado"] and forj.piezas == 1
 # Otra ronda: los sellos se apagan.
-g4.iniciar_partida()
+g4.iniciar_partida(); g4.quitar_cambiaformas()
 assert not g4.mundo.bloqueos_alien
 print("sellos: el Forjador repara un panel y levanta una barrera que frena solo a los aliens")
 

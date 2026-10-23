@@ -49,6 +49,11 @@ from tutorial import Tutorial
 from pausa import MenuPausa, mover_en_logros
 from audio_manager import audio_manager
 from infiltrado import CasoInfiltrado
+from nexus import RedNexus
+import celular
+from npcs import GestorNPCs, Apariencia
+from cambiaformas import Cambiaformas
+from data.npcs import NPCS_POR_PARTIDA
 from logros import GestorLogros
 from eventos import GestorEventos, crear_cajas
 import puertas
@@ -68,6 +73,7 @@ from screens.ayuda import render_ayuda
 from screens.creditos import render_creditos, reiniciar_scroll
 from screens.pausa import render_pausa
 from screens.logros import render_aviso_logro, render_arbol_logros
+from screens import celular as dibujo_celular
 
 
 ANCHO_VENTANA, ALTO_VENTANA = 960, 600
@@ -150,6 +156,9 @@ class Game:
         self.tutorial = None  # los primeros 30 s (tutorial.py)
         self.eventos = None   # apagón, alarma, compuertas (eventos.py)
         self.infiltrado = None  # misión secundaria del infiltrado de NEXUS (infiltrado.py)
+        self.nexus = None       # la red social del celular (nexus.py)
+        self.npcs = None        # los prisioneros que caminan (npcs.py)
+        self.cambiaformas = None  # el alien que se disfraza de ellos (cambiaformas.py)
         self.logros = None      # árbol de logros de la partida (logros.py)
         self.puertas_dobles, self.compuertas = [], []   # puertas.py
         self.pausa = None     # MenuPausa mientras está abierto (Esc en la partida)
@@ -335,7 +344,8 @@ class Game:
         self.compuertas = puertas.crear_compuertas(self.objetos, self.mundo)
         self._nuevo_ambiente()
         self.tutorial, self.eventos = None, None
-        self.infiltrado = CasoInfiltrado(self, self.objetos) if self.mision.activa else None
+        self.nexus = RedNexus(self) if self.mision.activa else None
+        self._crear_prisioneros()
         self.logros = GestorLogros(self)     # uno nuevo cada partida: se reinician solos
         if self.mision.activa:
             self.tiempo_restante_ms = DURACION_MISION_S * 1000
@@ -375,6 +385,42 @@ class Game:
         self.alien_en_vista = 0
         self.mostrar_arbol_alien = False
 
+    def _crear_prisioneros(self):
+        """Los prisioneros que caminan (cuentas de NEXUS), el caso del
+        Cambiaformas y el Cambiaformas, que se hace pasar por uno de ellos.
+
+        Se escogen NPCS_POR_PARTIDA cuentas de NEXUS. Los sospechosos del caso
+        salen de ellas; la identidad del culpable no camina por su cuenta: es el
+        Cambiaformas disfrazado.
+        """
+        import random
+        self.npcs, self.cambiaformas = None, None
+        if self.nexus is None:
+            self.infiltrado = CasoInfiltrado(self, self.objetos) if self.mision.activa else None
+            return
+        presos = self.nexus._presos()
+        elegidos = random.sample(presos, min(NPCS_POR_PARTIDA, len(presos)))
+        cuentas = [(n, self.nexus.grafo.datos[n]) for n in elegidos]
+        self.infiltrado = CasoInfiltrado(self, self.objetos,
+                                         cuentas=[d["nombre"] for _, d in cuentas])
+        culpable = self.infiltrado.infiltrado["nombre"]
+        self.npcs = GestorNPCs(self, cuentas)
+        apariencias = {n.usuario: Apariencia(n.apariencia.estilo, n.usuario, n.apariencia.numero)
+                       for n in self.npcs.npcs}
+        identidad = next(d["usuario"] for _, d in cuentas if d["nombre"] == culpable)
+        doble = next(n for n in self.npcs.npcs if n.usuario == identidad)
+        self.npcs.npcs.remove(doble)      # esa persona ES el Cambiaformas
+        self.cambiaformas = Cambiaformas(self, len(self.aliens) + 1, apariencias, identidad,
+                                         doble.centro)
+        self.aliens.append(self.cambiaformas)
+
+    def quitar_cambiaformas(self):
+        """Saca al Cambiaformas de la partida. Para las pruebas que miden otra
+        cosa (los aliens de ruta, la misión...): él va por su cuenta."""
+        if self.cambiaformas in self.aliens:
+            self.aliens.remove(self.cambiaformas)
+        self.cambiaformas = None
+
     def _preparar_escondites(self):
         """Pasa los escondites de data/escondites.py a rects en píxeles."""
         self.escondites = []
@@ -411,7 +457,8 @@ class Game:
 
     def _actualizar_ambiente(self, dt):
         # Durante el tutorial los aliens duermen: no se oyen sus pasos.
-        self.ambiente.actualizar(dt, self.jugadores, [] if self.en_tutorial else self.aliens)
+        self.ambiente.actualizar(dt, self.jugadores,
+                                 [] if self.en_tutorial else self._aliens_a_la_vista())
         self.narrador.actualizar(dt)
         self._aviso_pulso_ms = max(0, self._aviso_pulso_ms - dt)
         asustados = [j for j in self.jugadores if j.pulso > 85 and j.preso is None]
@@ -549,13 +596,13 @@ class Game:
 
     def _preparar_zonas(self):
         """Las zonas donde se interactúa con algo del mapa: las Terminales
-        NEXUS (abren el caso del infiltrado, infiltrado.py)."""
+        NEXUS (centrales de ayuda, celular.panel_ayuda)."""
         self.zonas = []
         for i, (rx, ry) in enumerate(self.objetos.get("nexus", []), start=1):
             radio = int(0.02 * self.mundo.ancho)
             self.zonas.append({
                 "clave": f"nexus_{i}", "nombre": "Terminal NEXUS",
-                "pista": "El caso del infiltrado.", "tipo": "nexus",
+                "pista": "Central de ayuda de NEXUS.", "tipo": "nexus",
                 "roles": [], "color": (90, 220, 230),
                 "rect": pygame.Rect(int(rx * self.mundo.ancho) - radio,
                                     int(ry * self.mundo.alto) - radio, radio * 2, radio * 2),
@@ -606,6 +653,8 @@ class Game:
                 jugador.pista_mision = self.mision.pista(jugador)
             if self.infiltrado is not None and not jugador.pista_mision:
                 jugador.pista_mision = self.infiltrado.pista(jugador)
+            if self.npcs is not None and not jugador.pista_mision and not jugador.preso:
+                jugador.pista_mision = self.npcs.pista(jugador)
             pista_puerta = puertas.pista(self.puertas_dobles, jugador)
             if pista_puerta and not jugador.preso:
                 jugador.pista_mision = "Puerta sin energía" if self.sin_luz else pista_puerta
@@ -639,6 +688,20 @@ class Game:
                                  self.escondites, self._alien_revisa)
             if self.eventos is not None:
                 self.eventos.actualizar(dt)
+        if self.npcs is not None:
+            self.npcs.actualizar(dt)
+        if self.nexus is not None:
+            self.nexus.actualizar(dt)
+            for jugador in self.jugadores:
+                panel = jugador.panel or {}
+                if panel.get("tipo") == "celular" and panel.get("vista") == "feed":
+                    # Lo nuevo que llega aparece aunque tenga el celular abierto;
+                    # el cursor se queda sobre la misma publicación.
+                    antes = panel["opciones"]
+                    elegida = antes[jugador.cursor] if jugador.cursor < len(antes) else None
+                    panel["opciones"] = celular.opciones_feed(self, jugador)
+                    if elegida in panel["opciones"]:
+                        jugador.cursor = panel["opciones"].index(elegida)
         self._actualizar_minijuegos(dt)
         self._actualizar_pulsos(dt)
         self._actualizar_ambiente(dt)
@@ -668,6 +731,9 @@ class Game:
             "vision": self.oscuridad,
             "oscuridad": self.oscuridad and self.eventos is not None and self.eventos.apagon,
             "sin_luz": self.sin_luz,
+            "nexus": self.nexus,
+            "npcs": self.npcs.npcs if self.npcs is not None else (),
+            "escolta": self.npcs.escoltado if self.npcs is not None else None,
         }
 
     def _actualizar_pulsos(self, dt):
@@ -677,12 +743,17 @@ class Game:
             if self.en_tutorial:
                 jugador.actualizar_pulso(dt, None, False)
                 continue
+            # El Cambiaformas disfrazado no asusta: nadie sabe que es un alien.
             distancia = min((math.hypot(a.centro[0] - centro[0], a.centro[1] - centro[1])
-                             for a in self.aliens), default=None)
+                             for a in self._aliens_a_la_vista()), default=None)
             if not jugador.cazable:
                 distancia = None
             visto = any(a.objetivo is jugador for a in self.aliens)
             jugador.actualizar_pulso(dt, distancia, visto)
+
+    def _aliens_a_la_vista(self):
+        """Los aliens que se notan como aliens (sin el Cambiaformas disfrazado)."""
+        return [a for a in self.aliens if not getattr(a, "disfrazado", False)]
 
     def terminar_ronda(self):
         if self.mision is not None:
@@ -707,21 +778,15 @@ class Game:
             self._abrir_nexus(jugador, zona)
 
     def _abrir_nexus(self, jugador, zona):
-        """Terminal NEXUS: el caso del infiltrado (infiltrado.py). Es lo único
-        que hay en NEXUS: ver sospechosos, subir pruebas y acusar."""
+        """Terminal NEXUS: central de ayuda (celular.panel_ayuda). Cómo va la
+        confianza, temas de uso sano de NEXUS, repasar el tutorial y, mientras
+        exista, el caso del infiltrado (infiltrado.py)."""
         if self.sin_luz:
             jugador.avisar("La terminal NEXUS está apagada: no hay luz.", (245, 130, 120))
             return
         if self.logros is not None:
             self.logros.conseguir("conectado", jugador)
-        if self.infiltrado is None:
-            jugador.abrir_panel({
-                "tipo": "aviso", "titulo": zona["nombre"],
-                "cuerpo": ["NEXUS no tiene conexión en este mapa."],
-                "pie": f"[{jugador.nombre_tecla('interactuar')}] salir",
-            })
-            return
-        jugador.abrir_panel(self.infiltrado.panel_terminal(jugador, zona))
+        jugador.abrir_panel(celular.panel_ayuda(self, jugador, zona))
 
     # -- Resolver la opción elegida ---------------------------------------------
 
@@ -741,6 +806,9 @@ class Game:
         if tipo == "emision":
             acciones_rol.poner_emision(self, jugador)
             return
+        if tipo == "celular":
+            celular.confirmar(self, jugador)
+            return
 
         accion = panel.get("accion")
         indice = jugador.cursor
@@ -748,6 +816,8 @@ class Game:
             self.mision.resolver_codigo(jugador, indice)
         elif accion in ("infiltrado_menu", "infiltrado_acusar"):
             self._resolver_infiltrado(jugador, panel, indice)
+        elif accion in ("ayuda_menu", "ayuda_tema"):
+            celular.confirmar_ayuda(self, jugador)
 
     def _resolver_infiltrado(self, jugador, panel, indice):
         """Menú de la terminal durante el caso del infiltrado (infiltrado.py)."""
@@ -850,9 +920,18 @@ class Game:
                     else:
                         jugador.salir_del_escondite()
                     return
-                if jugador.es_tecla(key, "habilidades") or jugador.es_tecla(key, "habilidad"):
+                if any(jugador.es_tecla(key, a) for a in ("habilidades", "habilidad", "celular")):
                     return
                 continue
+
+            # El celular (NEXUS): abre, va atrás o cierra.
+            if jugador.es_tecla(key, "celular"):
+                if jugador.panel is not None and jugador.panel.get("tipo") == "celular":
+                    celular.volver(self, jugador)
+                elif jugador.panel is None:
+                    celular.abrir(self, jugador)
+                    self.sonar("menu_mover", 0.4)
+                return
 
             # El mapa de la Emisión abierto: la tecla de habilidad o la del
             # árbol lo cierran sin gastar la habilidad.
@@ -905,6 +984,8 @@ class Game:
                         acciones_rol.usar_estacion(self, jugador, estacion)
                     elif escondite is not None:
                         jugador.esconderse(escondite)
+                    elif self.zona_bajo(jugador) is None and self.npcs is not None:
+                        self.npcs.hablar(jugador)     # "¿vienes conmigo?" (npcs.py)
                     else:
                         self.interactuar(jugador)
                     return
@@ -1204,10 +1285,12 @@ class Game:
             render_partida(self.screen, self.mundo, self.jugadores, self.zonas,
                            self.tiempo_restante_ms / 1000.0, self.mostrar_hitboxes,
                            self.aliens, self.escondites, self._extras_dibujo())
-            self.narrador.dibujar(self.screen)
+            self.narrador.dibujar(self.screen, dibujo_celular.desplazamiento_avisos(
+                self.screen, len(self.jugadores), self.nexus))
             if self.mostrar_arbol_alien and self.aliens:
-                render_arbol_alien(self.screen, self.aliens[self.alien_en_vista],
-                                   self.arbol_alien, self.alien_en_vista + 1, len(self.aliens))
+                alien = self.aliens[self.alien_en_vista]
+                render_arbol_alien(self.screen, alien, alien.arbol,
+                                   self.alien_en_vista + 1, len(self.aliens))
             if self.pausa is None:
                 render_aviso_logro(self.screen, self.logros)
             else:
@@ -1219,7 +1302,8 @@ class Game:
             else:
                 self.resultados_rects = render_resultados(
                     self.screen, self.jugadores, self.font, self.small_font, self.mision,
-                    self.equipo, self.infiltrado, self.logros, self.resultados_sel)
+                    self.equipo, self.infiltrado, self.logros, self.resultados_sel,
+                    self.nexus, self.cambiaformas, self.npcs)
         elif self.current_screen == "ayuda":
             render_ayuda(self.screen, self.small_font)
         elif self.current_screen == "creditos":

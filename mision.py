@@ -3,6 +3,9 @@
     1. Prisión     encontrar el código en las notas y abrir la puerta.
     2. Sabotaje    apagar las consolas de navegación (mantener la tecla).
     3. Cápsula     llevar 3 piezas a la cápsula y repararla (mantener la tecla).
+                   Para repararla hacen falta los planos, que se ganan con la
+                   confianza de la tripulación en NEXUS (nexus.py). Eso corre
+                   en paralelo con todo lo anterior.
     4. Huida       los aliens entran en alerta; todos tienen que llegar a la
                    cápsula. Si llegan todos, ganan.
 
@@ -61,6 +64,7 @@ TEXTO_FASE = {
     "sabotaje": "Apaguen las consolas de navegación ({hechas}/{total}).",
     "capsula": "Lleven {faltan} pieza(s) a la cápsula y repárenla.",
     "reparar": "Reparen la cápsula: mantengan la tecla.",
+    "planos": "Faltan los planos: ganen la confianza en NEXUS.",
     "huida": "¡Alerta! Todos a la cápsula.",
 }
 
@@ -103,6 +107,7 @@ class Mision:
         self.falta_forjador = "Forjador" not in roles
         self.piezas_para_todos = self.activa and self.falta_forjador
         self.resultado = None            # "victoria" / "derrota"
+        self.motivo = None               # "nexus" si perdieron porque los aliens tomaron NEXUS
 
         self.puerta = None
         self.puerta_abierta = True
@@ -187,8 +192,15 @@ class Mision:
             return TEXTO_FASE["sabotaje"].format(hechas=hechas, total=len(self.consolas))
         if self.fase == "capsula":
             faltan = PIEZAS_NECESARIAS - self.piezas_entregadas
-            return TEXTO_FASE["capsula"].format(faltan=faltan) if faltan > 0 else TEXTO_FASE["reparar"]
+            if faltan > 0:
+                return TEXTO_FASE["capsula"].format(faltan=faltan)
+            return TEXTO_FASE["reparar"] if self.hay_planos() else TEXTO_FASE["planos"]
         return TEXTO_FASE.get(self.fase, "")
+
+    def hay_planos(self):
+        """Los planos de la cápsula se ganan en NEXUS. Sin NEXUS no hacen falta."""
+        red = getattr(self.juego, "nexus", None)
+        return red is None or red.planos
 
     def _cerca(self, jugador, rect, margen=40):
         return rect.inflate(margen * 2, margen * 2).colliderect(jugador.hitbox)
@@ -225,6 +237,8 @@ class Mision:
         if self.capsula and self.fase == "capsula" and self._cerca(jugador, self.capsula, 10):
             if self.piezas_entregadas < PIEZAS_NECESARIAS:
                 return "Dejar piezas en la cápsula" if jugador.piezas else "Cápsula: faltan piezas"
+            if not self.hay_planos():
+                return "Cápsula: faltan los planos (confianza en NEXUS)"
             return "Mantener: reparar la cápsula"
         for nota in self.notas:
             if self._cerca(jugador, nota["rect"], 20):
@@ -280,6 +294,9 @@ class Mision:
             elif faltan > 0:
                 quien = "Recójanlas" if self.piezas_para_todos else "El Forjador tiene que recogerlas"
                 jugador.avisar(f"Faltan {faltan} pieza(s). {quien}.", COLOR_MAL)
+            elif not self.hay_planos():
+                jugador.avisar("Sin los planos no saben cómo repararla. Ganen la confianza "
+                               "de la tripulación en NEXUS.", COLOR_MAL)
             else:
                 jugador.avisar("Mantén la tecla para reparar la cápsula.", COLOR_AVISO)
             return True
@@ -376,6 +393,9 @@ class Mision:
                 return
         if (self.fase == "capsula" and self.piezas_entregadas >= PIEZAS_NECESARIAS
                 and self._cerca(jugador, self.capsula, 10)):
+            if not self.hay_planos():
+                jugador.avisar("Faltan los planos: ganen la confianza en NEXUS.", COLOR_MAL)
+                return
             if jugador.rol == "Forjador":
                 duracion = REPARACION_ROL_S
             elif "kit" in jugador.objetos:
@@ -498,6 +518,11 @@ class Mision:
 
     def actualizar(self, dt):
         if not self.activa or self.resultado is not None:
+            return
+        red = getattr(self.juego, "nexus", None)
+        if red is not None and red.derrota:
+            # Ganó el rojo: los aliens tomaron NEXUS. (Aquí irá la cinemática.)
+            self.resultado, self.motivo = "derrota", "nexus"
             return
         # Los puestos sin mando todavía no se mueven: no cuentan para ganar ni
         # para perder, o con 3 o 4 jugadores nunca se podría escapar.
