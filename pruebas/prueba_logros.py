@@ -35,7 +35,7 @@ nodos = arbol.preorden()
 assert len(nodos) == arbol.total() == len(arbol.indice)
 assert all(n.rama in COLOR_RAMA for n in nodos)
 niveles = arbol.por_niveles()
-assert niveles[0] == [arbol.raiz] and len(niveles[1]) == 6
+assert niveles[0] == [arbol.raiz] and len(niveles[1]) == 7
 assert sum(len(n) for n in niveles) == arbol.total()
 print(f"{arbol.total()} logros, {len(niveles)} niveles, ramas: {[n.nombre for n in niveles[1]]}")
 
@@ -125,7 +125,7 @@ print("abrir la puerta sin fallar: 'Código roto' y 'A la primera'")
 zona = next(z for z in g.zonas if z["clave"].startswith("nexus"))
 poner(j2, zona["rect"].center); frames(g, 1)
 g._tecla_en_partida(pygame.K_RETURN)
-assert j2.panel["accion"] == "infiltrado_menu" and L.tiene("conectado")
+assert j2.panel["accion"] == "ayuda_menu" and L.tiene("conectado")
 assert L.arbol.buscar("conectado").quien == "Forjador"
 j2.cerrar_panel()
 print("NEXUS: 'Conectado'")

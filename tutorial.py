@@ -18,7 +18,7 @@ mientras espera a los demás.
 
 MS_SIGILO_NECESARIO = 700
 
-# {mover}, {sigilo}, {interactuar}, {habilidad} y {habilidades} se cambian por
+# {mover}, {sigilo}, {interactuar}, {habilidad}, {habilidades} y {celular} se cambian por
 # las teclas de cada jugador. "accion" dice si además se completa haciéndolo.
 PASOS = [
     {"texto": "Muévete con {mover}.", "accion": "mover"},
@@ -30,11 +30,39 @@ PASOS = [
               "linterna, nada eléctrico funciona y no verás a los aliens ni por dónde "
               "miran. Busquen la caja de fusibles que parpadea en rojo y enciéndanla.",
      "accion": "leer"},
+    {"texto": "{celular}: tu celular con NEXUS. Los aliens riegan rumores falsos: vayan "
+              "al lugar, saquen una foto y desmiéntanlos. Si la tripulación les cree, les "
+              "pasan los planos de la cápsula. Ojo: con el celular abierto no te mueves.",
+     "accion": "leer"},
+    {"texto": "Por la nave caminan otros prisioneros. Uno es el Cambiaformas disfrazado: "
+              "no habla y su nombre falla. Si te ve solo, se revela. ¡No te alejes de tu equipo!",
+     "accion": "leer"},
     {"texto": "{interactuar}: usar, leer notas y esconderte. Si te atrapan vas a una "
               "celda y tus compañeros te sacan. Tienes 3 vidas.", "accion": "leer"},
+    {"texto": "{interactuar} junto a un prisionero: \"¿vienes conmigo?\". Los verdes te "
+              "siguen; llévalos a la cápsula y contarán en NEXUS que los salvaste. Si uno "
+              "acepta sin decir nada y se te pega demasiado... desconfía.", "accion": "leer"},
     {"texto": "{habilidad}: usar tu habilidad.  {habilidades}: árbol de habilidades. "
               "¡Escapen juntos!", "accion": "leer"},
 ]
+
+
+def con_teclas(texto, jugador):
+    """Cambia {mover}, {sigilo}... por las teclas de ese jugador."""
+    mover = "WASD" if jugador.puesto == 0 else "las flechas" if jugador.puesto == 1 \
+        else "el stick" if getattr(jugador, "con_mando", False) else jugador.controles_nombre
+    return texto.format(
+        mover=mover, sigilo=jugador.nombre_tecla("sigilo"),
+        interactuar=jugador.nombre_tecla("interactuar"),
+        habilidad=jugador.nombre_tecla("habilidad"),
+        habilidades=jugador.nombre_tecla("habilidades"),
+        celular=jugador.nombre_tecla("celular"))
+
+
+def pasos_con_teclas(jugador):
+    """Todos los pasos, ya con las teclas del jugador (para repasarlos en una
+    Terminal NEXUS)."""
+    return [con_teclas(p["texto"], jugador) for p in PASOS]
 
 
 class Tutorial:
@@ -100,11 +128,4 @@ class Tutorial:
             hechos, total = self.listos()
             return (len(PASOS), len(PASOS),
                     f"¡Listo! Esperando a los demás ({hechos}/{total} listos)...")
-        mover = "WASD" if jugador.puesto == 0 else "las flechas" if jugador.puesto == 1 \
-            else "el stick" if getattr(jugador, "con_mando", False) else jugador.controles_nombre
-        texto = PASOS[e["paso"]]["texto"].format(
-            mover=mover, sigilo=jugador.nombre_tecla("sigilo"),
-            interactuar=jugador.nombre_tecla("interactuar"),
-            habilidad=jugador.nombre_tecla("habilidad"),
-            habilidades=jugador.nombre_tecla("habilidades"))
-        return (e["paso"] + 1, len(PASOS), texto)
+        return (e["paso"] + 1, len(PASOS), con_teclas(PASOS[e["paso"]]["texto"], jugador))

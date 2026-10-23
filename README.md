@@ -22,8 +22,9 @@ pantalla, partida en una vista por jugador.
 | Arbol binario de comportamiento | `Estructuras/arbol_comportamiento.py` | La "IA" de cada alien: cada frame baja de la raiz a una hoja respondiendo preguntas (¿ve a alguien?, ¿oye un ruido?) y la hoja dice que hace. Se ve en vivo en Pausa > Opciones > Arbol del alien. |
 | Arbol binario de habilidades | `Estructuras/arbol_habilidades.py` | Progresion de cada rol durante la ronda. Al subir se escoge **una de dos** ramas y la otra se cierra, asi que lo desbloqueado cambia las opciones que el jugador ve. Recorrido por niveles (BFS) para dibujarlo y preorden para descartar la rama perdida. |
 | Arbol N-ario de logros | `Estructuras/arbol_logros.py` | Los logros de la partida, como los de Minecraft: cada uno abre otros. Indice clave -> nodo, subir por los padres hasta la raiz al conseguir uno, BFS por niveles, preorden para moverse por la vista y postorden para ubicar cada nodo al dibujarlo. Pausa > Logros. |
+| Arbol de comportamiento del Cambiaformas | `data/comportamiento_cambiaformas.py`, `cambiaformas.py` | Otro arbol binario de decision con la misma clase: ¿fuera de combate? ¿huyendo? ¿lo llevan creyendo que es un prisionero? ¿ya se revelo? ¿la presa se escondio? ¿esta cerca y sola? ¿tiene presa? ¿hay un rumor de carnada? -> seguir (y traicionar), acechar, revelarse, perseguir, revisar escondite, huir... |
 | Grafo de la nave (BFS) | `navegacion.py` | Los aliens buscan camino por una cuadricula del mapa (cada celda es un nodo) para llegar a un ruido rodeando paredes. |
-| Grafos | *segunda entrega* | Red social NEXUS para propagar las pruebas del infiltrado. |
+| Grafo dirigido de NEXUS | `Estructuras/grafo.py`, `nexus.py` | La red social del celular. Cada cuenta es un nodo y "lo que publica A le llega a B" es una arista (lista de adyacencia). Los rumores y los desmentidos se propagan con **BFS por niveles** (un nivel por tick); "¿de donde salio esto?" es el **camino mas corto** desde el bot que lo empezo; reportar un bot es **borrar su nodo**; las barras de confianza son el % de nodos verdes y rojos. |
 
 ## Como correrlo
 
@@ -54,6 +55,7 @@ trozo de pantalla y usa su tecla de interaccion con lo que tenga cerca.
 | Arbol de habilidades | Q | Shift derecho | Y (o U) | Y (o R) |
 | Usar habilidad | F | - (junto al Shift derecho) | X (o P) | X (o V) |
 | Caminar en sigilo (mantener) | Shift izquierdo | AltGr o 0 del numerico | LB o LT | LB o LT |
+| Celular (NEXUS): abrir / atras | TAB | . (punto) | RB (o J) | RB (o B) |
 | Cerrar un panel | - | - | B | B |
 
 Los jugadores 3 y 4 juegan con mando (Xbox o parecido): el primero que se
@@ -76,6 +78,67 @@ python Editores/hitbox_editor.py     # dibujar las hitboxes de un mapa
 python Editores/personaje_editor.py  # calibrar escala e hitbox de un personaje
 python Editores/visor_personajes.py  # revisar que sprites y config tiene cada personaje
 ```
+
+### NEXUS: la red social en el celular
+
+Cada jugador tiene NEXUS en su celular. Los aliens (el Cambiaformas, con cuentas
+falsas que parecen prisioneros) riegan **rumores falsos** sobre lugares de la nave
+("la capsula exploto", "las celdas tienen gas"...). Con el celular se puede:
+
+- **Ir a verificarlo**: una flecha lleva al lugar; al llegar se saca una foto sola.
+- **Desmentir** con la foto: la verdad corre por la red y la tripulacion confia en
+  ustedes. La foto tal cual convence a mas gente, pero se ve donde estas y el alien
+  mas cercano va por ti; recortada es mas segura.
+- **Compartir**: compartir un rumor sin verificar lo riega mas y tus seguidores
+  dejan de confiar en ti.
+- **¿De donde salio esto?** y **reportar**: reportar al bot que lo empezo lo borra
+  de la red; reportar a un prisionero que solo se lo creyo no sirve de nada.
+
+Arriba al centro esta la **barra de confianza** de la tripulacion, una sola para
+todo el equipo: la parte **verde** (confian en ustedes) crece desde la izquierda, la
+**roja** (le creen a los aliens) desde la derecha y en medio queda gris (los que no
+deciden). Con la verde en 80% (la raya blanca) les pasan los **planos de la capsula**
+(sin ellos no se puede reparar). Mientras la roja le gana a la verde, los aliens son
+mas rapidos y ven mas lejos; si la roja llega al 90%, los aliens toman NEXUS y se
+pierde. Con el celular abierto no te mueves: si un alien llega, te atrapa. Al final,
+los resultados muestran como usaron NEXUS. Cuentas, rumores y numeros se editan en
+`data/nexus.py`.
+
+Las **Terminales NEXUS** del mapa son centrales de ayuda: muestran como va la
+confianza, cuanto falta para los planos y que rumores faltan por desmentir, y
+explican el uso sano de la red (como reconocer un rumor falso, cuidar la ubicacion,
+cuentas falsas y reportes). Tambien dejan repasar el tutorial y, por ahora, abrir
+el caso del infiltrado.
+
+### Los prisioneros y el Cambiaformas
+
+Por la nave caminan 6 prisioneros, cada uno con su nombre de NEXUS encima y un
+puntito de color: los **verdes** (confian en ustedes) dan pistas al pasar cerca,
+los **grises** solo charlan y los **rojos** a veces gritan donde estas.
+
+Uno de ellos no es un prisionero: es el **Cambiaformas**, un alien unico con su
+propio arbol de comportamiento. Escoge a la presa mas sola, la sigue disfrazado y,
+cuando la tiene cerca, se revela (susto) y corre mas rapido que nadie un rato. Si
+falla, huye, se disfraza de otro prisionero y vuelve por la misma presa. Revisa el
+casillero donde te vio esconderte, espera junto al lugar de sus rumores y se entera
+cuando alguien te delata. Pistas: no habla, su nombre falla, puede haber dos con el
+mismo nombre, el Escaneo y la Sintonia lo marcan y disfrazado no sube el pulso.
+El hackeo lo aturde y le quita el disfraz; el **caso del Cambiaformas** (3 pruebas
+subidas en una Terminal NEXUS, los sospechosos son los prisioneros que caminan) lo
+deja 60 s sin poder disfrazarse. Numeros en `data/npcs.py`.
+
+Tambien **suplanta** cuentas: publica en NEXUS como el prisionero que imita para
+citar a alguien en un lugar apartado y emboscarlo. "¿De donde salio esto?" muestra
+"dispositivo desconocido"; reportar la suplantacion lo deja al descubierto. Cerca
+de el, disfrazado, se oye un **susurro**.
+
+**Rescatar prisioneros:** con la tecla de interactuar junto a un prisionero le
+preguntas "¿vienes conmigo?". Los verdes te siguen, los grises dudan y los rojos
+no. Llevarlo a la capsula da puntos y publica un testimonio que riega confianza.
+Ojo: el Cambiaformas disfrazado tambien acepta (sin decir nada) y te traiciona:
+si te quedas solo con el, se revela; si llega con el grupo a la capsula, la
+sabotea (arranca una pieza o deshace parte de la reparacion). Los verdes te
+advierten si vas con el.
 
 ### La mision (mapa de la nave)
 
@@ -119,6 +182,8 @@ se cierra y la nave delata al que acuso.
 python pruebas/prueba_mision.py    # juega la mision completa sin ventana
 python pruebas/prueba_sorpresas.py # oscuridad, aliens, sigilo, eventos, puertas, tutorial
 python pruebas/prueba_vision.py    # campo de vision: las paredes tapan
+python pruebas/prueba_nexus.py     # NEXUS: grafo, rumores, celular, barras y planos
+python pruebas/prueba_cambiaformas.py # prisioneros que caminan y el Cambiaformas
 python pruebas/prueba_infiltrado.py # mision secundaria del infiltrado de NEXUS
 python pruebas/prueba_logros.py    # arbol de logros y cuando se consigue cada uno
 python pruebas/prueba_sonidos.py   # que todo sonido pedido exista y suene donde va

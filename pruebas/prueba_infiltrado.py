@@ -80,6 +80,8 @@ print("caso armado: 3 pruebas en el mapa, 5 sospechosos, infiltrado:", caso.infi
 # Sin pruebas encontradas, la terminal ya muestra el caso (sin subir ni acusar).
 a_la_terminal(g, j1)
 g._tecla_en_partida(pygame.K_e)
+assert j1.panel["accion"] == "ayuda_menu", "la terminal es la central de ayuda"
+elegir(g, j1, "El caso del Cambiaformas")
 assert j1.panel["accion"] == "infiltrado_menu"
 assert [o["texto"] for o in j1.panel["opciones"]] == ["Salir"]
 j1.cerrar_panel()
@@ -92,14 +94,14 @@ assert j1.pista_mision and "audio" in j1.pista_mision, j1.pista_mision
 g._tecla_en_partida(pygame.K_e)
 assert "prueba_audio" in j1.objetos and audio["tomada"] and caso.iniciado
 assert caso.valor("prueba_audio") in j1.panel["cuerpo"][0]
-assert "infiltrado" in j2.mensaje
+assert "Cambiaformas" in j2.mensaje
 g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "infiltrado_a_prueba.png"))
 j1.cerrar_panel()
 print("recoger el audio: va al inventario y dice el sector del infiltrado")
 
 # ---------- Subir ----------
 a_la_terminal(g, j1)
-g._tecla_en_partida(pygame.K_e)
+g._tecla_en_partida(pygame.K_e); elegir(g, j1, "El caso del Cambiaformas")
 assert j1.panel["accion"] == "infiltrado_menu"
 assert any(o["texto"].startswith("Subir") for o in j1.panel["opciones"])
 assert not any(o["texto"].startswith("Acusar") for o in j1.panel["opciones"])
@@ -118,7 +120,7 @@ j1.cerrar_panel()
 inocente = next((s for s in restantes if s is not caso.infiltrado), None)
 if inocente is None:   # el audio solo ya lo dejó solo: se sube otra para probar
     inocente = next(s for s in caso.sospechosos if s is not caso.infiltrado)
-g._tecla_en_partida(pygame.K_e)
+g._tecla_en_partida(pygame.K_e); elegir(g, j1, "El caso del Cambiaformas")
 elegir(g, j1, "Acusar")
 assert j1.panel["accion"] == "infiltrado_acusar"
 g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "infiltrado_c_acusar.png"))
@@ -130,11 +132,13 @@ if inocente in j1.panel["candidatos"]:
 else:
     caso.acusar(j1, inocente)
 assert caso.estado == "fallido" and not caso.activo and j1.puntos < puntos
-assert all(a.punto_ruido is not None for a in g.aliens), "la nave delata al que acusó"
+assert all(a.punto_ruido is not None for a in g.aliens if a is not g.cambiaformas), \
+    "la nave delata al que acusó"
+assert g.cambiaformas.presa is j1, "y el Cambiaformas se entera: lo escoge de presa"
 assert "inocente" in caso.resumen() or "acusaron" in caso.resumen()
 j1.cerrar_panel()
 # Con el caso cerrado la terminal solo cuenta cómo terminó.
-g._tecla_en_partida(pygame.K_e)
+g._tecla_en_partida(pygame.K_e); elegir(g, j1, "El caso del Cambiaformas")
 assert j1.panel["tipo"] == "aviso" and "inocente" in j1.panel["cuerpo"][0]
 j1.cerrar_panel()
 print("acusar a un inocente: el caso se cierra ->", caso.resumen())
@@ -151,17 +155,18 @@ for prueba in caso.pruebas:
 assert sum(1 for t in PRUEBAS if t in j1.objetos) == 2 and "prueba_captura" in j2.objetos
 g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "infiltrado_d_inventario.png"))
 a_la_terminal(g, j1)
-g._tecla_en_partida(pygame.K_e)
+g._tecla_en_partida(pygame.K_e); elegir(g, j1, "El caso del Cambiaformas")
 elegir(g, j1, "Subir prueba")       # sube las 2 de una
 assert len(caso.subidas) == 2 and caso.activo
 j1.cerrar_panel()
 for a in g.aliens:
     a.descanso_ms = 0
 a_la_terminal(g, j2)
-g._tecla_en_partida(pygame.K_RETURN)
+g._tecla_en_partida(pygame.K_RETURN); elegir(g, j2, "El caso del Cambiaformas")
 elegir(g, j2, "Subir")
 assert caso.estado == "expuesto" and len(caso.restantes()) == 1
 assert all(a.confundido and a.descanso_ms >= CONFUSION_MS - 100 for a in g.aliens)
+assert g.cambiaformas.expuesto_ms > 0 and not g.cambiaformas.disfrazado, "expuesto: sin disfraz"
 g._actualizar_partida(DT)
 assert all(a.accion == "DESCANSAR" for a in g.aliens)
 print("las 3 pruebas arriba: expuesto ->", caso.resumen(), "| aliens confundidos")
@@ -177,8 +182,10 @@ j1 = g.jugadores[0]
 p = caso.pruebas[0]
 poner(j1, p["rect"].center); g._actualizar_partida(DT); g._tecla_en_partida(pygame.K_e); j1.cerrar_panel()
 a_la_terminal(g, j1)
-g._tecla_en_partida(pygame.K_e); elegir(g, j1, "Subir"); j1.cerrar_panel()
-g._tecla_en_partida(pygame.K_e); elegir(g, j1, "Acusar")
+g._tecla_en_partida(pygame.K_e); elegir(g, j1, "El caso del Cambiaformas")
+elegir(g, j1, "Subir"); j1.cerrar_panel()
+g._tecla_en_partida(pygame.K_e); elegir(g, j1, "El caso del Cambiaformas")
+elegir(g, j1, "Acusar")
 elegir(g, j1, caso.infiltrado["nombre"])
 assert caso.estado == "expuesto"
 print("acusar bien con 1 prueba también lo expone")

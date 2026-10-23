@@ -69,6 +69,7 @@ g._manejar_tecla(pygame.K_RETURN); avanzar(); g.current_screen = "roles"
 g.seleccion_roles[0]["cursor"] = 0; g._manejar_tecla(pygame.K_e)
 g.seleccion_roles[1]["cursor"] = 1; g._manejar_tecla(pygame.K_RETURN)
 avanzar(); g.current_screen = "partida"
+g.quitar_cambiaformas()          # los aliens de ruta; el Cambiaformas: prueba_cambiaformas.py
 g.tutorial.activo = False; g._terminar_tutorial()
 g.mision.abrir_puerta()          # para recorrer la nave entera
 

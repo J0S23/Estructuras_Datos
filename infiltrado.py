@@ -1,4 +1,9 @@
-"""NEXUS y su misión secundaria "El Infiltrado" (idea de Joseph). Es opcional.
+"""El caso del Cambiaformas (antes "El Infiltrado", idea de Joseph). Es opcional.
+
+Los sospechosos son prisioneros que caminan por la nave (npcs.py); el culpable
+es la identidad que usa el Cambiaformas (cambiaformas.py). Exponerlo lo deja
+sin poder disfrazarse un rato. (El nombre del archivo quedó de antes.)
+
 
 Es todo lo que hay en NEXUS, la red social de la nave: las Terminales NEXUS
 abren este caso (sospechosos, subir pruebas y acusar).
@@ -39,7 +44,9 @@ def nombre_prueba(tipo, plural=False):
 
 
 class CasoInfiltrado:
-    def __init__(self, juego, objetos, rng=None):
+    def __init__(self, juego, objetos, rng=None, cuentas=None):
+        """`cuentas`: los nombres de los prisioneros que caminan por la nave
+        (npcs.py); de ahí salen los sospechosos. Sin eso, los de data/infiltrado.py."""
         self.juego = juego
         self.rng = rng or random.Random()
         self.estado = "abierto"          # "expuesto" o "fallido" cuando se cierra
@@ -48,8 +55,9 @@ class CasoInfiltrado:
         self.acusado = None              # a quién acusaron (si acusaron)
         self.pruebas = []                # {"rect", "tipo", "tomada"} en el mapa
 
-        cuantos = min(SOSPECHOSOS_POR_PARTIDA, len(CUENTAS))
-        nombres = self.rng.sample(CUENTAS, cuantos)
+        cuentas = list(cuentas or CUENTAS)
+        cuantos = min(SOSPECHOSOS_POR_PARTIDA, len(cuentas))
+        nombres = self.rng.sample(cuentas, cuantos)
         claves = list(RASGOS)
         combinaciones = self.rng.sample(list(itertools.product(range(2), repeat=len(claves))),
                                         cuantos)
@@ -137,14 +145,14 @@ class CasoInfiltrado:
             "tipo": "aviso",
             "titulo": f"Prueba: {nombre_prueba(prueba['tipo'])}",
             "cuerpo": [self.texto_prueba(prueba["tipo"]), "",
-                       "Alguien en NEXUS no es quien dice ser. Sube esta prueba desde "
+                       "Uno de los prisioneros no es quien dice ser. Sube esta prueba desde "
                        "una Terminal NEXUS para que la red la vea."],
             "pie": f"[{jugador.nombre_tecla('interactuar')}] guardar",
         })
         if primera:
             for otro in self.juego.jugadores:
                 if otro is not jugador:
-                    otro.avisar("¡Hay un infiltrado en NEXUS!", COLOR_CASO)
+                    otro.avisar("¡El Cambiaformas anda entre los prisioneros!", COLOR_CASO)
             self._decir("prueba", jugador.rol)
         return True
 
@@ -162,11 +170,11 @@ class CasoInfiltrado:
                     "cuerpo": ["La red está tranquila. Demasiado tranquila."], "pie": pie_salir}
         if not self.activo:
             nombre = self.infiltrado["nombre"]
-            cuerpo = ([f"Caso cerrado: {nombre} era el infiltrado y ya todos lo saben."]
+            cuerpo = ([f"Caso cerrado: {nombre} era el Cambiaformas y ya todos lo saben."]
                       if self.estado == "expuesto" else
                       [f"Acusaron a {self.acusado['nombre']}, que era inocente.",
-                       "El infiltrado borró su rastro. Ya no se puede hacer nada."])
-            return {"tipo": "aviso", "titulo": "NEXUS · El infiltrado", "cuerpo": cuerpo,
+                       "El Cambiaformas borró su rastro. Ya no se puede hacer nada."])
+            return {"tipo": "aviso", "titulo": "NEXUS · El Cambiaformas", "cuerpo": cuerpo,
                     "pie": pie_salir}
         mias = self.pruebas_de(jugador)
         opciones = []
@@ -175,13 +183,14 @@ class CasoInfiltrado:
         if self.subidas:
             opciones.append(("Acusar a alguien", "acusar"))
         opciones.append(("Salir", "salir"))
-        cuerpo = ["Alguien en NEXUS es un alien cambiaformas haciéndose pasar por "
-                  "un prisionero. Busquen las 3 pruebas por la nave y súbanlas aquí.",
+        cuerpo = ["Uno de los prisioneros que caminan por la nave es el Cambiaformas "
+                  "disfrazado. Busquen las 3 pruebas por la nave y súbanlas aquí: al "
+                  "exponerlo, no se podrá disfrazar por un rato.",
                   f"Pruebas subidas: {len(self.subidas)}/{len(PRUEBAS)}", "",
                   "Sospechosos:"] + self.lineas_sospechosos()
         return {
             "tipo": "opciones", "accion": "infiltrado_menu", "zona": zona,
-            "titulo": "NEXUS · El infiltrado",
+            "titulo": "NEXUS · El Cambiaformas",
             "cuerpo": cuerpo,
             "opciones": [{"texto": t} for t, _ in opciones],
             "acciones": [a for _, a in opciones],
@@ -193,7 +202,7 @@ class CasoInfiltrado:
         restantes = self.restantes()
         return {
             "tipo": "opciones", "accion": "infiltrado_acusar",
-            "titulo": "¿Quién es el infiltrado?",
+            "titulo": "¿Quién es el Cambiaformas?",
             "cuerpo": ["Si aciertas, queda expuesto. Si te equivocas, el caso se cierra "
                        "y la nave avisa a los aliens dónde estás."],
             "opciones": [{"texto": s["nombre"]} for s in restantes] + [{"texto": "Mejor no"}],
@@ -234,10 +243,10 @@ class CasoInfiltrado:
         self.acusado = sospechoso
         if sospechoso is self.infiltrado:
             self.exponer(jugador)
-            return (f"¡Acertaste! {sospechoso['nombre']} era el infiltrado. "
-                    f"Los aliens quedaron confundidos.", PUNTOS_EXPONER)
+            return (f"¡Acertaste! {sospechoso['nombre']} era el Cambiaformas. "
+                    f"Los aliens quedaron confundidos y ya no se puede disfrazar un rato.", PUNTOS_EXPONER)
         self.fallar(jugador, sospechoso)
-        return (f"{sospechoso['nombre']} era inocente. El infiltrado se escondió y la nave "
+        return (f"{sospechoso['nombre']} era inocente. El Cambiaformas se escondió y la nave "
                 f"te delató: los aliens vienen por ti.", PUNTOS_ACUSACION_FALSA)
 
     # -- Cierre del caso -----------------------------------------------------------------
@@ -251,7 +260,7 @@ class CasoInfiltrado:
             alien.confundir(CONFUSION_MS)
         self._sonar("expuesto", 0.9)
         for otro in self.juego.jugadores:
-            otro.avisar(f"¡Infiltrado expuesto! Aliens confundidos {CONFUSION_MS // 1000} s",
+            otro.avisar(f"¡Cambiaformas expuesto! Aliens confundidos {CONFUSION_MS // 1000} s",
                         COLOR_BIEN)
         self._limpiar()
         self._decir("infiltrado_expuesto", jugador.rol)
@@ -262,6 +271,8 @@ class CasoInfiltrado:
         jugador.sumar_puntos(PUNTOS_ACUSACION_FALSA)
         for alien in getattr(self.juego, "aliens", ()):
             alien.oir(jugador.hitbox.center)
+            if hasattr(alien, "enterarse"):
+                alien.enterarse(jugador)
         self._sonar("alarma", 0.8)
         for otro in self.juego.jugadores:
             if otro is not jugador:
@@ -300,10 +311,10 @@ class CasoInfiltrado:
             return None
         nombre = self.infiltrado["nombre"]
         if self.estado == "expuesto":
-            return f"Infiltrado: expuesto ({nombre})"
+            return f"Cambiaformas: expuesto ({nombre})"
         if self.estado == "fallido":
-            return f"Infiltrado: acusaron a {self.acusado['nombre']}; era {nombre}"
-        return f"Infiltrado: no lo descubrieron (era {nombre}, {len(self.subidas)}/3 pruebas)"
+            return f"Cambiaformas: acusaron a {self.acusado['nombre']}; era {nombre}"
+        return f"Cambiaformas: no lo descubrieron (era {nombre}, {len(self.subidas)}/3 pruebas)"
 
     def _sonar(self, nombre, volumen=1.0):
         if hasattr(self.juego, "sonar"):

@@ -9,10 +9,34 @@ Eventos que usa el juego (ia_nave.py):
     huida, escondite_revisado, escondite_calmado, rescate,
     poco_tiempo, ambiente, tutorial, despertar, apagon, alarma, compuerta,
     fin_evento, puerta_doble, luz, sello, eliminado, curacion,
-    prueba, infiltrado_expuesto, acusacion_falsa
+    prueba, infiltrado_expuesto, acusacion_falsa, rumor, desmentido, planos, cambiaformas,
+    sabotaje, prisionero_rescatado
 """
 
 FRASES = {
+    "cambiaformas": [
+        "Sorpresa. No todos los prisioneros son lo que parecen, {rol}.",
+        "Te dije que no confiaras en cualquier perfil.",
+    ],
+    "sabotaje": [
+        "¿Lo trajiste hasta la cápsula, {rol}? Qué amable. Gracias por el paseo.",
+        "Un prisionero que no habla y no se despega de ti. ¿En serio no sospechaste?",
+    ],
+    "prisionero_rescatado": [
+        "{rol} trajo a un prisionero a la cápsula. Ahora todos en NEXUS hablan bien de ustedes. Qué fastidio.",
+    ],
+    "rumor": [
+        "Hay noticias nuevas en NEXUS. Yo que ustedes, las compartiría sin leer.",
+        "Mis cuentas favoritas acaban de publicar algo. Créanles, son muy confiables.",
+    ],
+    "desmentido": [
+        "{rol} fue a revisar en persona. Qué aburrido es verificar, ¿no?",
+        "Una foto. Qué anticuado, {rol}. Antes la gente creía lo primero que leía.",
+    ],
+    "planos": [
+        "La tripulación les cree. Odio cuando la verdad corre más rápido que mis rumores.",
+        "Alguien les pasó los planos de la cápsula. Revisaré mis cuentas falsas.",
+    ],
     "prueba": [
         "{rol} anda recogiendo cosas que no son suyas. Interesante.",
         "Esa grabación no debía salir de la bodega. Nadie la va a creer, {rol}.",

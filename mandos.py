@@ -25,6 +25,7 @@ ajusta BOTONES / EJES con `python pruebas/probar_mando.py`):
     X                           usar la habilidad
     Y                           árbol de habilidades
     LB o LT (mantener)          caminar en sigilo
+    RB                          celular (NEXUS)
     B                           volver (solo en los menús)
     START                       pausa en la partida (en los menús, aceptar)
 """
@@ -44,7 +45,7 @@ PUESTOS_CON_MANDO = (2, 3)
 # Teclas virtuales: muy por encima de cualquier código de tecla de pygame.
 BASE_VIRTUAL = 0x7F000000
 ACCIONES = ("arriba", "abajo", "izquierda", "derecha", "interactuar", "habilidad",
-            "habilidades", "sigilo", "volver")
+            "habilidades", "sigilo", "volver", "celular")
 
 
 def tecla_virtual(puesto, accion):
@@ -61,7 +62,7 @@ def accion_de(tecla):
     return resto // 32, ACCIONES[resto % 32]
 
 
-NOMBRE_BOTON = {"interactuar": "A", "habilidad": "X", "habilidades": "Y",
+NOMBRE_BOTON = {"interactuar": "A", "habilidad": "X", "habilidades": "Y", "celular": "RB",
                 "sigilo": "LB", "arriba": "Stick", "abajo": "Stick",
                 "izquierda": "Stick", "derecha": "Stick", "volver": "B"}
 
@@ -134,7 +135,7 @@ class Mandos:
                 lt = joy.get_axis(EJE_LT) if joy.get_numaxes() > EJE_LT else -1
                 return bool(joy.get_button(BOTONES["LB"])) or lt > 0.3
             boton = {"interactuar": "A", "habilidad": "X", "habilidades": "Y",
-                     "volver": "B"}[accion]
+                     "volver": "B", "celular": "RB"}[accion]
             return bool(joy.get_button(BOTONES[boton]))
         except pygame.error:
             return False
@@ -177,7 +178,7 @@ class Mandos:
         if ev.type == pygame.JOYBUTTONDOWN:
             nombre = next((n for n, b in BOTONES.items() if b == ev.button), None)
             accion = {"A": "interactuar", "X": "habilidad", "Y": "habilidades",
-                      "B": "volver", "START": "pausa"}.get(nombre)
+                      "B": "volver", "START": "pausa", "RB": "celular"}.get(nombre)
             return [(puesto, accion)] if accion else []
         if ev.type == pygame.JOYHATMOTION:
             hx, hy = ev.value

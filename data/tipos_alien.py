@@ -56,6 +56,16 @@ TIPOS_ALIEN = {
         "oido": 1.0, "tacto": 0, "aguante_ms": 2600, "cansancio_ms": 2400,
         "color": (235, 115, 90), "borde": (90, 30, 20),
     },
+    # Único (cambiaformas.py): no patrulla rutas, se disfraza de prisionero.
+    # Usa su propio árbol (data/comportamiento_cambiaformas.py).
+    "cambiaformas": {
+        "nombre": "Cambiaformas",
+        "descripcion": "Se disfraza de prisionero y se revela de cerca.",
+        "vel_patrulla": 1.3, "vel_investigar": 2.6, "vel_perseguir": 4.7,
+        "alcance_vision": 0, "medio_angulo": math.pi,
+        "oido": 1.2, "tacto": 0, "aguante_ms": 0, "cansancio_ms": 0,
+        "color": (120, 40, 140), "borde": (30, 10, 40),
+    },
 }
 
 TIPO_POR_DEFECTO = "rastreador"

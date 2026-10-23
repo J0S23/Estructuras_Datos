@@ -32,16 +32,22 @@ ARBOL_LOGROS = L(
             L("todos_a_bordo", "Todos a bordo", "Escapar sin que eliminen a nadie.")))),
       rama="escape"),
 
-    L("conectado", "Conectado", "Entrar a NEXUS desde una terminal.",
-      L("algo_no_cuadra", "Algo no cuadra", "Encontrar una prueba del infiltrado.",
+    L("conectado", "Conectado", "Abrir NEXUS (en el celular o en una terminal).",
+      L("fact_checker", "Fact-checker", "Desmentir un rumor con una foto del lugar.",
+        L("planos", "Planos en mano", "Ganarse la confianza de la tripulación: los planos de la cápsula.")),
+      L("perfil_bajo", "Perfil bajo", "Publicar una foto recortada, sin mostrar dónde estás."),
+      L("cazador_de_bots", "Cazador de bots", "Reportar una cuenta falsa del Cambiaformas."),
+      L("perfil_robado", "Perfil robado", "Reportar una publicación suplantada por el Cambiaformas."),
+      L("algo_no_cuadra", "Algo no cuadra", "Encontrar una prueba del Cambiaformas.",
         L("evidencia", "Evidencia", "Subir una prueba a NEXUS.",
-          L("caso_cerrado", "Caso cerrado", "Exponer al infiltrado con las 3 pruebas."),
-          L("corazonada", "Corazonada", "Acusar al infiltrado correcto antes de tener las 3 pruebas."),
+          L("caso_cerrado", "Caso cerrado", "Exponer al Cambiaformas con las 3 pruebas."),
+          L("corazonada", "Corazonada", "Acusar al Cambiaformas correcto antes de tener las 3 pruebas."),
           L("acusacion_falsa", "Acusación falsa", "Acusar a un inocente. La nave te delató."))),
       rama="nexus"),
 
     L("nadie_atras", "Nadie se queda atrás", "Sacar a un compañero de una celda.",
       L("segunda_oportunidad", "Segunda oportunidad", "Rescatar a alguien que estaba en su última vida."),
+      L("rescate", "Rescate", "Llevar a un prisionero hasta la cápsula de escape."),
       L("medico", "Médico de guerra", "Devolverle una vida a un compañero (Regeneración)."),
       rama="equipo"),
 
@@ -56,6 +62,13 @@ ARBOL_LOGROS = L(
       L("por_aqui_no", "Por aquí no", "Que un sello frene a un alien (Forjador)."),
       L("titiritero", "Titiritero", "Atraer a un alien con una señal falsa (Resonante)."),
       rama="aliens"),
+
+    L("sobreviviente", "Sobreviviente", "Sobrevivir a que el Cambiaformas se revele frente a ti.",
+      L("en_manada", "En manada", "Que el Cambiaformas no se atreva porque iban juntos."),
+      L("no_me_enganas", "No me engañas", "Hackear al Cambiaformas mientras está disfrazado.",
+        L("lobo_con_piel_de_oveja", "Lobo con piel de oveja",
+          "Descubrir al Cambiaformas mientras lo llevan creyendo que es un prisionero.")),
+      rama="cambiaformas"),
     rama="inicio",
 )
 
@@ -68,4 +81,5 @@ COLOR_RAMA = {
     "equipo": (120, 230, 150),
     "nave": (255, 214, 64),
     "aliens": (245, 130, 120),
+    "cambiaformas": (190, 150, 255),
 }

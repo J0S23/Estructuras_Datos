@@ -28,6 +28,7 @@ from ambiente import temblor, dibujar_susto
 from screens.panel_habilidades import render_panel_habilidades
 from screens import roles as dibujo_roles
 from screens import mision_dibujo
+from screens import celular as dibujo_celular
 
 
 COLOR_SEPARADOR = (18, 16, 30)
@@ -103,12 +104,16 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
         render_escondido(screen, vista, jugador)
         render_tension(screen, vista, jugador)
         render_hud(screen, vista, jugador, segundos_restantes)
+        dibujo_celular.render_aviso_celular(screen, vista, jugador, extras.get("nexus"))
         render_vidas(screen, vista, jugador)
+        render_escolta(screen, vista, jugador, extras.get("escolta"))
         render_pista_zona(screen, vista, jugador)
         if jugador.panel is not None and jugador.panel.get("tipo") == "habilidades":
             render_panel_habilidades(screen, vista, jugador)
         elif jugador.panel is not None and jugador.panel.get("tipo") == "emision":
             render_mapa_emision(screen, vista, jugador, mundo)
+        elif jugador.panel is not None and jugador.panel.get("tipo") == "celular":
+            pass    # el celular va al final, encima del inventario y del pulso
         else:
             render_panel(screen, vista, jugador)
         render_mensaje(screen, vista, jugador)
@@ -116,6 +121,8 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
         render_inventario(screen, vista, jugador)
         dibujo_roles.render_minimapa(screen, vista, jugador, extras)
         mision_dibujo.render_progreso(screen, vista, jugador)
+        if jugador.panel is not None and jugador.panel.get("tipo") == "celular":
+            dibujo_celular.render_celular(screen, vista, jugador, extras.get("nexus"))
         render_minijuego(screen, vista, jugador)
         render_tutorial(screen, vista, jugador, extras.get("tutorial"))
         dibujar_susto(screen, vista, jugador)
@@ -123,7 +130,9 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
         screen.set_clip(clip_previo)
 
     _dibujar_separadores(screen, viewports)
-    render_evento(screen, extras.get("eventos"))
+    dibujo_celular.render_confianza(screen, extras.get("nexus"), len(jugadores))
+    render_evento(screen, extras.get("eventos"),
+                  dibujo_celular.desplazamiento_avisos(screen, len(jugadores), extras.get("nexus")))
     if mostrar_hitboxes:
         _dibujar_leyenda(screen, mundo, jugadores)
 
@@ -218,10 +227,12 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
     # se ve. Los aliens fuera de su vista no se dibujan (ni cuerpo, ni cono, ni
     # señal); los compañeros sí, oscurecidos como el resto del mapa.
     campo = None
+    npcs = list((extras or {}).get("npcs", ()))
     if (extras or {}).get("vision") and not mostrar_hitboxes:
         campo = vision.campo_de(dueño.hitbox.center, vision.obstaculos(
             mundo, extras.get("puertas_dobles", ()), extras.get("compuertas", ())))
         aliens = [a for a in aliens if campo.ve_a(a.hitbox)]
+        npcs = [n for n in npcs if campo.ve_a(n.hitbox)]
 
     # Los conos de visión van en el piso, debajo de todos los personajes.
     if not a_oscuras:
@@ -230,7 +241,7 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
 
     # Jugadores y aliens juntos, ordenados por Y para que el de adelante tape
     # al de atrás.
-    for jugador in sorted(list(jugadores) + list(aliens), key=lambda j: j.hitbox.bottom):
+    for jugador in sorted(list(jugadores) + list(aliens) + npcs, key=lambda j: j.hitbox.bottom):
         jugador.dibujar(screen, offset)
         if mostrar_hitboxes:
             # Hitboxes del personaje: la de colisión y la de interacción.
@@ -260,6 +271,7 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         mision_dibujo.dibujar_encima(screen, offset, camara, extras.get("mision"), tiempo_ms)
         dibujo_roles.dibujar_encima(screen, offset, camara, dueño, extras, tiempo_ms)
         dibujo_roles.dibujar_flechas(screen, vista, camara, dueño, extras)
+        dibujo_celular.dibujar_lugar(screen, vista, camara, dueño, extras.get("nexus"), tiempo_ms)
 
     screen.set_clip(clip_previo)
 
@@ -370,6 +382,25 @@ def _envolver(texto, f, ancho):
     return lineas
 
 
+def render_escolta(screen, vista, jugador, escoltado):
+    """Debajo de las vidas: a quién llevas a la cápsula (npcs.py). Muestra el
+    nombre que se ve, aunque sea el Cambiaformas disfrazado."""
+    usuario = escoltado(jugador) if escoltado is not None else None
+    if not usuario:
+        return
+    from screens.paneles import _fuente_para
+    f_hud = _fuente_para(vista)
+    lineas = 3 if jugador.info else 2
+    tam = max(16, min(26, vista.width // 34))
+    y = vista.y + f_hud.get_linesize() * lineas + 14 + tam + 14
+    f = fuente_de_tamano(max(13, min(16, vista.width // 50)))
+    img = f.render(f"Te sigue: {usuario}  ->  cápsula", True, (120, 230, 150))
+    fondo = pygame.Surface((img.get_width() + 16, img.get_height() + 8), pygame.SRCALPHA)
+    fondo.fill((14, 15, 28, 170))
+    screen.blit(fondo, (vista.x + 8, y))
+    screen.blit(img, (vista.x + 16, y + 4))
+
+
 def render_tutorial(screen, vista, jugador, tutorial):
     """El paso del tutorial de este jugador, abajo del centro de su vista."""
     if tutorial is None or not tutorial.activo or not getattr(jugador, "puede_moverse", True):
@@ -415,7 +446,7 @@ def render_tutorial(screen, vista, jugador, tutorial):
     screen.blit(pie, (caja.right - pie.get_width() - 14, caja.bottom - pie.get_height() - 8))
 
 
-def render_evento(screen, eventos):
+def render_evento(screen, eventos, bajar=0):
     """Aviso arriba al centro mientras dura un evento aleatorio."""
     if eventos is None:
         return
@@ -428,7 +459,7 @@ def render_evento(screen, eventos):
     # Debajo del cartel de la IA (y=100..152): más arriba chocaba con los
     # mensajes de cada jugador. No coincide con el tutorial (no hay eventos
     # mientras dura), que con 3 o 4 jugadores usa este mismo lugar.
-    caja = img.get_rect(midtop=(screen.get_width() // 2, 160)).inflate(28, 10)
+    caja = img.get_rect(midtop=(screen.get_width() // 2, 160 + bajar)).inflate(28, 10)
     fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
     fondo.fill((10, 8, 20, 220))
     screen.blit(fondo, caja.topleft)

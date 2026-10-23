@@ -67,7 +67,7 @@ class Narrador:
             self.decir("ambiente")
             self.silencio_ms = 0
 
-    def dibujar(self, screen):
+    def dibujar(self, screen, bajar=0):
         if not self.hablando:
             return
         from screens.paneles import partir_lineas
@@ -82,7 +82,7 @@ class Narrador:
         ancho = max(ancho, etiqueta.get_width()) + 36
         alto = etiqueta.get_height() + f.get_linesize() * len(lineas) + 22
         caja = pygame.Rect(0, 0, ancho, alto)
-        caja.midtop = (ancho_pantalla // 2, 100)   # debajo del HUD y de los avisos
+        caja.midtop = (ancho_pantalla // 2, 100 + bajar)   # debajo del HUD y de la barra de confianza
 
         # Letra por letra, línea por línea, como una terminal.
         visibles, quedan = [], letras
