@@ -11,7 +11,7 @@ tripulación sin Tecnomante ni Forjador (consumibles) y prueba la derrota.
 Guarda capturas en pruebas/capturas/mision_*.png.
 """
 
-import os, sys, math
+import os, sys
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ["SDL_AUDIODRIVER"] = "dummy"
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

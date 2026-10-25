@@ -666,7 +666,7 @@ def main():
     project_root = os.path.dirname(base_dir)
 
     screen = pygame.display.set_mode((1400, 860))
-    pygame.display.set_caption("Editor de personaje — EmpatiaQuest")
+    pygame.display.set_caption("Editor de personaje — NEXUS")
     clock = pygame.time.Clock()
 
     if len(sys.argv) > 1:

@@ -15,9 +15,8 @@ os.makedirs(OUT, exist_ok=True)
 
 from juego import app as App
 from juego import objetos_mapa
-from redes import celular
 from Estructuras.grafo import Grafo
-from redes.nexus import RedNexus, VERDE, ROJO, GRIS
+from redes.nexus import VERDE, ROJO, GRIS
 from data.nexus import UMBRAL_PLANOS, UMBRAL_DERROTA_ROJO, TICK_PROPAGACION_MS, CUENTAS
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60

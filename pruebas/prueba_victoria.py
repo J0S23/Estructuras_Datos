@@ -7,7 +7,7 @@ de confianza (Normal), la huida y la victoria. Revisa también la flecha al
 objetivo en cada parte.
 """
 
-import os, sys, math
+import os, sys
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ["SDL_AUDIODRIVER"] = "dummy"
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

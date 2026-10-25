@@ -17,8 +17,7 @@ from juego import app as App
 from juego import objetos_mapa
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 from data.comportamiento_cambiaformas import ARBOL_CAMBIAFORMAS
-from data.npcs import (NPCS_POR_PARTIDA, DISTANCIA_REVELARSE, TRANSFORMARSE_MS,
-                       ESPERA_INICIAL_MS, EXPUESTO_MS)
+from data.npcs import NPCS_POR_PARTIDA, TRANSFORMARSE_MS, EXPUESTO_MS
 from redes.nexus import VERDE, ROJO
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
@@ -355,8 +354,6 @@ cap(g, "cambiaformas_a_prisioneros.png")
 red.grafo.datos[npc.nodo]["color"] = ROJO
 npc.charla_ms = 0
 g.npcs.rng = random.Random(1)
-import data.npcs as datos_npcs
-viejo = datos_npcs.FRASES_ROJO
 g.cambiaformas.presa = None
 from entidades import npcs as modulo_npcs
 modulo_npcs.FRASES_ROJO = ["¡Aquí está {usuario}! ¡Aliens, aquí!"]
