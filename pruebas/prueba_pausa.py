@@ -15,7 +15,6 @@ os.makedirs(OUT, exist_ok=True)
 
 from juego import app as App
 from juego import objetos_mapa
-from juego import mandos as M
 from juego.audio_manager import audio_manager
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60

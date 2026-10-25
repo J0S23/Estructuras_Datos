@@ -21,7 +21,6 @@ from juego import app as App
 from juego import objetos_mapa
 from misiones import puertas
 from juego import tutorial as T
-from misiones.eventos import GestorEventos
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 

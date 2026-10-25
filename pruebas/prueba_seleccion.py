@@ -21,7 +21,6 @@ os.makedirs(OUT, exist_ok=True)
 from juego import app as App
 from juego import objetos_mapa
 objetos_mapa.mapa_activo = lambda: "Nave"   # el único mapa del juego
-from data.roles import ROLES
 
 CONFIRMAR = [pygame.K_e, pygame.K_RETURN, pygame.K_o, pygame.K_y]
 ARRIBA    = [pygame.K_w, pygame.K_UP, pygame.K_i, pygame.K_t]

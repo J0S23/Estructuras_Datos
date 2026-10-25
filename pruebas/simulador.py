@@ -30,7 +30,6 @@ import pygame; pygame.init()
 
 from juego import app as App
 from juego import objetos_mapa
-from misiones import puertas
 from misiones.mision import RADIO_RESCATE, PIEZAS_NECESARIAS
 objetos_mapa.mapa_activo = lambda: "Nave"
 App.Narrador.decir = lambda self, *a, **k: True   # sin banners (más rápido)
@@ -177,7 +176,6 @@ class Mapa:
 
     def _camino(self, desde, hasta, cerca, evitar):
         extra = self.bloqueos()
-        cx, cy = self.w / 2, self.h / 2
         def ok(c):
             if c not in self.libre:
                 return False

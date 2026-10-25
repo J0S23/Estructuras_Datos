@@ -19,7 +19,7 @@ import pygame
 
 from juego.fuentes import fuente_de_tamano
 from screens.paneles import partir_lineas
-from data.nexus import NOMBRE_LUGAR, UMBRAL_PLANOS
+from data.nexus import UMBRAL_PLANOS
 
 COLOR_CARCASA = (18, 18, 26)
 COLOR_PANTALLA = (238, 240, 247)
@@ -31,7 +31,6 @@ COLOR_TENUE = (110, 116, 140)
 COLOR_MARCA = (52, 108, 220)
 COLOR_VERDE = (60, 190, 110)
 COLOR_ROJO = (225, 70, 70)
-COLOR_FOTO = (255, 236, 170)
 COLOR_SOMBRA = (12, 11, 23)
 COLOR_LUGAR = (90, 170, 255)
 

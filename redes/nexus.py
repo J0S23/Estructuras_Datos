@@ -48,7 +48,7 @@ from data.nexus import (
     BOTS_AL_EMPEZAR, TICK_PROPAGACION_MS, PRIMER_RUMOR_S, RUMOR_CADA_S, NORMAL_CADA_S,
     NUEVO_BOT_CADA_S, MAX_POR_VERIFICAR, NIVELES_DESMENTIDO, NOMBRE_LUGAR, PROB_CONVENCER_UBICACION,
     NIVELES_COMPARTIR_CIERTO, UMBRAL_PLANOS, UMBRAL_DERROTA_ROJO, DIFERENCIA_POTENCIA_MAX,
-    POTENCIA_VELOCIDAD, POTENCIA_VISION, RADIO_FOTO, PUNTOS_DESMENTIR,
+    RADIO_FOTO, PUNTOS_DESMENTIR,
     PUNTOS_REPORTAR_BOT, PUNTOS_PLANOS, PROB_CREER_RUMOR, PROB_CONVENCER,
     PUNTOS_SUPLANTACION,
 )
@@ -141,7 +141,6 @@ class RedNexus:
             nodo = f"preso_{i}"
             g.agregar_nodo(nodo, tipo="preso", color=GRIS, **cuenta)
             presos.append(nodo)
-        self.presos_iniciales = len(presos)
         for nodo in presos:
             for otro in self.rng.sample([p for p in presos if p != nodo],
                                         min(SEGUIDORES_PRISIONERO, len(presos) - 1)):

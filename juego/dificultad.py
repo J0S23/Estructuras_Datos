@@ -56,7 +56,6 @@ class Dificultad:
         self.reloj_ms = REVISAR_CADA_MS
         self.capturas = []                      # cuándo atraparon a alguien (ms de partida)
         self.tiempo_ms = 0
-        self.ultimo_rendimiento = 0.0
 
     # -- Lo que preguntan los demás -----------------------------------------------------
 
@@ -120,7 +119,6 @@ class Dificultad:
         self.reloj_ms = REVISAR_CADA_MS
         antes = self.nombre_nivel()
         r = self.rendimiento(juego)
-        self.ultimo_rendimiento = r
         self.nivel = max(NIVEL_MIN, min(NIVEL_MAX, self.nivel + r * PASO_MAX))
         self.nivel_max = max(self.nivel_max, self.nivel)
         despues = self.nombre_nivel()
