@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "spawn": null,
+  "rutas_aliens": [],
+  "tipos_aliens": [],
+  "escondites": [],
+  "terminales": [],
+  "paneles": [],
+  "piezas": [],
+  "celdas": [],
+  "puerta": null,
+  "notas": [],
+  "consolas": [],
+  "capsula": null,
+  "consumibles": [],
+  "nexus": [],
+  "compuertas": [],
+  "puertas_dobles": [],
+  "fusibles": [],
+  "pruebas": [],
+  "mapa": "MapaE2"
+}
