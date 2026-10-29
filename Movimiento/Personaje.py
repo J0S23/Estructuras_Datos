@@ -6,6 +6,8 @@ Cada personaje vive en su propia carpeta dentro de Imagenes/Personajes/
     <prefijo>Idle_<direccion>.png        1 frame
     <prefijo>Breathing_<direccion>.png   varios frames (idle animado)
     <prefijo>Walking_<direccion>.png     varios frames (caminata)
+    <prefijo>Running_<direccion>.png     si no hay Walking, hace de caminata
+
 
 donde <direccion> es una de las 8: north, north-east, east, south-east,
 south, south-west, west, north-west.
@@ -21,6 +23,7 @@ tamaño de la imagen asumiendo frames cuadrados (una hoja de 736x92 tiene
 """
 
 import json
+import math
 import os
 
 import pygame
@@ -102,6 +105,12 @@ def detectar_hojas(carpeta):
             continue
 
         animacion = next((a for a in ANIMACIONES if a in nombre), None)
+        if animacion is None and "running" in nombre:
+            # Correr hace de caminar mientras no haya hoja de caminar (el
+            # Cambiaformas solo trae Idle y Running). Si hay las dos, gana
+            # Walking aunque se lea después.
+            hojas.setdefault("walking", {}).setdefault(direccion, os.path.join(carpeta, archivo))
+            continue
         if animacion is None:
             continue
 
@@ -177,6 +186,56 @@ def direccion_desde_vector(dx, dy, por_defecto="south"):
     if vertical and horizontal:
         return f"{vertical}-{horizontal}"
     return vertical or horizontal
+
+
+# Ángulo de cada dirección en pantalla (0 = este; la y crece hacia abajo, así
+# que pi/2 es el sur). El mismo orden que usan los aliens.
+_ORDEN_ANGULO = ("east", "south-east", "south", "south-west",
+                 "west", "north-west", "north", "north-east")
+ANGULO_DIRECCION = {d: i * math.pi / 4 for i, d in enumerate(_ORDEN_ANGULO)}
+
+
+class DireccionSuave:
+    """Hacia dónde mira algo que se mueve solo, sin que la animación tiemble.
+
+    Lo que se mueve por el mapa avanza de a píxeles enteros: yendo en una
+    diagonal "rara" un cuadro avanza (1, 0) y el siguiente (1, 1), y si la
+    dirección sale de ese último paso salta entre este y sureste ~17 veces por
+    segundo. Aquí sale de la velocidad promedio de los últimos pasos, y para
+    cambiar hay que pasarse del borde entre dos direcciones por `HISTERESIS`.
+    Igual con caminar/quieto: un cuadro sin avanzar no cuenta como pararse.
+    """
+
+    SUAVIZADO = 0.2                  # cuánto pesa el último paso en el promedio
+    HISTERESIS = math.radians(12)    # además de los 22.5° hasta el borde
+    GRACIA = 6                       # cuadros sin avanzar para decir que se paró
+
+    def __init__(self, direccion="south"):
+        self.direccion = direccion
+        self.moviendose = False
+        self._vx = self._vy = 0.0
+        self._quieto = self.GRACIA
+
+    def actualizar(self, dx, dy):
+        """Se llama una vez por cuadro con lo que se movió. Devuelve la dirección."""
+        if dx or dy:
+            if self._quieto >= self.GRACIA:     # arranca: el promedio empieza aquí
+                self._vx, self._vy = float(dx), float(dy)
+            else:
+                self._vx += (dx - self._vx) * self.SUAVIZADO
+                self._vy += (dy - self._vy) * self.SUAVIZADO
+            self._quieto = 0
+        else:
+            self._quieto += 1
+        self.moviendose = self._quieto < self.GRACIA
+        if not self.moviendose or math.hypot(self._vx, self._vy) < 0.05:
+            return self.direccion
+        angulo = math.atan2(self._vy, self._vx)
+        actual = ANGULO_DIRECCION[self.direccion]
+        diferencia = abs((angulo - actual + math.pi) % (2 * math.pi) - math.pi)
+        if diferencia > math.pi / 8 + self.HISTERESIS:
+            self.direccion = _ORDEN_ANGULO[round(angulo / (math.pi / 4)) % 8]
+        return self.direccion
 
 
 class Personaje:

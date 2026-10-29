@@ -183,6 +183,10 @@ class Jugador:
         self.panel = None
         self.cursor = 0
 
+        # La sala donde está (juego/salas.py), para el HUD.
+        self.sala = None
+        self.sala_cambio_ms = 0
+
         # Mensaje corto de feedback y su tiempo restante.
         self.mensaje = ""
         self.mensaje_color = (255, 255, 255)
@@ -225,6 +229,9 @@ class Jugador:
         self.equipo = None
         self.pista_mision = None
         self.susto_ms = 0            # cuánto le queda al susto de ser atrapado
+        self.susto_total_ms = 0      # cuánto dura el susto actual (ambiente.py)
+        self.susto_tipo = "alien"    # "alien", "ciego", "cazador", "vigia", "cf_revela" o "cf_captura"
+        self.susto_disfraz = None    # sprite del prisionero que imitaba el Cambiaformas
         self.vidas = VIDAS_INICIALES
         self.vidas_max = VIDAS_INICIALES     # la dificultad lo cambia (dificultad.py)
         self.vidas_infinitas = False         # dificultad Tutorial: atrapar no quita vidas

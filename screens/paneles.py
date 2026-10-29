@@ -175,8 +175,21 @@ def render_panel(screen, vista, jugador):
     screen.set_clip(clip_previo)
 
 
-def render_hud(screen, vista, jugador, segundos_restantes):
-    """Barra superior del viewport: rol, puntos, objetivo y reloj."""
+COLOR_SALA = (150, 205, 255)
+
+
+def _icono_lugar(screen, centro, tam, color):
+    """Un pin de mapa chiquito, dibujado con formas."""
+    cx, cy = centro
+    r = max(3, tam // 3)
+    pygame.draw.polygon(screen, color, [(cx - r, cy - r // 2), (cx + r, cy - r // 2), (cx, cy + r + 2)])
+    pygame.draw.circle(screen, color, (cx, cy - r // 2), r)
+    pygame.draw.circle(screen, (14, 15, 28), (cx, cy - r // 2), max(1, r // 2))
+
+
+def render_hud(screen, vista, jugador, segundos_restantes=None):
+    """Barra superior del viewport: rol, puntos, objetivo y la sala donde está
+    (o el reloj, en un mapa sin misión, que todavía se juega por tiempo)."""
     f = _fuente_para(vista)
     lineas = 3 if jugador.info else 2
     alto_barra = f.get_linesize() * lineas + 14
@@ -194,12 +207,24 @@ def render_hud(screen, vista, jugador, segundos_restantes):
     screen.blit(puntos, (vista.right - puntos.get_width() - 12, y))
 
     y += f.get_linesize()
-    partes = partir_lineas(jugador.objetivo, f, vista.width - 120)
+    derecha, icono = None, False
+    if segundos_restantes is not None:
+        derecha = f.render(_formato_reloj(segundos_restantes), True, COLOR_TEXTO)
+    elif getattr(jugador, "sala", None):
+        nueva = getattr(jugador, "sala_cambio_ms", 0) > 0
+        derecha = f.render(jugador.sala, True, COLOR_TITULO if nueva else COLOR_SALA)
+        icono = True
+    reservado = (derecha.get_width() + (22 if icono else 0) + 24) if derecha else 12
+    partes = partir_lineas(jugador.objetivo, f, max(60, vista.width - reservado - 12))
     objetivo = partes[0] + ("..." if len(partes) > 1 else "")
     screen.blit(f.render(objetivo, True, COLOR_TENUE), (x, y))
 
-    reloj = f.render(_formato_reloj(segundos_restantes), True, COLOR_TEXTO)
-    screen.blit(reloj, (vista.right - reloj.get_width() - 12, y))
+    if derecha is not None:
+        dx = vista.right - derecha.get_width() - 12
+        screen.blit(derecha, (dx, y))
+        if icono:
+            _icono_lugar(screen, (dx - 11, y + f.get_linesize() // 2 - 1), f.get_linesize() - 4,
+                         COLOR_TITULO if getattr(jugador, "sala_cambio_ms", 0) > 0 else COLOR_SALA)
 
     # Línea propia del rol: la recarga de su habilidad y cosas así
     # (acciones_rol.linea_de_estado).
@@ -224,9 +249,12 @@ def fila_vidas(vista, jugador, tapado=None):
     f = _fuente_para(vista)
     lineas = 3 if jugador.info else 2
     tam = max(16, min(26, vista.width // 34))
-    maximo = getattr(jugador, "vidas_max", VIDAS_INICIALES)
+    if getattr(jugador, "vidas_infinitas", False):
+        ancho = tam + 6 + ancho_infinito(tam) + 10      # un corazón y el ∞
+    else:
+        ancho = getattr(jugador, "vidas_max", VIDAS_INICIALES) * (tam + 6) + 10
     rect = pygame.Rect(vista.x + 8, vista.y + f.get_linesize() * lineas + 14,
-                       maximo * (tam + 6) + 10, tam + 12)
+                       ancho, tam + 12)
     if tapado is not None and rect.colliderect(tapado):
         rect.left = tapado.right + 10
     return rect, tam
@@ -457,9 +485,41 @@ def render_tension(screen, vista, jugador):
     alfa = int(255 * min(1.0, fuerza * (0.55 + 0.45 * golpe)))
     if alfa <= 0:
         return
+    tiras = _vineta_nivel(vista.size, alfa)
+    if tiras is not None:
+        for tira, (dx, dy) in tiras:
+            screen.blit(tira, (vista.x + dx, vista.y + dy), special_flags=pygame.BLEND_PREMULTIPLIED)
+        return
     for tira, (dx, dy) in _vineta(vista.size):
         tira.set_alpha(alfa)
         screen.blit(tira, (vista.x + dx, vista.y + dy))
+
+
+NIVELES_VINETA = 12
+_cache_vineta_niveles = {}
+
+
+def _vineta_nivel(tamano, alfa):
+    """La viñeta ya mezclada con un nivel de `alfa` (12 niveles) y con el
+    alfa premultiplicado: así se pega con el mezclador rápido de pygame. Antes
+    se le ponía `set_alpha` a las tiras cada cuadro, y ese mezclado (alfa por
+    pixel por alfa de la superficie) era lo más lento del dibujo justo cuando
+    hay tensión: con el pulso alto, ~1.6 ms por vista a 1080p (ahora la mitad).
+    None si este pygame no tiene `premul_alpha` (se usa la forma de antes)."""
+    if not hasattr(pygame.Surface, "premul_alpha"):
+        return None
+    nivel = max(1, min(NIVELES_VINETA, round(alfa / 255 * NIVELES_VINETA)))
+    clave = (tuple(tamano), nivel)
+    if clave not in _cache_vineta_niveles:
+        if len(_cache_vineta_niveles) > 4 * NIVELES_VINETA:     # cambió el tamaño de las vistas
+            _cache_vineta_niveles.clear()
+        tiras = []
+        for tira, posicion in _vineta(tamano):
+            capa = tira.copy()
+            capa.fill((255, 255, 255, int(255 * nivel / NIVELES_VINETA)), special_flags=pygame.BLEND_RGBA_MULT)
+            tiras.append((capa.premul_alpha(), posicion))
+        _cache_vineta_niveles[clave] = tiras
+    return _cache_vineta_niveles[clave]
 
 
 # -- Escondites y minijuego ---------------------------------------------------------
@@ -583,12 +643,35 @@ def render_vidas(screen, vista, jugador, tapado=None):
     x = rect.x + 6 + tam // 2
     y = rect.centery
     parpadeo = getattr(jugador, "vida_cambio_ms", 0) > 0 and (pygame.time.get_ticks() // 120) % 2
+    if getattr(jugador, "vidas_infinitas", False):
+        # Tutorial: no se pierden vidas. Un corazón (parpadea si te atrapan) y ∞.
+        dibujar_corazon(screen, (x, y), tam, True, (255, 240, 240) if parpadeo else COLOR_VIDA)
+        dibujar_infinito(screen, (x + tam // 2 + 8 + ancho_infinito(tam) // 2, y), tam,
+                         (255, 230, 235))
+        return
     for i in range(getattr(jugador, "vidas_max", VIDAS_INICIALES)):
         lleno = i < vidas
         if parpadeo and i == vidas:      # el que se acaba de perder
             dibujar_corazon(screen, (x + i * (tam + 6), y), tam, True, (255, 240, 240))
             continue
         dibujar_corazon(screen, (x + i * (tam + 6), y), tam, lleno)
+
+
+def ancho_infinito(tam):
+    return int(tam * 1.5)
+
+
+def dibujar_infinito(screen, centro, tam, color, grosor=None):
+    """El símbolo de infinito (la letra del juego no lo trae): una lemniscata de
+    `ancho_infinito(tam)` px de ancho."""
+    cx, cy = centro
+    a = ancho_infinito(tam) / 2
+    puntos = []
+    for i in range(48):
+        t = i * 2 * math.pi / 48
+        d = 1 + math.sin(t) ** 2
+        puntos.append((cx + a * math.cos(t) / d, cy + a * math.sin(t) * math.cos(t) / d * 1.3))
+    pygame.draw.lines(screen, color, True, puntos, grosor or max(2, tam // 9))
 
 
 def render_eliminado(screen, vista, jugador):
@@ -603,7 +686,9 @@ def render_eliminado(screen, vista, jugador):
     grande = fuente_de_tamano(max(24, min(48, vista.width // 14)))
     titulo = grande.render("ELIMINADO", True, COLOR_VIDA)
     screen.blit(titulo, titulo.get_rect(center=(vista.centerx, vista.centery - grande.get_linesize())))
-    for i, (texto, color) in enumerate((("Te atraparon 3 veces.", COLOR_TEXTO),
+    veces = getattr(jugador, "vidas_max", 3)
+    for i, (texto, color) in enumerate(((f"Te atraparon {veces} {'vez' if veces == 1 else 'veces'}.",
+                                          COLOR_TEXTO),
                                          ("Tus compañeros siguen: ¡ánimo desde afuera!", COLOR_TENUE))):
         img = f.render(texto, True, color)
         screen.blit(img, img.get_rect(center=(vista.centerx, vista.centery + i * (f.get_linesize() + 6))))

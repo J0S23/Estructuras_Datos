@@ -8,10 +8,11 @@ Una vez abierta, queda abierta.
 **Compuerta**: una reja que el evento aleatorio "cierre de emergencia"
 (eventos.py) baja un rato y luego vuelve a subir.
 
-Las dos bloquean solo a los **jugadores**: a los aliens la nave les abre paso
-(es su nave). Por eso no se meten en `mundo.paredes` como la puerta de la
-prisión, sino que el juego las revisa aparte al mover a un jugador
-(`Game._colisiona_jugador`).
+La puerta para dos, mientras está cerrada, frena a **todos**: a los jugadores
+(`Game._colisiona_jugador`) y a los aliens (`mundo.puertas_alien`, que usan
+`mundo.colisiona_alien` y la búsqueda de caminos). La compuerta frena solo a
+los jugadores: a los aliens la nave les abre paso (es su nave). Ninguna va en
+`mundo.paredes` como la puerta de la prisión.
 
 Las dos se ponen en el mapa con el editor (Editores/editor_mapa.py).
 """
@@ -133,14 +134,19 @@ def pista(puertas, jugador):
 def dibujar(screen, offset, camara, puertas, compuertas, tiempo_ms):
     for puerta in puertas:
         rect = puerta["rect"]
-        if not rect.inflate(300, 300).colliderect(camara):
-            continue
         r = rect.move(-offset[0], -offset[1])
-        if puerta["abierta"]:
-            pygame.draw.rect(screen, (60, 70, 90), r, 2)
-        else:
-            _dibujar_reforzada(screen, r, puerta["progreso"])
+        # Cada cosa se dibuja si ELLA está en pantalla: los paneles pueden estar
+        # lejos de la puerta, y antes solo se veían cuando la puerta entraba
+        # en la cámara.
+        if rect.inflate(60, 60).colliderect(camara):
+            if puerta["abierta"]:
+                pygame.draw.rect(screen, (60, 70, 90), r, 2)
+            else:
+                _dibujar_reforzada(screen, r, puerta["progreso"])
         for i, panel in enumerate(puerta["paneles"]):
+            if not panel.inflate(60, 60).colliderect(camara) and not (
+                    not puerta["abierta"] and camara.clipline(panel.center, rect.center)):
+                continue          # ni el panel ni su línea a la puerta se ven aquí
             p = panel.move(-offset[0], -offset[1])
             ocupado = puerta["en_panel"][i] is not None
             if puerta["abierta"]:

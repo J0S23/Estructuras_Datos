@@ -95,8 +95,22 @@ class GestorEventos:
         mundo = getattr(juego, "mundo", None)
         if not libres or mundo is None or not hasattr(mundo, "area_alcanzable"):
             return list(self.cajas)
-        colisiona = getattr(juego, "_colisiona_jugador", mundo.colisiona)
         j = libres[0]
+        # Rápido: con los pedazos conectados de la navegación (lo que frena a
+        # los jugadores: la puerta del código, las puertas para dos cerradas y
+        # las compuertas bajadas). Antes se recorría todo el mapa caminable al
+        # empezar cada apagón (~50 ms de tirón en MapaE2).
+        if hasattr(mundo, "paredes_base"):
+            from juego import navegacion
+            nav = navegacion.de_mundo(mundo, 34, 20)
+            extra = [p for p in mundo.paredes if p not in mundo.paredes_base]
+            extra += [p["rect"] for p in getattr(juego, "puertas_dobles", []) if not p["abierta"]]
+            extra += [c["rect"] for c in getattr(juego, "compuertas", []) if c["cerrada"]]
+            alcanzables = [caja for caja in self.cajas
+                           if nav.conectados(j.hitbox.center, caja["rect"].center, extra=extra)]
+            if alcanzables:
+                return alcanzables
+        colisiona = getattr(juego, "_colisiona_jugador", mundo.colisiona)
         celdas = mundo.area_alcanzable(j.hitbox.topleft, j.hitbox.width, j.hitbox.height,
                                        colisiona=colisiona)
         alcanzables = []

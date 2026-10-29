@@ -82,7 +82,7 @@ g = nueva_partida(("Tecnomante", "Forjador"))
 tec, forj = g.jugadores
 m = g.mision
 print("mapa:", g.mundo.nombre_mapa, "| misión activa:", m.activa, "| fase:", m.fase,
-      "| código:", m.codigo, "| tiempo:", g.tiempo_restante_ms // 1000, "s")
+      "| código:", m.codigo, "| sin límite de tiempo:", g.tiempo_restante_ms is None)
 assert m.activa and m.fase == "prision" and m.puerta in g.mundo.paredes
 assert not m.consumibles, "con Tecnomante y Forjador no hay consumibles"
 assert len(g.aliens) == 3 and any(z["clave"].startswith("nexus") for z in g.zonas)

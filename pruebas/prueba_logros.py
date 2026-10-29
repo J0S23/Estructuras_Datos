@@ -238,4 +238,19 @@ print("resultados: 'Ver logros' muestra el árbol (teclado, mouse y mando) y 'Vo
 g2 = nueva_partida()
 assert g2.logros.arbol.obtenidos() == 0
 print("partida nueva: logros en 0")
+
+# "Conoce a tu enemigo": todos los tipos, el Cambiaformas incluido (y a él
+# hay que verlo como es: disfrazado no cuenta).
+L2 = g2.logros
+L2.juego.tutorial.activo = False; g2._terminar_tutorial()
+cf = g2.cambiaformas
+assert cf is not None and cf.disfrazado
+L2.tipos_vistos = {a.tipo for a in g2.aliens if a is not cf}
+cf.hitbox.center = g2.jugadores[0].hitbox.center
+L2.actualizar(DT)
+assert not L2.tiene("conoce_a_tu_enemigo"), "faltaba ver al Cambiaformas como es"
+cf.disfrazado = False
+L2.actualizar(DT)
+assert L2.tiene("conoce_a_tu_enemigo")
+print("'Conoce a tu enemigo' pide también al Cambiaformas (revelado)")
 print("\nTODO OK")

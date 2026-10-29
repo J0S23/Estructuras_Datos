@@ -7,7 +7,7 @@ si un evento tiene varias, se escoge una al azar.
 Eventos que usa el juego (ia_nave.py):
     inicio, pulso_alto, atrapado, codigo_malo, puerta_abierta, consola,
     huida, escondite_revisado, escondite_calmado, rescate,
-    poco_tiempo, ambiente, tutorial, despertar, apagon, alarma, compuerta,
+    ambiente, tutorial, despertar, apagon, alarma, compuerta,
     fin_evento, puerta_doble, luz, sello, eliminado, curacion,
     prueba, infiltrado_expuesto, acusacion_falsa, rumor, desmentido, planos, cambiaformas,
     sabotaje, prisionero_rescatado, dificultad_sube, dificultad_baja
@@ -76,7 +76,7 @@ FRASES = {
         "Error. ¿Seguro que saben leer?",
     ],
     "puerta_abierta": [
-        "Puerta de la prisión abierta. Eso no estaba en el protocolo.",
+        "Puerta de seguridad abierta. Eso no estaba en el protocolo.",
         "Vaya. Encontraron el código. Anotado.",
     ],
     "consola": [
@@ -97,9 +97,6 @@ FRASES = {
     ],
     "rescate": [
         "Liberaron al sujeto {rol}. Trabajo en equipo. Qué molesto.",
-    ],
-    "poco_tiempo": [
-        "Queda un minuto para el salto. Después de eso, nadie vuelve a casa.",
     ],
     "tutorial": [
         "Sedación de la tripulación en curso. Cuando todos despierten, mis unidades también.",

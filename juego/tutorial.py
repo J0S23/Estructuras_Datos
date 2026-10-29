@@ -6,7 +6,7 @@ siguiente con su tecla de habilidad cuando ya lo leyó. Los de moverse y
 caminar en sigilo también se completan solos al hacerlos. Mientras dura:
 
 - los aliens duermen (no se mueven ni ven ni oyen),
-- el reloj de la misión no corre,
+- el cronómetro de la partida no corre,
 - no hay eventos aleatorios,
 - la puerta de la prisión no abre (mision.py pregunta `juego.en_tutorial`),
   para que nadie avance con los aliens dormidos.
@@ -18,7 +18,7 @@ mientras espera a los demás.
 
 MS_SIGILO_NECESARIO = 700
 
-# {mover}, {sigilo}, {interactuar}, {habilidad}, {habilidades} y {celular} se cambian por
+# {mover}, {sigilo}, {interactuar}, {habilidad}, {habilidades}, {celular} y {vidas} se cambian por
 # las teclas de cada jugador. "accion" dice si además se completa haciéndolo.
 PASOS = [
     {"texto": "Muévete con {mover}.", "accion": "mover"},
@@ -38,7 +38,7 @@ PASOS = [
               "no habla y su nombre falla. Si te ve solo, se revela. ¡No te alejes de tu equipo!",
      "accion": "leer"},
     {"texto": "{interactuar}: usar, leer notas y esconderte. Si te atrapan vas a una "
-              "celda y tus compañeros te sacan. Tienes 3 vidas.", "accion": "leer"},
+              "celda y tus compañeros te sacan. Tienes {vidas}.", "accion": "leer"},
     {"texto": "{interactuar} junto a un prisionero: \"¿vienes conmigo?\". Los verdes te "
               "siguen; llévalos a la cápsula y contarán en NEXUS que los salvaste. Si uno "
               "acepta sin decir nada y se te pega demasiado... desconfía.", "accion": "leer"},
@@ -56,7 +56,15 @@ def con_teclas(texto, jugador):
         interactuar=jugador.nombre_tecla("interactuar"),
         habilidad=jugador.nombre_tecla("habilidad"),
         habilidades=jugador.nombre_tecla("habilidades"),
-        celular=jugador.nombre_tecla("celular"))
+        celular=jugador.nombre_tecla("celular"),
+        vidas=_vidas_texto(jugador))
+
+
+def _vidas_texto(jugador):
+    if getattr(jugador, "vidas_infinitas", False):
+        return "vidas infinitas"
+    n = getattr(jugador, "vidas_max", 3)
+    return f"{n} vida{'s' if n != 1 else ''}"
 
 
 def pasos_con_teclas(jugador):

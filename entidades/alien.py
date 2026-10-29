@@ -23,8 +23,9 @@ Hay varios **tipos** de alien (data/tipos_alien.py): todos usan el mismo
 árbol, pero cada tipo ve, oye y corre distinto. El Ciego, por ejemplo, nunca
 responde "sí" a "¿ve a un jugador?" salvo que lo tenga casi encima.
 
-Los sprites de los aliens (de Anny) están en Imagenes/Aliens/<carpeta>/ con
-el mismo formato que los personajes (8 direcciones, idle/breathing/walking).
+Los sprites de los aliens (de Anny; el del Cambiaformas, de Joseph) están en
+Imagenes/Aliens/<carpeta>/ con el mismo formato que los personajes (8
+direcciones, idle/breathing/walking; running sirve de walking).
 Un tipo sin carpeta (el Rastreador) se sigue dibujando con formas.
 """
 
@@ -67,11 +68,14 @@ COLOR_CONO = {
 }
 
 # Sprites por tipo: carpeta en Imagenes/Aliens/ y escala (los cuadros vienen
-# de 96 px; el Ciego de 80 px y es bajito porque va a cuatro patas).
+# de 96 px; el Ciego de 80 px y es bajito porque va a cuatro patas). El
+# Cambiaformas viene en cuadros de 80 px y se agranda más: revelado tiene que
+# verse más alto que los demás (~120 px).
 SPRITES_ALIEN = {
     "ciego": ("Alien_Ciego", 2.0),
     "cazador": ("Alien_Rapido", 1.8),
     "vigia": ("Alien_Vision", 1.9),
+    "cambiaformas": ("Alien_Cambiaformas", 2.3),
 }
 FPS_ANIMACION = 8
 # Ángulo -> dirección del sprite (0 = este, va en sentido horario en pantalla).
@@ -149,6 +153,11 @@ class Alien:
         self._ruta_parcial = False        # el camino no llega al ruido, solo lo más cerca posible
         self._destino_ruta = None
         self._recalcular_ms = 0
+        # Patrulla con puertas cerradas (_elegir_punto_patrulla): a qué punto
+        # va, si directo o rodeando, y con qué puertas/sellos se decidió.
+        self._patrulla_revisada = None
+        self._patrulla_directa = True
+        self._patrulla_quieto = False
 
     # -- Percepción ---------------------------------------------------------------
 
@@ -406,13 +415,51 @@ class Alien:
                 self.atascado_ms = 0
             return
 
-        # PATRULLAR. Si no puede llegar a un punto de su ruta (un sello lo
-        # dejó del otro lado), sigue con el siguiente.
+        # PATRULLAR. La ruta puede pasar por puertas (la del código, las para
+        # dos) o por donde el Forjador levantó un sello: mientras estén
+        # cerradas, se salta los puntos a los que no puede llegar (sin ir a
+        # chocar contra la puerta) y patrulla solo su lado; cuando se abren,
+        # vuelve a revisar y recorre la ruta entera.
+        version = (len(mundo.paredes), len(getattr(mundo, "bloqueos_alien", ())),
+                   len(getattr(mundo, "puertas_alien", ())))
+        if self._patrulla_revisada != (self.indice_ruta, version):
+            self._elegir_punto_patrulla(mundo, version)
+        if self._patrulla_quieto:
+            return                       # encerrado: se queda de guardia
         destino = self.ruta[self.indice_ruta]
-        if self._ir_hacia(destino, self.datos["vel_patrulla"] * factor, dt, mundo, 6) \
-                or self.atascado_ms > TIEMPO_ATASCADO_MS:
+        velocidad = self.datos["vel_patrulla"] * factor
+        if self._patrulla_directa:
+            llego = self._ir_hacia(destino, velocidad, dt, mundo, 6)
+        else:
+            llego = self._ir_por_camino(destino, velocidad, dt, mundo)
+        if llego or self.atascado_ms > TIEMPO_ATASCADO_MS:
             self.indice_ruta = (self.indice_ruta + 1) % len(self.ruta)
             self.atascado_ms = 0
+            self.ruta_ruido, self._destino_ruta = [], None
+
+    def _elegir_punto_patrulla(self, mundo, version):
+        """Desde el punto que le toca, el primero de su ruta al que puede llegar:
+        directo si la línea está libre, o rodeando (navegacion.py) si no. Si a
+        ninguno se puede llegar, se queda quieto hasta que algo se abra."""
+        self._patrulla_quieto = False
+        self._patrulla_directa = True
+        n = len(self.ruta)
+        if n > 1 and hasattr(mundo, "paredes_base"):     # (las pruebas usan mundos de mentira)
+            from juego import navegacion
+            nav = navegacion.de_mundo(mundo, self.hitbox.width, self.hitbox.height)
+            for k in range(n):
+                i = (self.indice_ruta + k) % n
+                punto = self.ruta[i]
+                if nav.libre_entre(self.centro, punto):
+                    self.indice_ruta, self._patrulla_directa = i, True
+                    break
+                if nav.conectados(self.centro, punto):
+                    self.indice_ruta, self._patrulla_directa = i, False
+                    break
+            else:
+                self._patrulla_quieto = True
+            self.ruta_ruido, self._destino_ruta = [], None
+        self._patrulla_revisada = (self.indice_ruta, version)
 
     def _ir_por_camino(self, destino, velocidad, dt, mundo):
         """Como _ir_hacia, pero rodeando paredes (navegacion.py).
@@ -436,12 +483,24 @@ class Alien:
                 self.ruta_ruido = [destino]
                 self._ruta_parcial = False
             else:
-                camino = nav.camino(self.centro, destino, parcial=True)
-                if not camino:
-                    self.ruta_ruido = []
-                    return True          # no se puede llegar ni acercarse: que se rinda
-                self.ruta_ruido = camino
-                self._ruta_parcial = nav.ultimo_parcial
+                # Un camino largo se busca en varios cuadros (navegacion.py,
+                # por_partes; unos pocos cuadros): mientras tanto va directo.
+                # Se sigue pidiendo el mismo destino hasta que salga.
+                pedido = getattr(self, "_buscando_hacia", None) or destino
+                camino = nav.camino(self.centro, pedido, parcial=True,
+                                    por_partes=navegacion.PRESUPUESTO_ALIEN, quien=id(self))
+                if camino is None and nav.ocupada:
+                    self._buscando_hacia = pedido
+                    self._destino_ruta, self._recalcular_ms, self.ruta_ruido = None, 0, []
+                    self._ir_hacia(destino, velocidad, dt, mundo)
+                    return False
+                else:
+                    self._buscando_hacia = None
+                    if not camino:
+                        self.ruta_ruido = []
+                        return True          # no se puede llegar ni acercarse: que se rinda
+                    self.ruta_ruido = camino
+                    self._ruta_parcial = nav.ultimo_parcial
         if not self.ruta_ruido:
             return self._ir_hacia(destino, velocidad, dt, mundo)
         # El último punto del camino sigue al ruido aunque se mueva un poco

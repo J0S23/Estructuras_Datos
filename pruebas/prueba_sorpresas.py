@@ -77,10 +77,10 @@ g = nueva_partida()
 j1, j2 = g.jugadores
 assert g.en_tutorial and g.narrador.dichas[0][0] == "tutorial"
 posiciones = [a.centro for a in g.aliens]
-tiempo = g.tiempo_restante_ms
+tiempo = g.tiempo_jugado_ms
 frames(g, 60)
 assert [a.centro for a in g.aliens] == posiciones, "los aliens no se mueven en el tutorial"
-assert g.tiempo_restante_ms == tiempo, "el reloj no corre en el tutorial"
+assert g.tiempo_jugado_ms == tiempo, "el cronómetro no corre en el tutorial"
 print("tutorial: aliens dormidos y reloj quieto | paso de J1:", g.tutorial.texto(j1)[2])
 cap(g, "sorpresas_a_tutorial.png")
 
@@ -96,7 +96,7 @@ print("tutorial: moverse y sigilo se completan haciéndolos")
 
 # Sin tiempo: aunque pase un minuto entero, sigue el tutorial.
 frames(g, int(60 * 1000 / DT))
-assert g.en_tutorial and g.tiempo_restante_ms == tiempo
+assert g.en_tutorial and g.tiempo_jugado_ms == tiempo
 print("tutorial: no tiene tiempo, espera a los jugadores")
 
 # La puerta de la prisión no abre mientras alguien no haya terminado.
@@ -121,7 +121,7 @@ for _ in range(len(T.PASOS)):
 assert not g.en_tutorial and all(not a.aturdido for a in g.aliens)
 assert any(d[0] == "despertar" for d in g.narrador.dichas)
 frames(g, 30)
-assert g.tiempo_restante_ms < tiempo
+assert g.tiempo_jugado_ms > tiempo
 print("tutorial: cuando los dos terminan despiertan los aliens y corre el reloj")
 
 # Y ya se puede usar el teclado de la puerta.

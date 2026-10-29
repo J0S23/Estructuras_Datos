@@ -440,7 +440,6 @@ def jugar(roles, semilla, max_s=520):
              "aliens_pegados": Counter(), "error": None, "donde": Counter()}
     g = nueva_partida(roles)
     g.eventos.rng = random.Random(semilla)
-    max_s = max(max_s, g.tiempo_total_ms / 1000 + 5)   # las dificultades fáciles duran más
     mapa = Mapa(g)
     bots = [Bot(g, j, mapa) for j in g.jugadores[:2]]
     original = g._atrapar
@@ -481,9 +480,8 @@ def jugar(roles, semilla, max_s=520):
             t += DT
     except Exception:
         stats["error"] = traceback.format_exc()
-    stats["resultado"] = g.mision.resultado or ("tiempo" if t >= max_s * 1000 else "?")
+    stats["resultado"] = g.mision.resultado or ("sin terminar" if t >= max_s * 1000 else "?")
     stats["duracion_s"] = t / 1000
-    stats["reloj_restante_s"] = g.tiempo_restante_ms // 1000
     stats["eventos"] = list(g.eventos.historial)
     stats["capturas"] = sum(j.veces_atrapado for j in g.jugadores)
     stats["puntos"] = g.equipo.total

@@ -35,7 +35,8 @@ def opciones_resultados(logros):
 
 def render_resultados(screen, jugadores, font=None, small_font=None,
                       mision=None, equipo=None, infiltrado=None, logros=None, seleccion=0,
-                      nexus=None, cambiaformas=None, npcs=None, dificultad=None):
+                      nexus=None, cambiaformas=None, npcs=None, dificultad=None,
+                      tiempo_jugado_ms=None):
     """Dibuja el resumen. Devuelve los rects de los botones (para el mouse)."""
     ancho, alto = screen.get_size()
     alto_boton = 52 if alto >= 600 else 40
@@ -97,12 +98,15 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
         y += paso + 6
         if mision is not None and mision.activa:
             from misiones.mision import PIEZAS_NECESARIAS
-            fases = {"prision": "seguían en la prisión", "sabotaje": "apagando las consolas",
+            fases = {"prision": "seguían encerrados, buscando el código", "sabotaje": "apagando las consolas",
                      "capsula": "llevando piezas a la cápsula", "reparar": "reparando la cápsula",
                      "huida": "corriendo a la cápsula"}
             lineas = ["Escaparon de la nave." if mision.resultado == "victoria"
                       else f"Se quedaron {fases.get(mision.fase, mision.fase)}.",
                       f"Piezas en la cápsula: {mision.piezas_entregadas}/{PIEZAS_NECESARIAS}"]
+            if tiempo_jugado_ms is not None:
+                s = int(tiempo_jugado_ms // 1000)
+                lineas.append(f"Tiempo de partida: {s // 60}:{s % 60:02d}")
             if logros is not None:
                 lineas.append(f"Veces que los atraparon: {logros.capturas_total}")
             eliminados = [j.rol for j in jugadores if getattr(j, "eliminado", False)]

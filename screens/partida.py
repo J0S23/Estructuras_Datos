@@ -77,7 +77,7 @@ def calcular_viewports(ancho, alto, cantidad):
     ]
 
 
-def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=0,
+def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=None,
                    mostrar_hitboxes=False, aliens=(), escondites=(), extras=None):
     """Dibuja un viewport por jugador, cada uno con su cámara, HUD y paneles."""
     ancho, alto = screen.get_size()

@@ -48,6 +48,7 @@ from data.npcs import (DANIO_SABOTAJE, DISTANCIA_REVELARSE, DISTANCIA_COMPANIA, 
 from data.nexus import NOMBRE_LUGAR
 from misiones.logros import logro
 from entidades import npcs
+from Movimiento.Personaje import DireccionSuave, ANGULO_DIRECCION
 from juego import dificultad
 GLITCH = "#%&?!@*"
 
@@ -83,6 +84,7 @@ class Cambiaformas(Alien):
         self.huir_al_despertar = False
         self.rafaga_ms = 0
         self.transformando_ms = 0
+        self._giro = DireccionSuave()       # hacia dónde mira el sprite revelado
         self.calma_ms = int(self._ajuste("cf_espera_ms", ESPERA_INICIAL_MS))  # al empezar se toma su tiempo
         self.revisando = None               # el casillero que está revisando
         self.expuesto_ms = 0
@@ -294,8 +296,15 @@ class Cambiaformas(Alien):
         if antes_descanso > 0 and self.descanso_ms == 0 and self.huir_al_despertar:
             self.huir_al_despertar = False
             self._empezar_huida()
+        dx, dy = self.hitbox.centerx - antes[0], self.hitbox.centery - antes[1]
+        # Merodeando camina con npcs.caminar, que no gira al alien: el sprite
+        # revelado mira hacia donde camina (sin temblar, ver DireccionSuave).
+        self._giro.actualizar(dx, dy)
+        self.moviendose = self._giro.moviendose
+        if self.moviendose:
+            self.angulo = ANGULO_DIRECCION[self._giro.direccion]
         if self.apariencia is not None:
-            self.apariencia.animar(self.hitbox.centerx - antes[0], self.hitbox.centery - antes[1])
+            self.apariencia.animar(dx, dy, dt)
         self.burbuja_ms = max(0, self.burbuja_ms - dt)
         self._aprender(dt)
         self._susurrar(dt)
@@ -574,9 +583,9 @@ class Cambiaformas(Alien):
         for j in self.juego.jugadores:
             j.avisar(f"¡{quien} era el Cambiaformas! Saboteó la cápsula: {danio}.", (236, 70, 60))
         if guia is not None:
-            guia.susto_ms = 700
-        if hasattr(self.juego, "sonar"):
-            self.juego.sonar("susto", 0.9)
+            self._asustar(guia)
+        elif hasattr(self.juego, "sonar"):
+            self.juego.sonar("cf_revela", 0.9)
         if hasattr(self.juego, "decir"):
             self.juego.decir("sabotaje", getattr(guia, "rol", None))
         self.presa = None
@@ -611,13 +620,22 @@ class Cambiaformas(Alien):
         self.transformando_ms = TRANSFORMARSE_MS
         presa = self.presa
         if presa is not None:
-            presa.susto_ms = 900
+            self._asustar(presa)
             presa.avisar(f"¡{self.apariencia.usuario if self.apariencia else 'Ese prisionero'} "
                          "era el Cambiaformas!", (236, 70, 60))
-        if hasattr(self.juego, "sonar"):
-            self.juego.sonar("susto", 1.0)
+        elif hasattr(self.juego, "sonar"):
+            self.juego.sonar("cf_revela", 1.0)
         if hasattr(self.juego, "decir"):
             self.juego.decir("cambiaformas", getattr(presa, "rol", None))
+
+    def _asustar(self, jugador):
+        """Su susto de transformación (ambiente.py): el prisionero que imitaba
+        se vuelve el monstruo en la pantalla de ese jugador."""
+        ambiente = getattr(self.juego, "ambiente", None)
+        if ambiente is not None:
+            ambiente.susto(jugador, "cf_revela", self.apariencia.sprite if self.apariencia else None)
+        else:
+            jugador.susto_ms = 900
 
     def _empezar_huida(self):
         self.disfrazado = False
@@ -749,10 +767,20 @@ class Cambiaformas(Alien):
             self.apariencia.dibujar(screen, self.hitbox.center, offset, usuario, color,
                                     self.burbuja if self.burbuja_ms > 0 else None)
             return
-        self._dibujar_monstruo(screen, offset)
+        # Transformándose: parpadea entre el prisionero y el monstruo.
+        if (self.transformando_ms > 0 and self.apariencia is not None
+                and int(self.transformando_ms / 90) % 2):
+            self.apariencia.dibujar(screen, self.hitbox.center, offset)
+            return
+        imagen, _ = self._frame_sprite()
+        if imagen is not None:
+            super().dibujar(screen, offset)       # el sprite de Joseph
+        else:
+            self._dibujar_monstruo(screen, offset)
 
     def _dibujar_monstruo(self, screen, offset):
-        """Provisional hasta que haya arte: una silueta alta y deforme."""
+        """Si falta el sprite (Imagenes/Aliens/Alien_Cambiaformas): una
+        silueta alta y deforme dibujada con formas."""
         x = self.hitbox.centerx - offset[0]
         pies = self.hitbox.bottom - offset[1]
         t = self.tiempo_ms / 1000

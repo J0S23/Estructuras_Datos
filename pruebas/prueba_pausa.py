@@ -48,8 +48,8 @@ g._manejar_tecla(pygame.K_ESCAPE)
 assert g.current_screen == "partida" and g.pausa is not None and g.pausa.vista == "menu"
 assert [a for _, a in g.pausa.opciones()] == ["continuar", "opciones", "logros", "confirmar"]
 
-# Congelado: ni el reloj ni los aliens se mueven.
-tiempo = g.tiempo_restante_ms
+# Congelado: ni el cronómetro ni los aliens se mueven.
+tiempo = g.tiempo_jugado_ms
 pos_aliens = [a.centro for a in g.aliens]
 for _ in range(120):
     if g.current_screen == "partida" and g.transitions.is_idle():
@@ -57,7 +57,7 @@ for _ in range(120):
             g.pausa.actualizar(DT)
         else:
             g._actualizar_partida(DT)
-assert g.tiempo_restante_ms == tiempo
+assert g.tiempo_jugado_ms == tiempo
 assert [a.centro for a in g.aliens] == pos_aliens
 # Las teclas de los jugadores no hacen nada con la pausa abierta.
 g._manejar_tecla(pygame.K_l)
@@ -112,8 +112,8 @@ print("Opciones: volumen, oscuridad, hitboxes y árbol del alien; Esc vuelve")
 g.pausa.seleccion = 0; g._manejar_tecla(pygame.K_RETURN)
 assert g.pausa is None
 g._actualizar_partida(DT)
-assert g.tiempo_restante_ms < tiempo
-print("Continuar quita la pausa y el reloj sigue")
+assert g.tiempo_jugado_ms > tiempo
+print("Continuar quita la pausa y el cronómetro sigue")
 
 # Terminar partida pide confirmación; "No" vuelve al menú de pausa.
 g._manejar_tecla(pygame.K_ESCAPE)
