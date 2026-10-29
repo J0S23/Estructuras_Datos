@@ -177,7 +177,11 @@ def dibujar_encima(screen, offset, camara, dueño, extras, tiempo_ms):
             pygame.draw.rect(screen, color, (x, y, int(48 * otro.pulso / 100), 8))
             pygame.draw.rect(screen, COLOR_BIOMANTE, (x, y, 48, 8), 1)
             # Y sus vidas, para saber a quién curar.
-            from screens.paneles import dibujar_corazon
+            from screens.paneles import dibujar_corazon, dibujar_infinito
+            if getattr(otro, "vidas_infinitas", False):
+                dibujar_corazon(screen, (x + 8, y - 10), 12, True)
+                dibujar_infinito(screen, (x + 8 + 20, y - 10), 12, (255, 230, 235), 2)
+                continue
             for i in range(getattr(otro, "vidas", 0)):
                 dibujar_corazon(screen, (x + 8 + i * 16, y - 10), 12, True)
 

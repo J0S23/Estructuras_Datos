@@ -6,7 +6,7 @@ marcar logros. Este módulo decide CUÁNDO se consigue cada uno, de dos formas:
 - Avisos directos: el código donde pasa la cosa llama `logro(juego, clave,
   jugador)` (rescatar, subir una prueba, hackear, entrar a NEXUS...).
 - Revisando cada frame (`actualizar`): lo que es un estado y no un momento
-  (30 s en sigilo, ver a los 3 tipos de alien, un alien frenado por un sello,
+  (30 s en sigilo, ver a todos los tipos de alien, un alien frenado por un sello,
   el cambio de fase, que vuelva la luz...).
 
 Se crea uno nuevo en cada partida, así que los logros se reinician solos.
@@ -157,14 +157,20 @@ class GestorLogros:
             centro = jugador.hitbox.center
             for alien in aliens:
                 d = _distancia(alien.centro, centro)
-                if d <= DISTANCIA_VER_ALIEN:
+                # El Cambiaformas cuenta cuando se le ve como es (disfrazado
+                # es un prisionero más).
+                if d <= DISTANCIA_VER_ALIEN and not getattr(alien, "disfrazado", False):
                     self.tipos_vistos.add(alien.tipo)
                 if (alien.tipo == "ciego" and d <= DISTANCIA_SHHH and camina_en_sigilo
                         and alien.objetivo is None
                         and alien.accion not in ("PERSEGUIR", "ATRAPAR", "REVISAR_ESCONDITE",
                                                  "DESCANSAR")):
                     self.conseguir("shhh", jugador)
+        # Todos los tipos que hay en la partida, el Cambiaformas incluido.
         tipos = {a.tipo for a in aliens}
+        cambiaformas = getattr(self.juego, "cambiaformas", None)
+        if cambiaformas is not None:
+            tipos.add(cambiaformas.tipo)
         if len(tipos) >= 2 and tipos <= self.tipos_vistos:
             self.conseguir("conoce_a_tu_enemigo")
 

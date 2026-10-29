@@ -9,8 +9,8 @@ Qué se pone aquí (las paredes siguen en Editores/hitbox_editor.py):
     2  Rutas de aliens             por dónde patrulla cada alien
     3  Escondites                  casilleros, armarios...
     4  Celdas                      a dónde van los que atrapan
-    5  Puerta de la prisión        la que se abre con el código (fase 1)
-    6  Notas                       una de las alcanzables trae el código
+    5  Puerta con código           la que se abre con el código (fase 1)
+    6  Notas                       una de las de antes de la puerta trae el código
     7  Consolas de navegación      las que hay que apagar (fase 2)
     8  Cápsula de escape           fases 3 y 4; sin cápsula no hay misión
     9  Piezas                      las recoge el Forjador
@@ -18,7 +18,8 @@ Qué se pone aquí (las paredes siguen en Editores/hitbox_editor.py):
     ,  y  .  para las demás: compuertas (las cierra un evento), puertas para
              dos (con sus dos paneles), cajas de fusibles (para los apagones),
              terminales del Tecnomante, paneles del
-             Forjador, consumibles (decodificador / kit) y pruebas del infiltrado.
+             Forjador, consumibles (decodificador / kit), pruebas del infiltrado
+             y salas (el nombre que sale en el HUD: Laboratorio, Pasillo...).
     En las rutas, T cambia el tipo de alien (Rastreador, Vigía, Ciego, Cazador).
     También se puede hacer clic en la lista de la derecha.
 
@@ -52,6 +53,7 @@ import pygame
 from juego import objetos_mapa
 from juego.mundo import Mundo, CARPETA_FONDOS
 from data.tipos_alien import TIPOS_ALIEN, ORDEN_TIPOS, TIPO_POR_DEFECTO
+from misiones.mision import notas_antes_de_la_puerta
 
 
 # -- Herramientas ------------------------------------------------------------------------
@@ -61,7 +63,7 @@ HERRAMIENTAS = [
     {"clave": "rutas_aliens", "nombre": "Rutas de aliens", "color": (236, 70, 60)},
     {"clave": "escondites", "nombre": "Escondites", "color": (130, 160, 210)},
     {"clave": "celdas", "nombre": "Celdas", "color": (190, 190, 205)},
-    {"clave": "puerta", "nombre": "Puerta de la prisión", "color": (200, 80, 90)},
+    {"clave": "puerta", "nombre": "Puerta con código", "color": (200, 80, 90)},
     {"clave": "notas", "nombre": "Notas", "color": (240, 226, 170)},
     {"clave": "consolas", "nombre": "Consolas de navegación", "color": (180, 110, 255)},
     {"clave": "capsula", "nombre": "Cápsula de escape", "color": (90, 220, 230)},
@@ -74,6 +76,7 @@ HERRAMIENTAS = [
     {"clave": "terminales", "nombre": "Terminales (Tecnomante)", "color": (150, 120, 255)},
     {"clave": "paneles", "nombre": "Paneles y sellos (Forjador)", "color": (255, 120, 80)},
     {"clave": "consumibles", "nombre": "Consumibles (si falta un rol)", "color": (120, 200, 160)},
+    {"clave": "salas", "nombre": "Salas (nombre en el HUD)", "color": (150, 205, 255)},
 ]
 TECLAS_HERRAMIENTA = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5,
                       pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9, pygame.K_0]
@@ -111,6 +114,10 @@ TAMANOS = {
 }
 TAMANO_ALIEN = (34, 20)
 NOMBRES_ESCONDITE = ["Casillero", "Armario", "Contenedor", "Ducto"]
+# Los cuartos del modelo de la nave; T los recorre y Y escribe uno nuevo.
+NOMBRES_SALA = ["Control", "General", "Laboratorio", "Prisión", "Residencial", "Biosfera",
+                "Bahía", "Motores", "Comando", "Gestación", "Pasillo"]
+TAMANO_MIN_SALA = 24      # píxeles del mundo: menos que esto es un clic suelto
 
 AYUDA_HERRAMIENTA = {
     "spawn": ["Clic: los jugadores aparecen aquí.",
@@ -121,7 +128,9 @@ AYUDA_HERRAMIENTA = {
                      "Clic derecho: borra un punto.",
                      "N: ruta nueva (= un alien nuevo).",
                      "TAB: siguiente ruta.  SUPR: borra la ruta.",
-                     "Un solo punto = guardia quieto."],
+                     "Un solo punto = guardia quieto.",
+                     "Ámbar: pasa por una puerta. Cerrada, el",
+                     "alien patrulla su lado; abierta, toda."],
     "escondites": ["Clic: pone uno.  Arrastrar: lo mueve.",
                    "Clic derecho: lo borra.",
                    "T sobre uno: cambia el nombre."],
@@ -138,14 +147,17 @@ AYUDA_HERRAMIENTA = {
                "de los barrotes, en la pared).",
                "Tiene que quedar cerca del piso: desde",
                "ahí la liberan. Clic derecho: borra."],
-    "puerta": ["Clic: pone la puerta (una sola).",
+    "puerta": ["Clic: pone la puerta (una sola). La",
+               "cierra el código de una nota de antes",
+               "de la puerta (salen como \"(código)\").",
                "+ / -: más alta o más baja.",
                "[ / ]: más angosta o más ancha.",
                "Clic derecho: la quita (sin fase 1)."],
     "notas": ["Clic: pone una nota.  Arrastrar: mueve.",
               "El texto sale de data/notas.py, en orden.",
-              "Una de las que se alcanzan desde la",
-              "prisión trae el código (se sortea)."],
+              "Una de las que se alcanzan desde el inicio",
+              "con la puerta cerrada trae el código (se",
+              "sortea): salen como \"Nota N (código)\"."],
     "consolas": ["Clic: pone una consola.",
                  "Hay que apagarlas todas (fase 2)."],
     "capsula": ["Clic: pone la cápsula (una sola).",
@@ -169,6 +181,13 @@ AYUDA_HERRAMIENTA = {
                  "En un apagón se sortea cuál es la buena:",
                  "hay que encontrarla y encenderla.",
                  "Sin cajas, el mapa no tiene apagones."],
+    "salas": ["Arrastra en un lugar vacío: dibuja una",
+              "sala. Arrastra una: la mueve; su esquina",
+              "de abajo a la derecha: la agranda.",
+              "T sobre una: siguiente nombre de la lista.",
+              "Y sobre una: escribir el nombre (ENTER).",
+              "Varias con el mismo nombre = una sala.",
+              "Clic derecho: la borra. G: piso sin sala."],
     "puertas_dobles": ["Clic: pone la puerta; los dos clics",
                        "siguientes ponen sus dos paneles.",
                        "Se abre con dos jugadores, uno en cada",
@@ -237,6 +256,8 @@ class EditorMapa:
         self.deshacer, self.rehacer = [], []
         self.sucio = False
         self.confirmar = None         # acción que espera un segundo toque (R, ESC)
+        self.nombre_sala = "Pasillo"  # el nombre que lleva la próxima sala que se dibuje
+        self.escribiendo = None       # [índice de la sala, texto] mientras se escribe un nombre
 
         self.mostrar_paredes = True
         self.mostrar_caminable = False
@@ -368,6 +389,16 @@ class EditorMapa:
                 if self.rect_dict(obj).inflate(radio, radio).collidepoint(p):
                     return ("rect", i)
             return None
+        if clave == "salas":
+            # Primero las esquinas (agrandar), después la más chica que tenga el punto.
+            for i, obj in enumerate(self.datos["salas"]):
+                if math.dist(p, self.rect_dict(obj).bottomright) <= radio:
+                    return ("esquina", i)
+            for i, obj in enumerate(self.datos["salas"]):
+                rect = self.rect_dict(obj)
+                if rect.collidepoint(p) and (mejor is None or rect.width * rect.height < mejor_d):
+                    mejor, mejor_d = ("sala", i), rect.width * rect.height
+            return mejor
         if clave == "rutas_aliens":
             for i, ruta in enumerate(self.datos["rutas_aliens"]):
                 for j, punto in enumerate(ruta):
@@ -382,7 +413,29 @@ class EditorMapa:
                 mejor, mejor_d = ("obj", i), d
         return mejor
 
+    def _poner_sala(self, i, x0, y0, x1, y1):
+        x0, x1 = sorted((max(0, min(self.mundo.ancho, x0)), max(0, min(self.mundo.ancho, x1))))
+        y0, y1 = sorted((max(0, min(self.mundo.alto, y0)), max(0, min(self.mundo.alto, y1))))
+        sala = self.datos["salas"][i]
+        sala["rx"], sala["ry"] = self.norm(((x0 + x1) / 2, (y0 + y1) / 2))
+        sala["ancho"] = max(0.002, (x1 - x0) / self.mundo.ancho)
+        sala["alto"] = max(0.002, (y1 - y0) / self.mundo.alto)
+
     def mover_a(self, cosa, p):
+        if cosa[0] == "sala_nueva":
+            self._poner_sala(cosa[1], cosa[2][0], cosa[2][1], p[0], p[1])
+            return
+        if cosa[0] == "esquina":
+            rect = self.rect_dict(self.datos["salas"][cosa[1]])
+            self._poner_sala(cosa[1], rect.left, rect.top,
+                             max(p[0], rect.left + TAMANO_MIN_SALA), max(p[1], rect.top + TAMANO_MIN_SALA))
+            return
+        if cosa[0] == "sala":
+            rect = self.rect_dict(self.datos["salas"][cosa[1]])
+            cx, cy = p[0] + cosa[2], p[1] + cosa[3]
+            self._poner_sala(cosa[1], cx - rect.width / 2, cy - rect.height / 2,
+                             cx + rect.width / 2, cy + rect.height / 2)
+            return
         rx, ry = self.norm(p)
         rx, ry = min(1, max(0, rx)), min(1, max(0, ry))
         if cosa[0] == "unico":
@@ -426,6 +479,19 @@ class EditorMapa:
         clave = self.clave
         cosa = self.buscar(clave, pos)
         p = self.a_mundo(pos)
+        if clave == "salas":
+            if cosa is not None and cosa[0] == "sala":
+                centro = self.rect_dict(self.datos["salas"][cosa[1]]).center
+                self.nombre_sala = self.datos["salas"][cosa[1]]["nombre"]
+                self.arrastre = ("sala", cosa[1], centro[0] - p[0], centro[1] - p[1])
+            elif cosa is not None:
+                self.arrastre = cosa
+            elif 0 <= p[0] <= self.mundo.ancho and 0 <= p[1] <= self.mundo.alto:
+                rx, ry = self.norm(p)
+                self.datos["salas"].append({"nombre": self.nombre_sala, "rx": rx, "ry": ry,
+                                            "ancho": 0.002, "alto": 0.002})
+                self.arrastre = ("sala_nueva", len(self.datos["salas"]) - 1, p)
+            return
         if cosa is not None:
             if cosa[0] == "punto":
                 self.ruta_elegida = cosa[1]
@@ -483,6 +549,12 @@ class EditorMapa:
             self.mover_a(self.arrastre, self.a_mundo(pos))
 
     def soltar(self):
+        if self.arrastre is not None and self.arrastre[0] == "sala_nueva":
+            rect = self.rect_dict(self.datos["salas"][self.arrastre[1]])
+            if rect.width < TAMANO_MIN_SALA or rect.height < TAMANO_MIN_SALA:
+                del self.datos["salas"][self.arrastre[1]]
+            else:
+                self.avisar(f"Sala \"{self.nombre_sala}\". T cambia el nombre, Y lo escribe.")
         self.arrastre = None
         if self.antes is not None:
             objetos_mapa.normalizar(self.datos)
@@ -502,6 +574,8 @@ class EditorMapa:
                 self.datos[clave] = None
         elif cosa is None:
             pass
+        elif cosa[0] in ("sala", "esquina"):
+            del self.datos["salas"][cosa[1]]
         elif cosa[0] == "sello":
             del self.datos["paneles"][cosa[1]]["sello"]
         elif cosa[0] == "rect":
@@ -541,6 +615,47 @@ class EditorMapa:
             del self.datos["tipos_aliens"][i]
         self.ruta_elegida = max(0, min(self.ruta_elegida, len(rutas) - 1))
         self._terminar_cambio()
+
+    def _sala_bajo(self, pos):
+        cosa = self.buscar("salas", pos)
+        return cosa[1] if cosa is not None else None
+
+    def nombre_siguiente_sala(self, pos):
+        i = self._sala_bajo(pos)
+        if i is None:
+            # Sin sala bajo el mouse: cambia el nombre de la próxima que se dibuje.
+            k = NOMBRES_SALA.index(self.nombre_sala) if self.nombre_sala in NOMBRES_SALA else -1
+            self.nombre_sala = NOMBRES_SALA[(k + 1) % len(NOMBRES_SALA)]
+            self.avisar(f"La próxima sala se llamará \"{self.nombre_sala}\".")
+            return
+        self._empezar_cambio()
+        sala = self.datos["salas"][i]
+        k = NOMBRES_SALA.index(sala["nombre"]) if sala["nombre"] in NOMBRES_SALA else -1
+        sala["nombre"] = self.nombre_sala = NOMBRES_SALA[(k + 1) % len(NOMBRES_SALA)]
+        self._terminar_cambio()
+
+    def empezar_a_escribir(self, pos):
+        i = self._sala_bajo(pos)
+        if i is None:
+            self.avisar("Pon el mouse sobre una sala y aprieta Y para escribir su nombre.")
+            return
+        self.escribiendo = [i, ""]
+        pygame.key.start_text_input()
+
+    def _tecla_escribiendo(self, ev):
+        i, texto = self.escribiendo
+        if ev.type == pygame.TEXTINPUT:
+            self.escribiendo[1] = (texto + ev.text)[:24]
+        elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_BACKSPACE:
+            self.escribiendo[1] = texto[:-1]
+        elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+            self.escribiendo = None
+        elif ev.type == pygame.KEYDOWN and ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self.escribiendo = None
+            if texto.strip() and i < len(self.datos["salas"]):
+                self._empezar_cambio()
+                self.datos["salas"][i]["nombre"] = self.nombre_sala = texto.strip()
+                self._terminar_cambio()
 
     def cambiar_nombre(self, pos):
         cosa = self.buscar("escondites", pos)
@@ -715,6 +830,21 @@ class EditorMapa:
                 self.problemas.append("Misión: no hay celdas (si atrapan a alguien vuelve al inicio)")
             if self.datos.get("puerta") and not self.datos["notas"]:
                 self.problemas.append("Misión: hay puerta pero no notas con el código")
+
+        # Qué notas pueden traer el código: las que se alcanzan desde el inicio
+        # con la puerta y las puertas para dos cerradas (igual que el juego).
+        self.notas_codigo = set()
+        puerta = self.rect_puerta()
+        if puerta is not None and self.datos["notas"]:
+            spawn = self.datos.get("spawn")
+            desde = self.px(*spawn) if spawn else (self.mundo.ancho / 2, self.mundo.alto / 2)
+            desde = self.mundo.punto_libre((int(desde[0]), int(desde[1])), 48, 19)
+            notas = [self.rect_de("notas", self.posicion("notas", n)) for n in self.datos["notas"]]
+            dobles = [self.rect_dict(d) for d in self.datos.get("puertas_dobles", [])]
+            self.notas_codigo = set(notas_antes_de_la_puerta(self.mundo, desde, notas, [puerta] + dobles))
+            if not self.notas_codigo:
+                self.problemas.append("Puerta con código: ninguna nota se alcanza antes de la puerta "
+                                      "(el juego la dejaría abierta)")
         elif self.datos.get("puerta") or self.datos["consolas"]:
             self.problemas.append("Misión: falta la cápsula; sin ella no hay misión")
 
@@ -734,7 +864,17 @@ class EditorMapa:
                     self.estado[("panel", i, k)] = "lejos"
                     self.problemas.append(f"Puerta para dos {i + 1}, panel {k + 1}: no se llega")
 
+        # Salas: que todo el piso tenga nombre (si el mapa ya usa salas).
+        self.sin_sala = set()
+        if self.datos.get("salas"):
+            rects = [self.rect_dict(s) for s in self.datos["salas"]]
+            self.sin_sala = {c for c in self._celdas_caminables()
+                             if not any(r.collidepoint(c[0] + 24, c[1] + 10) for r in rects)}
+            if self.sin_sala:
+                self.problemas.append(f"Salas: hay piso sin sala ({len(self.sin_sala)} puntos; G los muestra)")
+
         self.tramos_malos = {}
+        self.tramos_puerta = {}
         for i, ruta in enumerate(self.datos["rutas_aliens"]):
             puntos = [self.px(*p) for p in ruta]
             if not puntos:
@@ -750,6 +890,16 @@ class EditorMapa:
             self.tramos_malos[i] = set(malos)
             for a, b in malos:
                 self.problemas.append(f"Ruta {i + 1}: el tramo {a + 1}-{b + 1} cruza una pared")
+            # Los tramos que pasan por una puerta (la del código o una para dos)
+            # no son un error: mientras está cerrada el alien patrulla solo su
+            # lado, y cuando la abren usa la ruta entera. Se pintan en ámbar.
+            puertas = [r for r in [self.rect_puerta()] if r is not None]
+            puertas += [self.rect_dict(d) for d in self.datos.get("puertas_dobles", [])]
+            n = len(puntos)
+            tramos = [(j, (j + 1) % n) for j in range(n)] if n > 2 else ([(0, 1)] if n == 2 else [])
+            self.tramos_puerta[i] = {(a, b) for a, b in tramos if (a, b) not in self.tramos_malos[i]
+                                     and any(r.inflate(*TAMANO_ALIEN).clipline(puntos[a], puntos[b])
+                                             for r in puertas)}
         return self.problemas
 
     # -- Entrada ---------------------------------------------------------------------------
@@ -782,6 +932,10 @@ class EditorMapa:
             self.borrar_ruta()
         elif key == pygame.K_t and self.clave == "rutas_aliens":
             self.cambiar_tipo()
+        elif key == pygame.K_t and self.clave == "salas":
+            self.nombre_siguiente_sala(pygame.mouse.get_pos())
+        elif key == pygame.K_y and self.clave == "salas":
+            self.empezar_a_escribir(pygame.mouse.get_pos())
         elif key == pygame.K_t:
             self.cambiar_nombre(pygame.mouse.get_pos())
         elif key in (pygame.K_PLUS, pygame.K_KP_PLUS, pygame.K_EQUALS):
@@ -811,6 +965,8 @@ class EditorMapa:
 
     def actualizar(self, dt):
         self.mensaje_ms = max(0, self.mensaje_ms - dt)
+        if self.escribiendo is not None:
+            return          # WASD escriben, no mueven la vista
         teclas = pygame.key.get_pressed()
         paso = 900 * dt / 1000
         if teclas[pygame.K_a] or teclas[pygame.K_LEFT]:
@@ -824,6 +980,11 @@ class EditorMapa:
                 self.cam[1] += paso
 
     def evento(self, ev):
+        if self.escribiendo is not None and ev.type in (pygame.KEYDOWN, pygame.TEXTINPUT):
+            self._tecla_escribiendo(ev)
+            if self.escribiendo is None:
+                pygame.key.stop_text_input()
+            return None
         if ev.type == pygame.MOUSEBUTTONDOWN:
             espacio = pygame.key.get_pressed()[pygame.K_SPACE]
             if ev.button == 2 or (ev.button == 1 and espacio):
@@ -890,8 +1051,10 @@ class EditorMapa:
                 pygame.draw.rect(capa, (*COLOR_MURO, 160), r, 1)
             s.blit(capa, (0, 0))
         if self.mostrar_caminable:
+            sin_sala = getattr(self, "sin_sala", set())
             for cx, cy in self._celdas_caminables():
-                pygame.draw.circle(s, (120, 255, 140), self.a_pantalla((cx + 24, cy + 10)), 2)
+                color = COLOR_PARED if (cx, cy) in sin_sala else (120, 255, 140)
+                pygame.draw.circle(s, color, self.a_pantalla((cx + 24, cy + 10)), 3 if (cx, cy) in sin_sala else 2)
 
         actual = self.clave
         apagado = lambda clave: clave != actual
@@ -923,6 +1086,8 @@ class EditorMapa:
                         texto = herr["nombre"]
                     else:
                         texto = f"{NOMBRE_SINGULAR[clave]} {i + 1}"
+                        if clave == "notas" and i in getattr(self, "notas_codigo", ()):
+                            texto += " (código)"
                     self._etiqueta(texto, r.midtop, color)
 
         # Puerta de la prisión.
@@ -970,6 +1135,26 @@ class EditorMapa:
                     if not apagado(clave):
                         self._etiqueta(f"P{k + 1}", caja.midtop, color)
 
+        # Salas (solo con su herramienta: si no, tapan todo).
+        if actual == "salas":
+            capa = pygame.Surface(area.size, pygame.SRCALPHA)
+            for i, obj in enumerate(self.datos["salas"]):
+                rect = self.rect_dict(obj)
+                x, y = self.a_pantalla(rect.topleft)
+                r = pygame.Rect(x, y, max(3, int(rect.width * self.zoom)), max(3, int(rect.height * self.zoom)))
+                tono = (sum(map(ord, obj["nombre"])) * 47) % 360
+                color = pygame.Color(0); color.hsva = (tono, 55, 100, 100)
+                pygame.draw.rect(capa, (color.r, color.g, color.b, 55), r)
+                pygame.draw.rect(capa, (color.r, color.g, color.b, 220), r, 2)
+                pygame.draw.rect(capa, (255, 255, 255, 230), (r.right - 7, r.bottom - 7, 7, 7))
+            s.blit(capa, (0, 0))
+            for i, obj in enumerate(self.datos["salas"]):
+                rect = self.rect_dict(obj)
+                texto = obj["nombre"]
+                if self.escribiendo is not None and self.escribiendo[0] == i:
+                    texto = self.escribiendo[1] + ("_" if (pygame.time.get_ticks() // 400) % 2 else " ")
+                self._etiqueta(texto, self.a_pantalla(rect.center), COLOR_TEXTO, arriba=False)
+
         # Rutas de los aliens.
         for i, ruta in enumerate(self.datos["rutas_aliens"]):
             elegida = (i == self.ruta_elegida and actual == "rutas_aliens")
@@ -979,8 +1164,9 @@ class EditorMapa:
             tramos = [(j, (j + 1) % n) for j in range(n)] if n > 2 else ([(0, 1)] if n == 2 else [])
             for a, b in tramos:
                 malo = (a, b) in self.tramos_malos.get(i, set()) or (b, a) in self.tramos_malos.get(i, set())
-                pygame.draw.line(s, COLOR_PARED if malo else base, puntos[a], puntos[b],
-                                 4 if (elegida or malo) else 2)
+                por_puerta = (a, b) in getattr(self, "tramos_puerta", {}).get(i, set())
+                color = COLOR_PARED if malo else (COLOR_LEJOS if por_puerta else base)
+                pygame.draw.line(s, color, puntos[a], puntos[b], 4 if (elegida or malo or por_puerta) else 2)
             for j, p in enumerate(puntos):
                 color = self._color(("punto", i, j), base)
                 pygame.draw.circle(s, color, p, 9 if elegida else 6)
@@ -1054,6 +1240,10 @@ class EditorMapa:
                   COLOR_TITULO, self.f_chica)
             tipo = TIPOS_ALIEN[self.tipo_de_ruta(self.ruta_elegida)]
             linea(f"Tipo: {tipo['nombre']} - {tipo['descripcion']}", COLOR_TITULO, self.f_chica)
+        if self.clave == "salas":
+            linea(f"Próxima sala: {self.nombre_sala}", COLOR_TITULO, self.f_chica)
+            if self.escribiendo is not None:
+                linea("Escribiendo: ENTER guarda, ESC cancela", COLOR_TITULO, self.f_chica)
         for texto in AYUDA_HERRAMIENTA[self.clave]:
             linea(texto, COLOR_TENUE, self.f_chica, 2)
         y += 8

@@ -120,6 +120,9 @@ print("guardado y leído igual:", TEMP)
 from juego import app as App
 original = objetos_mapa.cargar
 objetos_mapa.cargar = lambda mapa=None, ruta=None: original(ruta=TEMP)
+# Los objetos son de la Nave: el juego tiene que usar la Nave (no el mapa activo).
+activo_original = objetos_mapa.mapa_activo
+objetos_mapa.mapa_activo = lambda: "Nave"
 g = App.Game()
 def avanzar():
     for _ in range(80):
@@ -131,6 +134,7 @@ g.seleccion_roles[0]["cursor"] = 0; g._manejar_tecla(pygame.K_e)
 g.seleccion_roles[1]["cursor"] = 1; g._manejar_tecla(pygame.K_RETURN)
 avanzar()
 objetos_mapa.cargar = original
+objetos_mapa.mapa_activo = activo_original
 assert len(g.aliens) == len(leido["rutas_aliens"])
 assert len(g.escondites) == len(leido["escondites"])
 inicio = (0.5 * 0 + leido["spawn"][0] * g.mundo.ancho, leido["spawn"][1] * g.mundo.alto)

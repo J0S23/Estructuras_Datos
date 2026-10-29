@@ -16,18 +16,21 @@ El Cambiaformas (cambiaformas.py) se disfraza de uno de ellos: usa la misma
 apariencia (Apariencia) y el mismo letrero con el nombre, pero no habla y su
 nombre falla de vez en cuando.
 
-Aspecto provisional: un muñeco simple dibujado con formas (data/npcs.ESTILOS),
-distinto de los personajes de los jugadores.
+Aspecto: los sprites de Imagenes/Prisioneros/<carpeta>/ (de Joseph), uno por
+carpeta, repartidos entre los que caminan. Si no hay ninguno, un muñeco simple
+dibujado con formas (data/npcs.ESTILOS). Nunca los de los jugadores.
 """
 
 import math
+import os
 import random
+import zlib
 
 import pygame
 
 from juego import navegacion
 from juego.fuentes import fuente_de_tamano
-from Movimiento.Personaje import direccion_desde_vector
+from Movimiento.Personaje import DireccionSuave, detectar_hojas, cargar_animaciones
 from data.npcs import (ESTILOS, VELOCIDAD_NPC, ESPERA_NPC_MS, RADIO_CHARLA,
                        ENFRIAMIENTO_CHARLA_MS, DURACION_BURBUJA_MS, PROB_DELATAR,
                        FRASES_VERDE_ALIEN, FRASES_VERDE_CAMBIAFORMAS, FRASES_VERDE_RUMOR,
@@ -42,32 +45,76 @@ ANCHO_HITBOX, ALTO_HITBOX = 34, 20
 _poses = {}       # (estilo, número, dirección, paso) -> (imagen agrandada, alto de la cabeza)
 _carteles = {}    # letrero -> imagen con su fondo
 
+# Sprites de los prisioneros: una carpeta por prisionero en
+# Imagenes/Prisioneros/ con el formato de PixelLab
+# (<carpeta>_<idle|breathing|walking>_<direccion>.png). Para agregar uno basta
+# con poner su carpeta ahí: se reparten solos entre los que caminan.
+_RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CARPETA_PRISIONEROS = os.path.join(_RAIZ_PROYECTO, "Imagenes", "Prisioneros")
+ESCALA_SPRITE = 1.65       # la de los jugadores: cuadros de 96 px, figura de ~60
+FPS_SPRITE = 8
+_sprites = {}     # carpeta -> {"animaciones", "pie", "arriba"} o None
+
+
+def carpetas_prisioneros():
+    """Las carpetas de Imagenes/Prisioneros/ que tienen sprites, en orden."""
+    if not os.path.isdir(CARPETA_PRISIONEROS):
+        return []
+    return sorted(c for c in os.listdir(CARPETA_PRISIONEROS)
+                  if detectar_hojas(os.path.join(CARPETA_PRISIONEROS, c)))
+
+
+def sprites_prisionero(carpeta):
+    """Animaciones de esa carpeta (se cargan una sola vez), o None."""
+    if carpeta in _sprites:
+        return _sprites[carpeta]
+    if not carpeta or pygame.display.get_surface() is None:
+        return None
+    resultado = None
+    animaciones = cargar_animaciones(os.path.join(CARPETA_PRISIONEROS, carpeta),
+                                     escala=ESCALA_SPRITE, ancho_ratio=1.0)
+    muestra = (animaciones.get("idle", {}).get("south") or [None])[0]
+    if muestra is not None:
+        contenido = muestra.get_bounding_rect()
+        resultado = {"animaciones": animaciones,
+                     "pie": muestra.get_height() - contenido.bottom,   # aire bajo los pies
+                     "arriba": contenido.top}                           # aire sobre la cabeza
+    _sprites[carpeta] = resultado
+    return resultado
+
 
 VECINOS_PASEO = 6     # entre cuántos puntos cercanos escoge a dónde ir
 
 
 class Apariencia:
-    """Cómo se ve un prisionero: un muñeco simple dibujado con formas
-    (provisional, hasta que haya arte), su letrero y su burbuja.
+    """Cómo se ve un prisionero: su sprite (o, si no tiene, un muñeco simple
+    dibujado con formas), su letrero y su burbuja.
 
-    `estilo` es uno de data/npcs.ESTILOS: color del overol, piel y pelo. El
-    Cambiaformas se disfraza copiando el estilo y el usuario de un prisionero.
+    `sprite` es una carpeta de Imagenes/Prisioneros/ (o None). `estilo` es uno
+    de data/npcs.ESTILOS: color del overol, piel y pelo del muñeco. El
+    Cambiaformas se disfraza copiando todo eso y el usuario de un prisionero.
     """
 
     ALTO = 66
 
-    def __init__(self, estilo, usuario, numero=0):
+    def __init__(self, estilo, usuario, numero=0, sprite=None):
         self.estilo, self.usuario = estilo, usuario
         self.numero = numero        # el número del overol
+        self.sprite = sprite
+        # Reloj propio para la animación: solo avanza cuando el juego se
+        # actualiza (en la pausa no respiran). Arranca desfasado para que no
+        # respiren todos a la vez.
+        self.reloj_ms = zlib.crc32(usuario.encode()) % 1000
         self.direccion = "south"
         self.fase = 0.0             # para el balanceo al caminar
         self.moviendose = False
+        self._giro = DireccionSuave()
 
-    def animar(self, dx, dy):
-        self.moviendose = abs(dx) > 0.01 or abs(dy) > 0.01
+    def animar(self, dx, dy, dt=0):
+        self.reloj_ms += dt
+        self.direccion = self._giro.actualizar(dx, dy)
+        self.moviendose = self._giro.moviendose
         if self.moviendose:
-            self.direccion = direccion_desde_vector(
-                (dx > 0.05) - (dx < -0.05), (dy > 0.05) - (dy < -0.05), self.direccion)
             self.fase += 0.28
         else:
             self.fase = 0.0
@@ -131,21 +178,10 @@ class Apariencia:
         return centro[1] - 14
 
     def dibujar(self, screen, centro_pies, offset, letrero=None, color_estado=None, burbuja=None):
-        # Se dibuja chico y se agranda (pixelado) para que mida como los
-        # jugadores. Cada pose queda guardada: redibujarla con formas en cada
-        # cuadro (y en cada pantalla) era de lo más caro del dibujo.
-        clave = (tuple(sorted(self.estilo.items())), self.numero, self.direccion, self._paso())
-        pose = _poses.get(clave)
-        if pose is None:
-            lienzo = pygame.Surface((LIENZO_W, LIENZO_H), pygame.SRCALPHA)
-            arriba = self._cuerpo(lienzo, LIENZO_W // 2, LIENZO_H - 6)
-            pose = _poses[clave] = (pygame.transform.scale(lienzo, (LIENZO_W * ESCALA, LIENZO_H * ESCALA)),
-                                    arriba)
-        grande, arriba = pose
-        x = int(centro_pies[0] - offset[0])
-        pies = int(centro_pies[1] - offset[1] + 6)
-        screen.blit(grande, (x - LIENZO_W * ESCALA // 2, pies - (LIENZO_H - 6) * ESCALA))
-        cabeza = (x, pies - (LIENZO_H - 6 - arriba) * ESCALA - 2)
+        datos = sprites_prisionero(self.sprite) if self.sprite else None
+        cabeza = self._dibujar_sprite(screen, centro_pies, offset, datos) if datos else None
+        if cabeza is None:
+            cabeza = self._dibujar_muneco(screen, centro_pies, offset)
         if letrero:
             cartel = _carteles.get(letrero)
             if cartel is None:
@@ -163,6 +199,42 @@ class Apariencia:
             cabeza = (cabeza[0], caja.y - 2)
         if burbuja:
             _burbuja(screen, cabeza, burbuja)
+
+    def _dibujar_sprite(self, screen, centro_pies, offset, datos):
+        """Dibuja el cuadro que toca y devuelve dónde queda la cabeza (o None
+        si a esa animación le falta la dirección)."""
+        estado = "walking" if self.moviendose else "breathing"
+        frames = datos["animaciones"].get(estado, {}).get(self.direccion) or []
+        if not frames:
+            return None
+        cuadro = int(self.reloj_ms / (1000 / FPS_SPRITE)) % len(frames)
+        imagen = frames[cuadro]
+        x = int(centro_pies[0] - offset[0])
+        pies = int(centro_pies[1] - offset[1] + 6)      # mismo suelo que el muñeco
+        sombra = pygame.Rect(0, 0, 34, 10)
+        sombra.center = (x, pies)
+        pygame.draw.ellipse(screen, (12, 12, 20), sombra)
+        rect = imagen.get_rect(midbottom=(x, pies + datos["pie"]))
+        screen.blit(imagen, rect)
+        return (x, rect.y + datos["arriba"] - 2)
+
+    def _dibujar_muneco(self, screen, centro_pies, offset):
+        """El muñeco de formas (sin sprite). Devuelve dónde queda la cabeza."""
+        # Se dibuja chico y se agranda (pixelado) para que mida como los
+        # jugadores. Cada pose queda guardada: redibujarla con formas en cada
+        # cuadro (y en cada pantalla) era de lo más caro del dibujo.
+        clave = (tuple(sorted(self.estilo.items())), self.numero, self.direccion, self._paso())
+        pose = _poses.get(clave)
+        if pose is None:
+            lienzo = pygame.Surface((LIENZO_W, LIENZO_H), pygame.SRCALPHA)
+            arriba = self._cuerpo(lienzo, LIENZO_W // 2, LIENZO_H - 6)
+            pose = _poses[clave] = (pygame.transform.scale(lienzo, (LIENZO_W * ESCALA, LIENZO_H * ESCALA)),
+                                    arriba)
+        grande, arriba = pose
+        x = int(centro_pies[0] - offset[0])
+        pies = int(centro_pies[1] - offset[1] + 6)
+        screen.blit(grande, (x - LIENZO_W * ESCALA // 2, pies - (LIENZO_H - 6) * ESCALA))
+        return (x, pies - (LIENZO_H - 6 - arriba) * ESCALA - 2)
 
 
 def _burbuja(screen, punta, texto):
@@ -225,7 +297,7 @@ class NPC:
             self._seguir(dt, juego)
         else:
             caminar(self, dt, juego, puntos, VELOCIDAD_NPC)
-        self.apariencia.animar(self.hitbox.centerx - antes[0], self.hitbox.centery - antes[1])
+        self.apariencia.animar(self.hitbox.centerx - antes[0], self.hitbox.centery - antes[1], dt)
 
     def _seguir(self, dt, juego):
         """Va detrás de quien lo lleva. Si lo pierde (o lo atrapan), se queda."""
@@ -243,7 +315,7 @@ class NPC:
         if d > DISTANCIA_SEGUIR:
             if not self.ruta or math.dist(self.ruta[-1], guia.hitbox.center) > 80:
                 nav = navegacion.de_mundo(juego.mundo, self.hitbox.width, self.hitbox.height)
-                self.ruta = list(nav.camino(self.centro, guia.hitbox.center, parcial=True,
+                self.ruta = list(nav.camino(self.centro, guia.hitbox.center, parcial=True, sellos=False,
                                             puede_esperar=True) or [])
                 self.espera_ms = 0
             if self.ruta:
@@ -264,8 +336,9 @@ class NPC:
 def caminar(quien, dt, juego, puntos, velocidad, choca=None):
     """Camina de un punto de interés a otro con BFS; espera un rato en cada uno.
 
-    `choca` es con qué se choca (por defecto las paredes; el Cambiaformas pasa
-    las de los aliens, que incluyen los sellos del Forjador)."""
+    `choca` es con qué se choca (por defecto `mundo.colisiona_npc`: paredes,
+    puerta del código y puertas para dos cerradas; el Cambiaformas pasa las de
+    los aliens, que además incluyen los sellos del Forjador)."""
     if quien.espera_ms > 0:
         quien.espera_ms -= dt
         return
@@ -273,14 +346,23 @@ def caminar(quien, dt, juego, puntos, velocidad, choca=None):
     if not quien.ruta:
         # A uno de los puntos más cercanos (no al otro lado de la nave): así
         # pasea como alguien de verdad y el camino sale barato de calcular.
-        cerca = sorted(puntos, key=lambda p: math.dist(p, quien.hitbox.center))[1:VECINOS_PASEO + 1]
-        destino = quien.rng.choice(cerca or puntos)
+        destino = getattr(quien, "destino_paseo", None)
+        if destino is None:
+            cerca = sorted(puntos, key=lambda p: math.dist(p, quien.hitbox.center))[1:VECINOS_PASEO + 1]
+            destino = quien.rng.choice(cerca or puntos)
         nav = navegacion.de_mundo(mundo, quien.hitbox.width, quien.hitbox.height)
-        camino = nav.camino(quien.hitbox.center, destino, puede_esperar=True)
+        # Los prisioneros cruzan los sellos del Forjador (son para los aliens);
+        # el Cambiaformas, que pasa su propio `choca`, no. Un camino largo se
+        # busca de a pedazos en varios cuadros (por_partes): mientras tanto
+        # espera, y vuelve a pedir el mismo destino.
+        camino = nav.camino(quien.hitbox.center, destino, puede_esperar=True, sellos=choca is not None,
+                            por_partes=True, quien=id(quien))
         if not camino:
             # Sin camino, espera un rato; si solo era su turno, poquito.
+            quien.destino_paseo = destino if nav.ocupada else None
             quien.espera_ms = 50 if nav.ocupada else 400
             return
+        quien.destino_paseo = None
         quien.ruta = list(camino)
     objetivo = quien.ruta[0]
     dx, dy = objetivo[0] - quien.hitbox.centerx, objetivo[1] - quien.hitbox.centery
@@ -301,7 +383,7 @@ def caminar(quien, dt, juego, puntos, velocidad, choca=None):
         quien._resto[0] -= mx
         quien._resto[1] -= my
         quien.hitbox.move_ip(mx, my)
-        if (choca or mundo.colisiona)(quien.hitbox):
+        if (choca or getattr(mundo, "colisiona_npc", mundo.colisiona))(quien.hitbox):
             quien.hitbox = previo
     if quien.hitbox.center == antes:
         quien.atascado_ms += dt
@@ -329,9 +411,11 @@ class GestorNPCs:
         self.npcs = []
         self.rescatados = []
         self.avisados_rescate = set()   # a quién ya le pidió un verde que lo rescate
+        carpetas = carpetas_prisioneros()
         for i, (nodo, cuenta) in enumerate(cuentas):
             apariencia = Apariencia(ESTILOS[i % len(ESTILOS)], cuenta["usuario"],
-                                    self.rng.randint(10, 99))
+                                    self.rng.randint(10, 99),
+                                    carpetas[i % len(carpetas)] if carpetas else None)
             punto = self.rng.choice(self.puntos) if self.puntos else (100, 100)
             npc = NPC(nodo, cuenta["usuario"], apariencia, punto, self.rng)
             npc.juego = juego
@@ -355,11 +439,17 @@ class GestorNPCs:
             semilla = lugares[0] if lugares else (mundo.ancho // 2, mundo.alto // 2)
         alcanzables = mundo.area_alcanzable(semilla, ANCHO_HITBOX, ALTO_HITBOX, paso=48)
         puntos = []
+        # Las puertas para dos cerradas no cuentan aquí: se abren durante la
+        # partida, y si no, con la cápsula detrás de una (MapaE2) todos los
+        # prisioneros quedarían en ese lado. Mientras esté cerrada, igual no la
+        # cruzan: la búsqueda de caminos sí la tiene en cuenta.
+        puertas, mundo.puertas_alien = getattr(mundo, "puertas_alien", []), []
         for p in lugares:
             x, y = mundo.punto_libre((p[0] - ANCHO_HITBOX // 2, p[1] + 30), ANCHO_HITBOX, ALTO_HITBOX)
             centro = (int(x + ANCHO_HITBOX // 2), int(y + ALTO_HITBOX // 2))
-            if nav.camino(semilla, centro) is not None:
+            if nav.camino(semilla, centro, sellos=False) is not None:
                 puntos.append(centro)
+        mundo.puertas_alien = puertas
         # Y unos cuantos puntos sueltos de los pasillos.
         sueltos = [(c[0] + ANCHO_HITBOX // 2, c[1] + ALTO_HITBOX // 2) for c in alcanzables]
         if sueltos:

@@ -72,6 +72,9 @@ avanzar(); g.current_screen = "partida"
 g.quitar_cambiaformas()          # los aliens de ruta; el Cambiaformas: prueba_cambiaformas.py
 g.tutorial.activo = False; g._terminar_tutorial()
 g.mision.abrir_puerta()          # para recorrer la nave entera
+for doble in g.puertas_dobles:   # las puertas para dos también frenan a los aliens
+    doble["abierta"] = True
+    g._puerta_doble_abierta(doble)
 
 j1, j2 = g.jugadores
 # a1 oye (el Ciego), a2 ve (el Vigía); el Cazador se aparta para no estorbar.
@@ -126,7 +129,6 @@ for a in g.aliens:
     assert a.accion == "PATRULLAR", (a.nombre, a.accion)
     assert len(indices[a.numero]) == len(a.ruta), f"{a.nombre} no recorrió toda su ruta"
 print("patrullan toda su ruta sin meterse en paredes")
-g.tiempo_restante_ms = 300 * 1000
 cap("aliens_a_patrulla.png")
 
 # ---------- 4. Ver, perseguir y atrapar ----------

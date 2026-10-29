@@ -122,9 +122,11 @@ g.mundo.paredes.append(puerta)
 assert not malas, f"terminales inalcanzables: {[z['clave'] for z in malas]}"
 print("terminales NEXUS: todas alcanzables")
 
-# ---------- 6. Reloj y resultados ----------
-g.tiempo_restante_ms = 500
+# ---------- 6. Sin límite de tiempo, y resultados ----------
+assert g.tiempo_restante_ms is None
 g._actualizar_partida(1000)
+assert g.current_screen == "partida", "no se pierde por tiempo"
+g.terminar_ronda()            # lo que hace Terminar partida en la pausa
 avanzar(); g.current_screen = "resultados"
 cap("f_resultados.png")
 print("\nronda terminó, pantalla:", g.current_screen)

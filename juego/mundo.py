@@ -38,10 +38,15 @@ class Mundo:
         # Barreras que solo frenan a los aliens: los sellos que activa el
         # Forjador al reparar un panel (acciones_rol.py).
         self.bloqueos_alien = []
+        # Puertas para dos todavía cerradas: a los aliens también los frenan
+        # (a los jugadores, Game._colisiona_jugador). Aparte de los sellos
+        # porque esa lista se rehace en cada cuadro y da el logro "Por aquí no".
+        self.puertas_alien = []
 
     def reiniciar_paredes(self):
         self.paredes = list(self.paredes_base)
         self.bloqueos_alien = []
+        self.puertas_alien = []
 
     # -- Carga -------------------------------------------------------------------
 
@@ -96,8 +101,16 @@ class Mundo:
         return rect.collidelist(self.paredes) != -1
 
     def colisiona_alien(self, rect):
-        """Para los aliens: las paredes y además los sellos activos."""
-        return self.colisiona(rect) or rect.collidelist(self.bloqueos_alien) != -1
+        """Para los aliens: las paredes, los sellos activos y las puertas para
+        dos cerradas."""
+        return (self.colisiona(rect) or rect.collidelist(self.bloqueos_alien) != -1
+                or rect.collidelist(self.puertas_alien) != -1)
+
+    def colisiona_npc(self, rect):
+        """Para los prisioneros que caminan: las paredes (con la puerta del
+        código cerrada) y las puertas para dos cerradas. Los sellos del
+        Forjador no: esos solo frenan a los aliens."""
+        return self.colisiona(rect) or rect.collidelist(self.puertas_alien) != -1
 
     def linea_libre(self, desde, hasta, ancho=4, alto=4, paso=10, colisiona=None):
         """True si se puede ir en línea recta de `desde` a `hasta` sin paredes.

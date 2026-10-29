@@ -12,7 +12,7 @@ continuo entre Fácil (0) y más que Difícil (3). Los valores de en medio se
 interpolan.
 """
 
-from data.dificultad import (DIFICULTADES, AJUSTES, TIEMPO, VIDAS, UMBRAL_PLANOS, FLECHA, FUGA_MS,
+from data.dificultad import (DIFICULTADES, AJUSTES, RITMO_MISION_S, VIDAS, UMBRAL_PLANOS, FLECHA, FUGA_MS,
                              TUTORIAL, NIVEL_INICIAL, NIVEL_MIN, NIVEL_MAX, REVISAR_CADA_MS,
                              PASO_MAX, VENTANA_CAPTURAS_MS, NOMBRES_NIVEL)
 
@@ -63,11 +63,6 @@ class Dificultad:
         if self.clave == "tutorial":
             return TUTORIAL[nombre]
         return _interpolar(AJUSTES[nombre], self.nivel)
-
-    @property
-    def tiempo(self):
-        """Multiplica la duración de la partida."""
-        return TUTORIAL["tiempo"] if self.clave == "tutorial" else TIEMPO[self.clave]
 
     @property
     def vidas(self):
@@ -133,12 +128,12 @@ class Dificultad:
             or list(juego.jugadores)
         n = max(1, len(juego.jugadores))
         r = 0.0
-        # La misión contra el reloj: deberían terminar más o menos al 85% del tiempo.
+        # El ritmo de la misión (no hay límite de tiempo): ¿van más rápido o más
+        # lento que una partida bien jugada (RITMO_MISION_S)?
         progreso = progreso_mision(getattr(juego, "mision", None))
-        total = getattr(juego, "tiempo_total_ms", 0) or 0
-        if progreso is not None and total > 0:
-            usado = 1 - juego.tiempo_restante_ms / total
-            r += 1.2 * (progreso - usado / 0.85)
+        if progreso is not None:
+            usado = getattr(juego, "tiempo_jugado_ms", 0) / (RITMO_MISION_S * 1000)
+            r += max(-1.2, 1.2 * (progreso - usado / 0.85))
         # NEXUS.
         red = getattr(juego, "nexus", None)
         if red is not None:

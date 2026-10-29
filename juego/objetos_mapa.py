@@ -44,7 +44,7 @@ USAR_ARCHIVOS = True
 # (puertas.py).
 PARTES = ("spawn", "rutas_aliens", "tipos_aliens", "escondites", "terminales", "paneles",
           "piezas", "celdas", "puerta", "notas", "consolas", "capsula", "consumibles",
-          "nexus", "compuertas", "puertas_dobles", "fusibles", "pruebas")
+          "nexus", "compuertas", "puertas_dobles", "fusibles", "pruebas", "salas")
 
 
 def ruta_archivo(mapa):
@@ -94,6 +94,7 @@ def por_defecto():
         "puertas_dobles": [], # [{"rx", "ry", "ancho", "alto", "paneles": [[rx, ry], [rx, ry]]}]
         "fusibles": [],       # cajas de fusibles: sin ellas no hay apagones
         "pruebas": [],        # dónde pueden caer las pruebas del infiltrado (se usan 3)
+        "salas": [],          # [{"nombre", "rx", "ry", "ancho", "alto"}]: el nombre en el HUD
     }
 
 
@@ -156,6 +157,14 @@ def normalizar(datos):
         limpia["paneles"] = [[r(x), r(y)] for x, y in (doble.get("paneles") or [])[:2]]
         dobles.append(limpia)
     datos["puertas_dobles"] = dobles
+    # Las salas pueden ser grandes (no tienen el tope de 0.3 de las puertas).
+    salas = []
+    for sala in datos.get("salas") or []:
+        salas.append({"nombre": str(sala.get("nombre") or "").strip() or "Sala",
+                      "rx": r(sala["rx"]), "ry": r(sala["ry"]),
+                      "ancho": round(min(1.0, max(0.002, float(sala.get("ancho", 0.05)))), 4),
+                      "alto": round(min(1.0, max(0.002, float(sala.get("alto", 0.05)))), 4)})
+    datos["salas"] = salas
 
     # Un tipo por ruta: se rellena con "rastreador" o se recorta.
     from data.tipos_alien import TIPOS_ALIEN, TIPO_POR_DEFECTO

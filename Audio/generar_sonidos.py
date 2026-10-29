@@ -37,6 +37,15 @@ con el mismo nombre (.ogg, .wav o .mp3) y el juego lo usa (audio_manager.py).
     menu_mover  tic al moverse por un menú
     menu_ok     clic al confirmar
     ambiente    zumbido de la nave en bucle (se oye durante la partida)
+    cf_revela   el Cambiaformas se transforma: chillido que sube, glitch y golpe
+    cf_captura  te atrapó el Cambiaformas: el mismo chillido, pero cayendo, y un
+                golpe más grave (parecidos a propósito: es el mismo alien)
+    captura_ciego    te atrapó el Ciego: pings de sonar que se cierran, un
+                     gruñido sordo y el golpe
+    captura_cazador  te atrapó el Cazador: un zumbido de velocidad que pasa,
+                     chillido y zarpazo
+    captura_vigia    te atrapó el Vigía: pitidos de "fijando blanco" cada vez
+                     más seguidos y un acorde eléctrico
 """
 
 import math
@@ -217,6 +226,8 @@ def generar():
         zumbido.append(v * lfo)
     guardar("ambiente", zumbido, 0.5)
     generar_susurro()
+    generar_cambiaformas()
+    generar_sustos_aliens()
 
 
 def generar_susurro():
@@ -232,6 +243,90 @@ def generar_susurro():
         entrada = min(1.0, t / 0.25) * min(1.0, (dur - t) / 0.4)
         salida.append((siseo[i] * 0.6 + aliento[i]) * silabas * entrada)
     guardar("susurro", salida, 0.45)
+
+
+def generar_cambiaformas():
+    """Los sustos del Cambiaformas, distintos del "captura" de los demás
+    aliens. Usan su propio azar para no cambiar los otros sonidos.
+
+        python -c "import sys; sys.path.insert(0, 'Audio'); import generar_sonidos as g; g.generar_cambiaformas()"
+    """
+    azar = random.Random(23)
+
+    def chasquidos(dur, vol):
+        """Glitch: ruido cortado en pedacitos, como una señal que falla."""
+        n = int(FRECUENCIA * dur)
+        salida = []
+        while len(salida) < n:
+            largo = azar.randint(80, 900)
+            suena = azar.random() < 0.6
+            salida += [azar.uniform(-1, 1) * vol if suena else 0.0 for _ in range(largo)]
+        return [v * math.exp(-i / FRECUENCIA / (dur * 0.6)) for i, v in enumerate(salida[:n])]
+
+    revela = mezclar(tono(220, 1.0, 0.5, "saw", caida=0.6, f_final=880),
+                     tono(233, 1.0, 0.4, "saw", caida=0.6, f_final=940),
+                     chasquidos(0.9, 0.5),
+                     silencio(0.35) + tono(42, 0.6, 1.0, caida=0.25))
+    guardar("cf_revela", revela, 0.95)
+    captura = mezclar(tono(900, 0.8, 0.5, "saw", caida=0.4, f_final=180),
+                      tono(950, 0.8, 0.4, "saw", caida=0.4, f_final=170),
+                      chasquidos(0.5, 0.6), tono(35, 0.9, 1.0, caida=0.35))
+    guardar("cf_captura", captura, 0.95)
+
+
+
+def generar_sustos_aliens():
+    """Un susto por tipo de alien (ambiente.py), distinto del "captura" de
+    siempre, que queda para el Rastreador. Con su propio azar, para no
+    cambiar los otros sonidos.
+
+        python -c "import sys; sys.path.insert(0, 'Audio'); import generar_sonidos as g; g.generar_sustos_aliens()"
+    """
+    azar = random.Random(31)
+
+    def soplo(dur, vol, suave, subida=True):
+        """Ruido que crece (o se apaga): aire, velocidad."""
+        n = int(FRECUENCIA * dur)
+        salida, acum, ventana = [], 0.0, []
+        for i in range(n):
+            v = azar.uniform(-1, 1)
+            ventana.append(v)
+            acum += v
+            if len(ventana) > suave:
+                acum -= ventana.pop(0)
+            k = i / n
+            salida.append(acum / len(ventana) * vol * ((k ** 2) if subida else (1 - k) ** 2))
+        return salida
+
+    # Ciego: tres pings de sonar cada vez más cerca (más fuertes y seguidos),
+    # un gruñido sordo y el golpe.
+    pings = []
+    for espera, vol in ((0.0, 0.25), (0.16, 0.45), (0.26, 0.8)):
+        pings.append(silencio(espera) + tono(1250, 0.12, vol, caida=0.05))
+    grunido = silencio(0.36) + [v * (0.5 + 0.5 * math.sin(i / FRECUENCIA * 2 * math.pi * 23))
+                                for i, v in enumerate(soplo(0.55, 1.0, 40, subida=False))]
+    golpe = silencio(0.36) + tono(40, 0.6, 1.0, caida=0.22)
+    guardar("captura_ciego", mezclar(*pings, grunido, golpe,
+                                     silencio(0.36) + tono(180, 0.5, 0.35, "saw", caida=0.2, f_final=120)), 0.95)
+
+    # Cazador: algo que pasa rapidísimo (soplo que sube), chillido y zarpazo.
+    paso = soplo(0.24, 1.0, 3)
+    chillido = silencio(0.2) + mezclar(tono(620, 0.5, 0.5, "saw", caida=0.25, f_final=1500),
+                                       tono(660, 0.5, 0.4, "saw", caida=0.25, f_final=1580))
+    zarpazo = silencio(0.26) + mezclar(soplo(0.12, 1.0, 1, subida=False), tono(48, 0.4, 0.9, caida=0.15))
+    guardar("captura_cazador", mezclar(paso, chillido, zarpazo), 0.95)
+
+    # Vigía: pitidos de "fijando blanco" cada vez más seguidos y un acorde
+    # eléctrico al fijarlo.
+    pitidos, t = [], 0.0
+    for espera in (0.13, 0.1, 0.075, 0.055, 0.045):
+        pitidos.append(silencio(t) + tono(1760, 0.04, 0.4, "square", caida=0.03))
+        t += espera
+    acorde = silencio(t) + mezclar(tono(440, 0.55, 0.45, "square", caida=0.3),
+                                   tono(466, 0.55, 0.4, "square", caida=0.3),
+                                   tono(932, 0.55, 0.25, "saw", caida=0.25, f_final=700),
+                                   tono(44, 0.55, 0.9, caida=0.25))
+    guardar("captura_vigia", mezclar(*pitidos, acorde), 0.95)
 
 
 if __name__ == "__main__":

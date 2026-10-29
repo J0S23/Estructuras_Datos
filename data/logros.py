@@ -24,7 +24,7 @@ ARBOL_LOGROS = L(
       L("shhh", "Shhh", "Pasar a menos de 100 px del Ciego, en sigilo, sin que te oiga."),
       rama="sigilo"),
 
-    L("codigo_roto", "Código roto", "Abrir la puerta de la prisión.",
+    L("codigo_roto", "Código roto", "Abrir la puerta con el código.",
       L("a_la_primera", "A la primera", "Abrirla sin fallar el código ni una vez."),
       L("sin_rumbo", "Sin rumbo", "Apagar todas las consolas de navegación.",
         L("chatarrero", "Chatarrero", "Llevar las 3 piezas a la cápsula.",
@@ -56,7 +56,7 @@ ARBOL_LOGROS = L(
       L("trabajo_en_equipo", "Trabajo en equipo", "Abrir una puerta para dos."),
       rama="nave"),
 
-    L("conoce_a_tu_enemigo", "Conoce a tu enemigo", "Ver de cerca a los 3 tipos de alien.",
+    L("conoce_a_tu_enemigo", "Conoce a tu enemigo", "Ver de cerca a todos los tipos de alien, el Cambiaformas incluido.",
       L("agotalo", "Agótalo", "Que el Cazador se canse persiguiéndote."),
       L("apagado", "Fuera de servicio", "Apagar a un alien con un hackeo (Tecnomante)."),
       L("por_aqui_no", "Por aquí no", "Que un sello frene a un alien (Forjador)."),

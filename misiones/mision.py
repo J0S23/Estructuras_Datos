@@ -1,6 +1,9 @@
 """La misión de escape: tres fases cortas, celdas y puntos de equipo.
 
-    1. Prisión     encontrar el código en las notas y abrir la puerta.
+    1. Puerta      encontrar el código en las notas y abrir la puerta (si el
+                   mapa tiene una: en la Nave es la de la prisión, en MapaE2
+                   la salida de Control). El código va en una nota que se
+                   alcanza ANTES de la puerta (notas_antes_de_la_puerta).
     2. Sabotaje    apagar las consolas de navegación (mantener la tecla).
     3. Cápsula     llevar 3 piezas a la cápsula y repararla (mantener la tecla).
                    Para repararla hacen falta los planos, que se ganan con la
@@ -10,7 +13,8 @@
                    cápsula. Si llegan todos, ganan.
 
 Si atrapan a alguien, va a una **celda** y un compañero tiene que ir a
-sacarlo. Si están todos en celdas, o se acaba el tiempo, pierden.
+sacarlo. Si están todos en celdas o se quedan sin vidas, pierden. No hay
+límite de tiempo.
 
 Para que se pueda jugar con 2 o 3 personas:
 - sin Tecnomante, aparecen **decodificadores** para las consolas (no se gastan:
@@ -36,7 +40,6 @@ from misiones.logros import logro
 PIEZAS_NECESARIAS = 3
 SABOTAJE_ROL_S, SABOTAJE_OTROS_S = 3.0, 6.0          # segundos manteniendo la tecla
 REPARACION_ROL_S, REPARACION_OTROS_S = 4.0, 8.0
-DURACION_MISION_S = 420                               # siete minutos
 RADIO_RESCATE = 140
 
 PUNTOS_PUERTA = 20
@@ -83,6 +86,18 @@ class Equipo:
 
     def gastar(self, cantidad):
         self.puntos = max(0, self.puntos - cantidad)
+
+
+def notas_antes_de_la_puerta(mundo, desde, notas, tapan):
+    """Índices de las notas (rects) a las que se llega caminando desde `desde`
+    con la puerta del código y las puertas para dos cerradas (`tapan`): entre
+    ellas se sortea la del código, para que siempre se pueda leer antes de
+    abrir. La usa también el editor de mapa, para mostrar cuáles sirven."""
+    def choca(rect):
+        return mundo.colisiona(rect) or rect.collidelist(tapan) != -1
+    celdas = mundo.area_alcanzable(desde, colisiona=choca)
+    return [i for i, nota in enumerate(notas)
+            if any(pygame.Rect(c[0], c[1], 48, 19).colliderect(nota.inflate(40, 40)) for c in celdas)]
 
 
 def _rect(centro, tamano):
@@ -133,6 +148,9 @@ class Mision:
         self.consolas = [{"rect": _rect(px(c), TAMANO_CONSOLA), "progreso": 0.0}
                          for c in objetos.get("consolas", [])]
         self.celdas = [{"punto": px(c), "preso": None} for c in objetos.get("celdas", [])]
+        # Las puertas para dos también tapan al buscar dónde esconder el código.
+        self._dobles = [_rect(px((d["rx"], d["ry"])), (max(8, int(d["ancho"] * ancho)), max(8, int(d["alto"] * alto))))
+                        for d in objetos.get("puertas_dobles", [])]
         self._crear_notas([px(n) for n in objetos.get("notas", [])])
         self._crear_consumibles([px(c) for c in objetos.get("consumibles", [])])
 
@@ -149,16 +167,25 @@ class Mision:
         """Reparte los textos y esconde el código en una nota alcanzable."""
         self.notas = [{"rect": _rect(p, TAMANO_NOTA), "titulo": "", "texto": "", "leida_por": set()}
                       for p in puntos]
-        if not self.notas:
-            return
         alcanzables = list(range(len(self.notas)))
         if self.juego.jugadores and self.puerta is not None:
             desde = self.juego.jugadores[0].hitbox.topleft
-            celdas = self.juego.mundo.area_alcanzable(desde)
-            alcanzables = [i for i, n in enumerate(self.notas)
-                           if any(pygame.Rect(c[0], c[1], 48, 19).colliderect(n["rect"].inflate(40, 40))
-                                  for c in celdas)] or alcanzables
-        con_codigo = self.rng.choice(alcanzables)
+            alcanzables = notas_antes_de_la_puerta(self.juego.mundo, desde,
+                                                   [n["rect"] for n in self.notas],
+                                                   [self.puerta] + getattr(self, "_dobles", []))
+            if not alcanzables:
+                # Antes le ponía el código a cualquier nota, aunque estuviera del
+                # otro lado: la partida quedaba imposible. Mejor sin puerta.
+                print("[AVISO] Ninguna nota se alcanza antes de la puerta con código: "
+                      "se deja abierta (ponle notas antes, con el editor de mapa).")
+                if self.puerta in self.juego.mundo.paredes:
+                    self.juego.mundo.paredes.remove(self.puerta)
+                self.puerta, self.puerta_abierta = None, True
+                alcanzables = list(range(len(self.notas)))
+        if not self.notas:
+            return
+        # Sin puerta con código no hay código que esconder: todas son de historia.
+        con_codigo = self.rng.choice(alcanzables) if self.puerta is not None else None
         self.notas_alcanzables = [self.notas[i] for i in alcanzables]   # para la flecha
         lore = list(NOTAS)
         for i, nota in enumerate(self.notas):
@@ -388,7 +415,7 @@ class Mision:
         opciones = sorted(opciones)
         jugador.abrir_panel({
             "tipo": "opciones", "accion": "codigo", "codigos": opciones,
-            "titulo": "Puerta de la prisión",
+            "titulo": "Puerta con código",
             "cuerpo": ["Un teclado pide un código de tres números.",
                        "Si te equivocas, suena la alarma."],
             "opciones": [{"texto": c} for c in opciones],
@@ -421,7 +448,7 @@ class Mision:
         if jugador is not None:
             jugador.sumar_puntos(PUNTOS_PUERTA)
         self.fase = "sabotaje" if self.consolas else "capsula"
-        self._avisar_todos("¡La puerta de la prisión se abrió!", COLOR_BIEN)
+        self._avisar_todos("¡La puerta se abrió!", COLOR_BIEN)
         self._sonar("puerta")
         self._decir("puerta_abierta", None, True)
 
@@ -625,7 +652,7 @@ class Mision:
         jugadores = [j for j in self.juego.jugadores if j.puede_moverse]
         if not jugadores:
             if any(getattr(j, "eliminado", False) for j in self.juego.jugadores):
-                self.resultado = "derrota"     # los atraparon a todos 3 veces
+                self.resultado = "derrota"     # eliminaron a todos (sin vidas)
                 return
             jugadores = self.juego.jugadores
         for celda in self.celdas:
@@ -648,6 +675,7 @@ class Mision:
                 for j in jugadores:
                     j.sumar_puntos(PUNTOS_ESCAPE // max(1, len(jugadores)))
 
-    def terminar_por_tiempo(self):
+    def terminar_sin_escapar(self):
+        """Se acabó la partida sin que escaparan (Terminar partida en la pausa)."""
         if self.activa and self.resultado is None:
             self.resultado = "derrota"

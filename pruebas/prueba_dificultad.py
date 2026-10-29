@@ -19,7 +19,6 @@ from juego import dificultad
 from juego.dificultad import Dificultad
 from data.dificultad import DIFICULTADES, AJUSTES, POR_DEFECTO
 from data.npcs import ESPERA_INICIAL_MS
-from misiones.mision import DURACION_MISION_S
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 
@@ -40,7 +39,7 @@ for nombre, (facil, normal, dificil) in AJUSTES.items():
     assert (facil <= normal <= dificil) or (facil >= normal >= dificil), nombre
 d = Dificultad("dificil")
 assert d.valor("vel_aliens") == 1.0 and d.valor("cf_espera_ms") == ESPERA_INICIAL_MS
-assert d.tiempo == 1.0 and d.vidas == 3 and not d.flecha, "Difícil = como era el juego"
+assert d.vidas == 3 and not d.flecha, "Difícil = como era el juego"
 t = Dificultad("tutorial")
 assert t.vidas_infinitas and t.flecha and t.valor("vel_aliens") < Dificultad("facil").valor("vel_aliens")
 i = Dificultad("inteligente")
@@ -118,7 +117,7 @@ for clave in claves:
     g = partida(clave)
     d = g.dificultad
     assert d.clave == clave
-    assert g.tiempo_restante_ms == int(DURACION_MISION_S * 1000 * d.tiempo)
+    assert g.tiempo_restante_ms is None, "con misión no hay límite de tiempo"
     assert all(j.vidas == j.vidas_max == d.vidas for j in g.jugadores)
     assert g.nexus.umbral_planos == d.umbral_planos
     assert g.cambiaformas.calma_ms == int(d.valor("cf_espera_ms"))
@@ -127,9 +126,9 @@ for clave in claves:
     assert all(a.ajuste_vel == d.valor("vel_aliens") for a in g.aliens)
     g.screen = pygame.Surface((1024, 768))
     g._dibujar()
-    resumen[clave] = (round(g.tiempo_total_ms / 60000, 1), d.vidas, d.umbral_planos,
+    resumen[clave] = (d.vidas, d.umbral_planos,
                       round(d.valor("vel_aliens"), 2))
-print("tiempo (min), vidas, planos, velocidad de aliens:", resumen)
+print("vidas, planos, velocidad de aliens:", resumen)
 
 # Tutorial: que te atrapen no quita vidas.
 g = partida("tutorial")

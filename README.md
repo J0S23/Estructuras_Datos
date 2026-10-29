@@ -65,10 +65,11 @@ flechas y Enter. `python pruebas/probar_mando.py` muestra que boton manda cada
 cosa por si algun mando sale con los numeros cambiados (se ajusta en `mandos.py`). No hay tecla de correr; la de sigilo hace caminar a la
 mitad de velocidad y casi sin ruido.
 
-Teclas globales: **[F11]** alterna ventana y **[ESC]** (o START en el mando) abre el
+Teclas globales: **[F11]** alterna ventana, **[F3]** muestra los FPS y cuanto tarda
+cada cuadro (los cuadros lentos se escriben en la consola) y **[ESC]** (o START en el mando) abre el
 menu de pausa: continuar, opciones, logros y terminar partida. En Opciones, ademas del
 sonido y la pantalla completa, estan las vistas para probar: apagar el campo de vision y
-la oscuridad, ver las hitboxes y ver el arbol de comportamiento de cada alien en vivo. La mision dura siete minutos y termina en una pantalla de resultados, desde donde se puede ver el arbol de logros de la partida.
+la oscuridad, ver las hitboxes y ver el arbol de comportamiento de cada alien en vivo. No hay limite de tiempo: se pierde si atrapan a todos o se quedan sin vidas. Al terminar sale una pantalla de resultados (con cuanto duro la partida), desde donde se puede ver el arbol de logros de la partida.
 
 Ademas hay editores para preparar los assets:
 
@@ -152,34 +153,41 @@ advierten si vas con el.
 Despues de escoger cuantos juegan se elige la dificultad (numeros en
 `data/dificultad.py`):
 
-| | Tiempo | Vidas | Aliens | Planos | Flecha | Fuga de la celda |
-|---|---|---|---|---|---|---|
-| **Tutorial** | 14 min | no se pierden | 70% de velocidad/vision/oido | 60% | si | 8 s |
-| **Facil** | 10.5 min | 5 | 82% | 70% | si | 20 s |
-| **Normal** | 8.75 min | 4 | 92% | 75% | si | 40 s |
-| **Dificil** | 7 min | 3 | 100% (como era el juego) | 80% | no | no |
-| **Inteligente** | 8.75 min | 4 | se ajusta solo | 75% | mientras va facil | segun el nivel |
+| | Vidas | Aliens | Planos | Flecha | Fuga de la celda |
+|---|---|---|---|---|---|
+| **Tutorial** | no se pierden | 70% de velocidad/vision/oido | 60% | si | 8 s |
+| **Facil** | 5 | 82% | 70% | si | 20 s |
+| **Normal** | 4 | 92% | 75% | si | 40 s |
+| **Dificil** | 3 | 100% (como era el juego) | 80% | no | no |
+| **Inteligente** | 4 | se ajusta solo | 75% | mientras va facil | segun el nivel |
 
 Tambien cambian cuanto espera el Cambiaformas para cazar, cuanto descansa, cuanto
 tarda en traicionar y cada cuanto suplanta, y cada cuanto salen rumores y que tan
 facil se los creen. La **flecha** amarilla señala lo que toca hacer (notas,
 puerta, consolas, piezas, rumores, capsula o un compañero encerrado). Con **fuga**,
 el encerrado sale solo despues de ese tiempo y que esten todos presos no es derrota.
+En **Tutorial**, ademas, la primera vez que alguien ve cada tipo de alien (el
+Cambiaformas, cuando ya se revelo) el juego se pausa y una ventana lo señala y
+explica como funciona (`juego/presentacion_aliens.py`, textos en
+`data/presentacion_aliens.py`).
 
 **Inteligente** tiene un "director" (`dificultad.py`): cada 4 s mira como va el
-equipo (avance de la mision contra el reloj, confianza en NEXUS, capturas
+equipo (que tan rapido avanza la mision, confianza en NEXUS, capturas
 recientes, vidas) y sube o baja un nivel continuo entre Facil y "Pesadilla" (mas
 que Dificil). La IA de la nave avisa cuando cambia. En los resultados sale hasta
 donde llego.
 
 ### La mision (mapa de la nave)
 
-Cuatro prisioneros escapan de una nave alienigena en tres fases: abrir la
-puerta de la prision con el codigo que esta en una de las notas, apagar las
-consolas de navegacion y reparar la capsula de escape; despues los aliens
-entran en alerta y todos tienen que llegar a la capsula. Si atrapan a alguien
-va a una celda y otro lo tiene que sacar. Cada jugador tiene 3 vidas (los
-corazones arriba a la izquierda): a la tercera captura queda eliminado. La
+Cuatro prisioneros escapan de una nave alienigena: apagar las consolas de
+navegacion y reparar la capsula de escape; despues los aliens entran en alerta
+y todos tienen que llegar a la capsula. En el mapa de la segunda entrega
+(`MapaE2`) empiezan encerrados en Control y la primera fase es abrir su puerta
+con el codigo, que esta en una de las notas de Control (en la `Nave` vieja, la
+puerta de la prision). El juego solo esconde el codigo en notas a las que se
+llega antes de la puerta.
+Si atrapan a alguien va a una celda y otro lo tiene que sacar. Las vidas (los
+corazones arriba a la izquierda) dependen de la dificultad: sin vidas queda eliminado. La
 Biomante puede devolver vidas con Regeneración. Si eliminan al Tecnomante deja dos decodificadores, y si eliminan
 al Forjador deja un kit de herramientas, para que la mision se pueda terminar.
 Lo que lleva cada uno se ve en el inventario, abajo a la derecha. Las consolas y la reparacion se hacen
@@ -232,7 +240,9 @@ python pruebas/prueba_hud.py       # capturas del HUD con 2, 3 y 4 jugadores
 que va encima: inicio de los jugadores, rutas de los aliens, escondites,
 celdas, puerta de la prision, notas, consolas, capsula, piezas, terminales NEXUS,
 terminales y paneles de los roles, consumibles, compuertas, puertas para dos,
-cajas de fusibles y pruebas del infiltrado (la lista con sus teclas
+cajas de fusibles, pruebas del infiltrado y **salas** (rectangulos con nombre:
+el HUD de cada jugador dice en que sala esta; el editor avisa si queda piso sin
+sala) (la lista con sus teclas
 esta en el editor). Clic izquierdo pone o arrastra, clic derecho borra, `Ctrl+S` guarda,
 `M` hace que el juego use ese mapa y `F5` guarda y abre el juego para probar.
 Marca en rojo lo que choca con paredes y en naranja lo que no se alcanza
@@ -263,7 +273,9 @@ python pruebas/prueba_editor_mapa.py  # el editor y que el juego use lo guardado
 - `Editores/` -- herramientas para hitboxes, el mapa y calibracion de personajes.
 - `pruebas/` -- pruebas que corren sin abrir ventana y el simulador de bots.
 - `Imagenes/` -- assets: `Fondos/` (la nave y el menu), `Personajes/<Rol>/`
-  (`<Rol>_<animacion>_<direccion>.png`), `Aliens/` y `Objetos/`.
+  (`<Rol>_<animacion>_<direccion>.png`), `Aliens/` (incluido el Cambiaformas),
+  `Prisioneros/<carpeta>/` (los que caminan; cada carpeta nueva se reparte
+  sola) y `Objetos/`.
 - `Hitboxes/` -- los JSON que generan los editores (paredes, objetos del mapa,
   hitbox de cada rol). La nave es el unico mapa.
 - `Audio/`, `Fuentes/` -- efectos de sonido y la tipografia.
