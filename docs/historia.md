@@ -1,4 +1,4 @@
-# NEXUS: Operación Espejo
+# NEXUS
 
 ## De qué trata el juego
 
@@ -16,7 +16,7 @@ Todas tienen algo en común: usan NEXUS, la red social que apareció de la nada 
 
 El gobierno de Colombia sospecha que NEXUS no es una aplicación: es la voz de la nave. Algunos de esos famosos tienen tratos con los aliens; otros, directamente, son aliens.
 
-Así nace la **Operación Espejo**: cuatro especialistas suben a la nave para encontrar la verdad y contársela al mundo. Hay un problema: allá arriba, la mentira también tiene cuenta.
+Por eso envía a cuatro especialistas a la nave para encontrar la verdad y contársela al mundo. Hay un problema: allá arriba, la mentira también tiene cuenta.
 
 ## Los cuatro agentes
 
