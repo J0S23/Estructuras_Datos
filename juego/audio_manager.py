@@ -6,8 +6,9 @@ y el latido y los pasos suenan muchas veces por segundo. Si el audio no está
 disponible (sin parlantes, o en las pruebas sin ventana), todo falla en
 silencio y el juego sigue.
 
-No hay música: de fondo suena un zumbido de la nave en bucle (`bucle`), que
-se calla en los apagones. Su volumen sigue al de los efectos.
+De fondo suena un zumbido de la nave en bucle (`bucle`), que se calla en los
+apagones, y encima la música (`musica`): tranquila, o de tensión cuando un
+alien persigue a alguien. El volumen de los dos sigue al de los efectos.
 """
 
 import os
@@ -26,6 +27,10 @@ class AudioManager:
         self._canal_bucle = None
         self._bucle = None         # nombre del sonido en bucle que está sonando
         self._volumen_bucle = 0.0  # 0 a 1, antes de multiplicar por sfx_volume
+        self._canal_musica = None
+        self._musica = None        # nombre de la música que está sonando
+        self._volumen_musica = 0.0
+        self._turno_musica = 1     # cuál de los dos canales de música toca (0 o 1)
 
     def _resolve_audio_path(self, folder, nombre):
         for extension in (".ogg", ".wav", ".mp3"):
@@ -40,6 +45,11 @@ class AudioManager:
         except (TypeError, ValueError):
             return
         self.volumen_bucle(self._volumen_bucle)
+        try:
+            if self._canal_musica is not None:
+                self._canal_musica.set_volume(self._volumen_musica * self.sfx_volume)
+        except Exception:
+            pass
 
     def _sonido(self, nombre):
         if nombre not in self._sonidos:
@@ -54,6 +64,10 @@ class AudioManager:
         try:
             if pygame.mixer.get_init() is None or not os.path.isdir(self._sfx_dir):
                 return
+            # Zumbido + música + voces, pasos y latido a la vez: con los 8
+            # canales de siempre, alguno se quedaba sin sonar.
+            if pygame.mixer.get_num_channels() < 16:
+                pygame.mixer.set_num_channels(16)
             for archivo in os.listdir(self._sfx_dir):
                 nombre, extension = os.path.splitext(archivo)
                 if extension.lower() in (".ogg", ".wav", ".mp3"):
@@ -73,7 +87,11 @@ class AudioManager:
                 sonido = self._sonido(nombre)
                 if sonido is None:
                     return
-                self._canal_bucle = sonido.play(loops=-1, fade_ms=800)
+                # Canal apartado (el 2; el 0 y el 1 son de la música): los
+                # efectos no lo usan y la música no lo pisa.
+                pygame.mixer.set_reserved(3)
+                self._canal_bucle = pygame.mixer.Channel(2)
+                self._canal_bucle.play(sonido, loops=-1, fade_ms=800)
                 self._bucle = nombre
             self.volumen_bucle(volumen)
         except Exception:
@@ -98,6 +116,46 @@ class AudioManager:
     @property
     def sonando_bucle(self):
         return self._bucle
+
+    # -- Música de fondo (otro bucle, encima del zumbido) ----------------------------
+
+    def musica(self, nombre, volumen=1.0):
+        """Suena `nombre` en bucle como música (musica_calma, musica_tension).
+        Al cambiar de una a otra, la anterior se apaga de a poco mientras
+        entra la nueva."""
+        try:
+            if pygame.mixer.get_init() is None:
+                return
+            if self._musica != nombre:
+                self.parar_musica()
+                sonido = self._sonido(nombre)
+                if sonido is None:
+                    return
+                # Dos canales apartados solo para la música (los efectos no los
+                # usan): así nunca se queda sin canal, y al cambiar de música
+                # la nueva entra por el otro mientras la anterior se apaga.
+                pygame.mixer.set_reserved(3)
+                self._turno_musica = 1 - self._turno_musica
+                canal = pygame.mixer.Channel(self._turno_musica)
+                canal.play(sonido, loops=-1, fade_ms=1500)
+                self._canal_musica, self._musica = canal, nombre
+            self._volumen_musica = max(0.0, min(1.0, volumen))
+            if self._canal_musica is not None:
+                self._canal_musica.set_volume(self._volumen_musica * self.sfx_volume)
+        except Exception:
+            pass
+
+    def parar_musica(self):
+        try:
+            if self._canal_musica is not None:
+                self._canal_musica.fadeout(1200)
+        except Exception:
+            pass
+        self._canal_musica, self._musica = None, None
+
+    @property
+    def sonando_musica(self):
+        return self._musica
 
     def play_sfx(self, nombre, volume_scale=1.0):
         try:
