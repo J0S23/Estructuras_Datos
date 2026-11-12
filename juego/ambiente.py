@@ -42,6 +42,30 @@ INTERVALO_PASO_MS = 520
 INTERVALO_PASO_PERSIGUE_MS = 340
 AMPLITUD_TEMBLOR = 14        # píxeles
 
+# La voz de cada alien: se oye cada tanto cuando anda cerca de alguien (además
+# de sus pasos). tipo -> (sonidos, espera mínima y máxima en ms).
+ALCANCE_VOZ = 720
+VOCES = {
+    "ciego": (("voz_ciego_1", "voz_ciego_2"), 2400, 4200),        # chasquidos: así "ve"
+    "vigia": (("voz_vigia_1", "voz_vigia_2"), 5000, 9000),
+    "cazador": (("voz_cazador_1", "voz_cazador_2"), 4500, 8000),
+    "guardia": (("guardia_esfuerzo_1", "guardia_esfuerzo_2"), 2000, 3600),
+}
+ALCANCE_SOMBRA_SE_VA = 1100  # hasta dónde se oye a la Sombra deshacerse
+INTERVALO_PASTO_MS = 360     # pisadas en el pasto de la Biosfera
+SALA_CON_PASTO = "biosfera"
+PASOS_PASTO = ("paso_pasto_1", "paso_pasto_2")
+INTERVALO_GOLPE_CASILLERO_MS = 900
+RADIO_GOLPE_CASILLERO = 190  # el alien que te busca, pegado a tu casillero
+# Lo que se oye mientras alguien mantiene la tecla (por cómo empieza el texto
+# de su barra de progreso): (sonido, cada cuántos ms, volumen).
+TRABAJOS = (
+    ("Reparando", "reparar", 760, 0.6),
+    ("Cambiando fusibles", "reparar", 760, 0.5),
+    ("Apagando consola", "tecleo", 520, 0.5),
+    ("Abriendo la puerta", "tecleo", 520, 0.4),
+)
+
 
 def sonar(nombre, volumen=1.0):
     audio_manager.play_sfx(nombre, volumen)
@@ -52,6 +76,11 @@ class Ambiente:
         self.fase_latido = 0.0
         self.pasos_ms = {}       # id(alien) -> ms hasta el próximo paso
         self.ultimos = []        # (nombre, volumen) de lo que sonó; lo leen las pruebas
+        self.voz_ms = {}         # id(alien) -> ms hasta su próxima voz
+        self.sombras = {}        # id(sombra) -> a qué distancia estaba (para oírla irse)
+        self.esperas = {}        # (qué, id(jugador)) -> ms hasta el próximo sonido
+        self.posiciones = {}     # id(jugador) -> dónde estaba el cuadro pasado
+        self.azar = random.Random()
 
     def sonar(self, nombre, volumen=1.0):
         self.ultimos.append((nombre, round(volumen, 2)))
@@ -101,10 +130,16 @@ class Ambiente:
                 fuerza = max(0.0, min(1.0, (asustado.pulso - 20) / 75))
                 self.sonar("latido", 0.12 + 0.88 * fuerza)
 
+        self._sombra_se_va(aliens, libres)
+        self._pasos_en_pasto(dt, libres)
+        self._golpes_en_casillero(dt, jugadores, aliens)
+        self._trabajos(dt, jugadores)
+
         for alien in aliens:
             if alien.tipo == "sombra":
                 self._susurro(alien, libres, dt)
                 continue
+            self._voz(alien, libres, dt)
             if alien.accion in ("DESCANSAR", "BUSCAR", "REVISAR_ESCONDITE", "ATRAPAR"):
                 continue
             distancia = min((math.dist(alien.centro, j.hitbox.center) for j in libres), default=None)
@@ -117,6 +152,88 @@ class Ambiente:
                 self.pasos_ms[clave] = INTERVALO_PASO_PERSIGUE_MS if rapido else INTERVALO_PASO_MS
                 self.sonar("paso_alien", 0.15 + 0.85 * (1 - distancia / ALCANCE_PASOS))
 
+
+    def _cada(self, clave, dt, intervalo_ms):
+        """True cada `intervalo_ms` mientras se siga llamando con esa clave
+        (la primera vez, de una)."""
+        self.esperas[clave] = self.esperas.get(clave, 0) - dt
+        if self.esperas[clave] > 0:
+            return False
+        self.esperas[clave] = intervalo_ms
+        return True
+
+    def _voz(self, alien, libres, dt):
+        """Los chasquidos del Ciego, el ronroneo del Vigía, el chillido del
+        Cazador y el esfuerzo del Guardia: cada tanto, si hay alguien cerca."""
+        voz = VOCES.get(alien.tipo)
+        if voz is None or getattr(alien, "aturdido", False):
+            return
+        if alien.tipo == "guardia" and (getattr(alien, "comiendo", False)
+                                        or not getattr(alien, "moviendose", False)):
+            return                         # el Guardia se esfuerza al moverse
+        distancia = min((math.dist(alien.centro, j.hitbox.center) for j in libres), default=None)
+        if distancia is None or distancia > ALCANCE_VOZ:
+            return
+        sonidos, minimo, maximo = voz
+        clave = id(alien)
+        if clave not in self.voz_ms:
+            self.voz_ms[clave] = self.azar.randint(400, minimo)
+        # Persiguiendo se oye el doble de seguido.
+        self.voz_ms[clave] -= dt * (2 if alien.accion == "PERSEGUIR" else 1)
+        if self.voz_ms[clave] <= 0:
+            self.voz_ms[clave] = self.azar.randint(minimo, maximo)
+            self.sonar(self.azar.choice(sonidos), 0.12 + 0.7 * (1 - distancia / ALCANCE_VOZ))
+
+    def _sombra_se_va(self, aliens, libres):
+        """La Sombra que se veía y ya no está (volvió la luz): se oye deshacerse."""
+        ahora = {}
+        for alien in aliens:
+            if alien.tipo == "sombra" and not getattr(alien, "oculta", False):
+                ahora[id(alien)] = min((math.dist(alien.centro, j.hitbox.center) for j in libres),
+                                       default=ALCANCE_SOMBRA_SE_VA)
+        for clave, distancia in self.sombras.items():
+            if clave not in ahora and distancia < ALCANCE_SOMBRA_SE_VA:
+                self.sonar("sombra_desvanece", 0.25 + 0.65 * (1 - distancia / ALCANCE_SOMBRA_SE_VA))
+        self.sombras = ahora
+
+    def _pasos_en_pasto(self, dt, libres):
+        """En la Biosfera se camina sobre pasto (en sigilo, más bajito)."""
+        for jugador in libres:
+            clave = id(jugador)
+            centro = jugador.hitbox.center
+            antes = self.posiciones.get(clave, centro)
+            self.posiciones[clave] = centro
+            if centro == antes or SALA_CON_PASTO not in (getattr(jugador, "sala", None) or "").lower():
+                continue
+            if self._cada(("pasto", clave), dt, INTERVALO_PASTO_MS):
+                en_sigilo = getattr(jugador, "sigilo", False)
+                self.sonar(self.azar.choice(PASOS_PASTO), 0.22 if en_sigilo else 0.5)
+
+    def _golpes_en_casillero(self, dt, jugadores, aliens):
+        """Escondido en un casillero con el alien que te busca encima: golpea la puerta."""
+        for jugador in jugadores:
+            if not getattr(jugador, "escondido", False):
+                continue
+            cerca = any(alien.tipo != "sombra"
+                        and alien.accion in ("REVISAR_ESCONDITE", "PERSEGUIR", "BUSCAR")
+                        and math.dist(alien.centro, jugador.hitbox.center) <= RADIO_GOLPE_CASILLERO
+                        for alien in aliens)
+            if cerca and self._cada(("casillero", id(jugador)), dt, INTERVALO_GOLPE_CASILLERO_MS):
+                self.sonar("casillero_golpe", 0.9)
+
+    def _trabajos(self, dt, jugadores):
+        """Reparar la cápsula, cambiar fusibles, apagar una consola: mientras
+        la barra de progreso avanza, se oye el trabajo."""
+        for jugador in jugadores:
+            progreso = getattr(jugador, "progreso", None)
+            if not progreso:
+                continue
+            texto = str(progreso[0])
+            for empieza, nombre, intervalo, volumen in TRABAJOS:
+                if texto.startswith(empieza):
+                    if self._cada(("trabajo", id(jugador)), dt, intervalo):
+                        self.sonar(nombre, volumen)
+                    break
 
     def _susurro(self, sombra, libres, dt):
         """La Sombra no hace ruido al caminar: cerca se oye un susurro."""

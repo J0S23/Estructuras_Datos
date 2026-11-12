@@ -344,5 +344,289 @@ def generar_sustos_aliens():
     guardar("captura_sombra", mezclar(susurro, chasquido, golpe), 0.95)
 
 
+def generar_extras():
+    """Voces de los aliens, pasos en el pasto, golpes en el casillero, arreglos,
+    el cohete de la cápsula y la música de fondo (calma y tensión). Con su
+    propio azar, para no cambiar los otros sonidos.
+
+        python -c "import sys; sys.path.insert(0, 'Audio'); import generar_sonidos as g; g.generar_extras()"
+
+    Son provisionales: un archivo con el mismo nombre (.ogg o .wav) los
+    reemplaza. Ojo: un .mp3 no le gana al .wav que ya está (audio_manager.py
+    busca .ogg, .wav y .mp3, en ese orden): hay que borrar el .wav.
+
+        voz_ciego_1/2         chasquidos de garganta (como un "clicker")
+        voz_vigia_1/2         ronroneo grave entrecortado, de alien que acecha
+        voz_cazador_1/2       siseo y chillido corto
+        guardia_esfuerzo_1/2  gruñido de esfuerzo, pesado
+        sombra_desvanece      soplo que se deshace cuando vuelve la luz
+        paso_pasto_1/2        pisada en el pasto de la Biosfera
+        casillero_golpe       golpe metálico en la puerta del casillero
+        reparar               carraca y golpe de herramienta
+        tecleo                teclas de consola
+        cohete                la cápsula despega
+        musica_calma          bucle tranquilo (16 s)
+        musica_tension        bucle de persecución (8 s)
+    """
+    azar = random.Random(47)
+    F = FRECUENCIA
+    dos_pi = 2 * math.pi
+
+    def blanco(n):
+        return [azar.uniform(-1, 1) for _ in range(n)]
+
+    def pasa_bajos(muestras, corte):
+        """Filtro de un polo: deja lo que está por debajo de `corte` Hz."""
+        a = 1 - math.exp(-dos_pi * corte / F)
+        salida, y = [], 0.0
+        for v in muestras:
+            y += a * (v - y)
+            salida.append(y)
+        return salida
+
+    def pasa_altos(muestras, corte):
+        bajos = pasa_bajos(muestras, corte)
+        return [v - b for v, b in zip(muestras, bajos)]
+
+    def banda(muestras, bajo, alto):
+        return pasa_altos(pasa_bajos(muestras, alto), bajo)
+
+    def envolver(muestras, ataque, salida_s):
+        n = len(muestras)
+        a, s = max(1, int(ataque * F)), max(1, int(salida_s * F))
+        return [v * min(1.0, i / a, (n - i) / s) for i, v in enumerate(muestras)]
+
+    def poner(base, pista, en_s, vol=1.0):
+        """Suma `pista` dentro de `base` empezando en `en_s` segundos."""
+        inicio = int(en_s * F)
+        if inicio + len(pista) > len(base):
+            base.extend([0.0] * (inicio + len(pista) - len(base)))
+        for i, v in enumerate(pista):
+            base[inicio + i] += v * vol
+        return base
+
+    # -- Ciego: chasquidos de garganta ---------------------------------------------
+    def chasquido(f):
+        """Un clic seco: golpe de ruido muy corto con una resonancia hueca."""
+        n = int(0.022 * F)
+        clic = banda(blanco(n), 500, 4200)
+        return [clic[i] * math.exp(-i / F / 0.0035) * 1.3 +
+                math.sin(dos_pi * f * i / F) * math.exp(-i / F / 0.006) * 0.8 for i in range(n)]
+
+    def voz_ciego(esperas, tono_base):
+        pista, t = [], 0.0
+        for k, espera in enumerate(esperas):
+            poner(pista, chasquido(tono_base + azar.randint(-140, 180)), t, 0.6 + 0.4 * azar.random())
+            t += espera
+        # El graznido del final: una garganta que raspa.
+        n = int(0.42 * F)
+        raspa = pasa_bajos(blanco(n), 900)
+        graznido = [(raspa[i] * 0.9 + (2 * ((95 * i / F) % 1) - 1) * 0.5)
+                    * (0.5 + 0.5 * math.sin(dos_pi * 31 * i / F)) for i in range(n)]
+        poner(pista, envolver(graznido, 0.05, 0.25), t + 0.03, 0.55)
+        return pista
+
+    guardar("voz_ciego_1", voz_ciego([0.11, 0.09, 0.07, 0.055, 0.05, 0.05, 0.06, 0.08, 0.12], 1150), 0.8)
+    guardar("voz_ciego_2", voz_ciego([0.05, 0.05, 0.06, 0.2, 0.06, 0.05, 0.05, 0.05], 900), 0.8)
+
+    # -- Vigía: ronroneo grave entrecortado ------------------------------------------
+    def voz_vigia(dur, pulsos_ini, pulsos_fin, f):
+        n = int(dur * F)
+        aire = pasa_bajos(blanco(n), 700)
+        pista, fase, fase_p = [], 0.0, 0.0
+        for i in range(n):
+            k = i / n
+            fase += dos_pi * (f * (1 - 0.18 * k)) / F
+            fase_p += (pulsos_ini + (pulsos_fin - pulsos_ini) * k) / F
+            pulso = math.exp(-(fase_p % 1) * 7)             # cada pulso: un golpe de garganta
+            sierra = 2 * ((fase / dos_pi) % 1) - 1
+            pista.append((sierra * 0.7 + aire[i] * 1.6) * pulso)
+        return envolver(pasa_bajos(pista, 1500), 0.08, 0.3)
+
+    guardar("voz_vigia_1", voz_vigia(1.3, 26, 14, 72), 0.75)
+    guardar("voz_vigia_2", voz_vigia(0.9, 14, 30, 64), 0.75)
+
+    # -- Cazador: siseo y chillido ---------------------------------------------------
+    def voz_cazador(dur, f_ini, f_fin, siseo_s):
+        n = int(dur * F)
+        siseo = envolver(pasa_altos(blanco(int(siseo_s * F)), 2500), 0.12, 0.08)
+        pista = [v * 0.5 for v in siseo]
+        m = n - len(siseo)
+        ruido_m = banda(blanco(m), 900, 5000)
+        grito, fase = [], 0.0
+        for i in range(m):
+            k = i / m
+            f = f_ini + (f_fin - f_ini) * (k ** 0.6)
+            fase += dos_pi * f * (1 + 0.04 * math.sin(dos_pi * 38 * i / F)) / F
+            sierra = 2 * ((fase / dos_pi) % 1) - 1
+            cuadrada = 1.0 if math.sin(fase * 1.5) >= 0 else -1.0
+            grito.append(sierra * 0.55 + cuadrada * 0.2 + ruido_m[i] * 0.7)
+        return pista + envolver(grito, 0.02, 0.22)
+
+    guardar("voz_cazador_1", voz_cazador(0.95, 520, 1350, 0.3), 0.7)
+    guardar("voz_cazador_2", voz_cazador(0.7, 900, 480, 0.18), 0.7)
+
+    # -- Guardia: gruñido de esfuerzo -------------------------------------------------
+    def esfuerzo(dur, f, empuje):
+        n = int(dur * F)
+        aire = pasa_bajos(blanco(n), 1100)
+        pista, fase = [], 0.0
+        for i in range(n):
+            k = i / n
+            fase += dos_pi * f * (1 + empuje * math.sin(math.pi * k)) / F
+            sierra = 2 * ((fase / dos_pi) % 1) - 1
+            ronco = 0.65 + 0.35 * math.sin(dos_pi * 27 * i / F)
+            pista.append((sierra * 0.8 + aire[i] * 1.4) * ronco * math.sin(math.pi * k) ** 0.6)
+        resoplido = envolver(pasa_bajos(blanco(int(0.3 * F)), 1800), 0.03, 0.26)
+        return pasa_bajos(pista, 650) + [v * 0.35 for v in resoplido]
+
+    guardar("guardia_esfuerzo_1", esfuerzo(0.55, 68, 0.25), 0.85)
+    guardar("guardia_esfuerzo_2", esfuerzo(0.8, 58, -0.15), 0.85)
+
+    # -- Sombra: se deshace ------------------------------------------------------------
+    dur = 1.7
+    n = int(dur * F)
+    aire = blanco(n)
+    corte_y, pista = 0.0, []
+    for i in range(n):
+        k = i / n
+        a = 1 - math.exp(-dos_pi * (3800 * (1 - k) ** 2 + 180) / F)   # el filtro se cierra
+        corte_y += a * (aire[i] - corte_y)
+        brillo = (math.sin(dos_pi * (1480 - 900 * k) * i / F) * 0.12 +
+                  math.sin(dos_pi * (1493 - 880 * k) * i / F) * 0.12)
+        tiembla = 0.75 + 0.25 * math.sin(dos_pi * (11 - 7 * k) * i / F)
+        pista.append((corte_y * 1.2 + brillo) * tiembla * (1 - k) ** 1.6 * min(1.0, i / (0.05 * F)))
+    guardar("sombra_desvanece", pista, 0.6)
+
+    # -- Pasos en el pasto -------------------------------------------------------------
+    def pasto(crujidos):
+        pista = []
+        for en_s, largo, vol in crujidos:
+            hoja = pasa_altos(pasa_bajos(blanco(int(largo * F)), 5200), 1300)
+            poner(pista, [v * math.exp(-i / F / (largo * 0.35)) for i, v in enumerate(hoja)], en_s, vol)
+        return pista
+
+    guardar("paso_pasto_1", pasto([(0.0, 0.09, 1.0), (0.05, 0.07, 0.6), (0.11, 0.08, 0.45)]), 0.45)
+    guardar("paso_pasto_2", pasto([(0.0, 0.07, 0.8), (0.035, 0.1, 1.0), (0.12, 0.06, 0.4)]), 0.45)
+
+    # -- Golpes en el casillero --------------------------------------------------------
+    def golpe_metal(vol):
+        n = int(0.45 * F)
+        lata = banda(blanco(n), 300, 3000)
+        pista = []
+        for i in range(n):
+            t = i / F
+            v = math.sin(dos_pi * 62 * t) * math.exp(-t / 0.06) * 1.0        # el puño
+            for f, caida, peso in ((233, 0.16, 0.5), (377, 0.12, 0.4), (611, 0.09, 0.3),
+                                   (989, 0.07, 0.22), (1597, 0.05, 0.15)):   # la lata que vibra
+                v += math.sin(dos_pi * f * t) * math.exp(-t / caida) * peso
+            pista.append((v + lata[i] * math.exp(-t / 0.03) * 0.9) * vol)
+        return pista
+
+    casillero = []
+    poner(casillero, golpe_metal(1.0), 0.0)
+    poner(casillero, golpe_metal(0.7), 0.21)
+    guardar("casillero_golpe", casillero, 0.9)
+
+    # -- Arreglos: carraca y golpe de herramienta ----------------------------------------
+    reparar = []
+    for k in range(6):
+        n = int(0.03 * F)
+        diente = banda(blanco(n), 1800, 6000)
+        poner(reparar, [diente[i] * math.exp(-i / F / 0.006) +
+                        math.sin(dos_pi * 2100 * i / F) * math.exp(-i / F / 0.008) * 0.5 for i in range(n)],
+              k * 0.055, 0.7)
+    n = int(0.3 * F)
+    poner(reparar, [(math.sin(dos_pi * 780 * i / F) * 0.5 + math.sin(dos_pi * 1243 * i / F) * 0.35 +
+                     math.sin(dos_pi * 1990 * i / F) * 0.2) * math.exp(-i / F / 0.07) for i in range(n)], 0.38, 0.9)
+    guardar("reparar", reparar, 0.5)
+
+    tecleo = []
+    t = 0.0
+    for _ in range(5):
+        n = int(0.03 * F)
+        tecla = pasa_bajos(blanco(n), 3000)
+        poner(tecleo, [tecla[i] * math.exp(-i / F / 0.005) +
+                       math.sin(dos_pi * azar.choice([1320, 1480, 1760]) * i / F)
+                       * math.exp(-i / F / 0.012) * 0.25 for i in range(n)], t, 0.8)
+        t += azar.uniform(0.05, 0.1)
+    guardar("tecleo", tecleo, 0.35)
+
+    # -- El cohete de la cápsula ---------------------------------------------------------
+    dur = 4.2
+    n = int(dur * F)
+    trueno = pasa_bajos(blanco(n), 420)
+    chispas = pasa_altos(blanco(n), 3000)
+    pista = []
+    for i in range(n):
+        t = i / F
+        k = t / dur
+        sube = min(1.0, t / 1.1) ** 2                       # el motor arranca
+        se_va = 1.0 if t < 2.6 else max(0.0, 1 - (t - 2.6) / 1.6) ** 1.5
+        motor = math.sin(dos_pi * (38 + 60 * k) * t) * 0.5
+        tiembla = 0.7 + 0.3 * math.sin(dos_pi * 13 * t)
+        pista.append((trueno[i] * 3.2 * tiembla + motor + chispas[i] * 0.18 * sube) * sube * se_va)
+    guardar("cohete", pista, 0.95)
+
+    # -- Música de fondo -----------------------------------------------------------------
+    def bucle_vacio(dur):
+        return [0.0] * int(dur * F)
+
+    def nota(pista, f, en_s, dur, vol, ataque, salida_s, forma="sin", vibrato=0.0):
+        """Una nota dentro de un bucle: lo que se pasa del final vuelve al
+        principio, así el bucle empalma sin corte."""
+        total = len(pista)
+        n = int(dur * F)
+        inicio = int(en_s * F)
+        a, s = max(1, int(ataque * F)), max(1, int(salida_s * F))
+        fase = 0.0
+        for i in range(n):
+            fase += dos_pi * f * (1 + vibrato * math.sin(dos_pi * 5 * i / F)) / F
+            if forma == "sin":
+                v = math.sin(fase) + 0.25 * math.sin(2 * fase)
+            elif forma == "tri":
+                v = 2 * abs(2 * ((fase / dos_pi) % 1) - 1) - 1
+            else:
+                v = 2 * ((fase / dos_pi) % 1) - 1
+            pista[(inicio + i) % total] += v * vol * min(1.0, i / a, (n - i) / s)
+
+    # Calma: cuatro acordes lentos (La menor, Fa, Do, Sol) y unas notas sueltas.
+    calma = bucle_vacio(16.0)
+    acordes = [(110.0, 220.0, 261.63, 329.63), (87.31, 174.61, 261.63, 349.23),
+               (130.81, 196.0, 261.63, 329.63), (98.0, 196.0, 246.94, 293.66)]
+    melodia = [(659.25, 1.0), (523.25, 2.5), (698.46, 5.0), (523.25, 6.5),
+               (783.99, 9.0), (659.25, 10.5), (587.33, 13.0), (493.88, 14.5)]
+    for k, acorde in enumerate(acordes):
+        for j, f in enumerate(acorde):
+            nota(calma, f, k * 4.0 - 0.6, 5.2, 0.16 if j else 0.22, 1.4, 1.8)
+            nota(calma, f * 1.004, k * 4.0 - 0.6, 5.2, 0.07, 1.4, 1.8)      # un poco desafinada: más cálida
+    for f, en_s in melodia:
+        nota(calma, f, en_s, 1.8, 0.09, 0.03, 1.6, "tri")
+    guardar("musica_calma", calma, 0.6)
+
+    # Tensión: un bajo que late, dos notas pegadas que rozan y un golpe sordo.
+    tension = bucle_vacio(8.0)
+    pulso = 8.0 / 32                                        # 32 corcheas en el bucle
+    for k in range(32):
+        f = 73.42 if k % 16 < 12 else 69.3                   # Re, y baja medio tono al final
+        nota(tension, f, k * pulso, pulso * 0.85, 0.5 if k % 4 == 0 else 0.3, 0.008, 0.09, "saw")
+    # (filtrado dos veces seguidas y se queda la segunda vuelta: así el filtro
+    # ya viene "caliente" y el bucle sigue empalmando)
+    tension = pasa_bajos(tension + tension, 520)[len(tension):]
+    for en_s, f in ((0.0, 293.66), (4.0, 277.18)):
+        nota(tension, f, en_s - 0.4, 4.6, 0.11, 1.2, 1.4, "saw", 0.004)
+        nota(tension, f * 1.0595, en_s - 0.4, 4.6, 0.09, 1.2, 1.4, "saw", 0.004)   # medio tono arriba: roza
+    for k in (0, 3, 8, 11, 16, 19, 24, 27, 30):
+        n = int(0.22 * F)
+        inicio = int(k * pulso * F)
+        for i in range(n):
+            t = i / F
+            tension[(inicio + i) % len(tension)] += math.sin(dos_pi * (62 - 60 * t) * t) * math.exp(-t / 0.07) * 0.75
+    for en_s in (1.75, 3.75, 5.75, 7.75):                    # un tic agudo, como un reloj
+        nota(tension, 1760.0, en_s, 0.08, 0.05, 0.002, 0.07, "tri")
+    guardar("musica_tension", tension, 0.6)
+
+
 if __name__ == "__main__":
     generar()
+    generar_extras()
