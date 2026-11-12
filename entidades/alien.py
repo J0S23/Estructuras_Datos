@@ -82,6 +82,7 @@ SPRITES_ALIEN = {
     "vigia": ("Alien_Vision", 1.9),
     "cambiaformas": ("Alien_Cambiaformas", 2.3),
     "sombra": ("Alien_Sombra", 1.7),
+    "guardia": ("Alien_Guardia", 3.2),     # el Guardia de la Bahía (entidades/guardia.py)
 }
 FPS_ANIMACION = 8
 # Ángulo -> dirección del sprite (0 = este, va en sentido horario en pantalla).

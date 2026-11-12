@@ -21,10 +21,11 @@ y se ejecutan sus hojas (_ejecutar). Se dibuja con formas (`figura_guardia`).
 """
 
 import math
+import os
 
 import pygame
 
-from entidades.alien import Alien, _distancia
+from entidades.alien import Alien, _distancia, sprites_de, SPRITES_ALIEN, _RAIZ_PROYECTO, FPS_ANIMACION
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 from data.comportamiento_guardia import ARBOL_GUARDIA
 from juego.fuentes import fuente_de_tamano
@@ -240,6 +241,19 @@ class Guardia(Alien):
             return "escucha"
         return "camina" if self.moviendose else "quieto"
 
+    def _sprite(self):
+        """(cuadro, datos) del sprite que toca (Imagenes/Aliens/Alien_Guardia), o
+        (None, None) si no hay: comiendo, su hoja de comer (viene mirando al
+        oeste; al este se voltea); si no, respirar o caminar como los demás."""
+        datos = sprites_de(self.tipo)
+        if datos is None:
+            return None, None
+        if self._estado_figura() == "come":
+            cuadros = cuadros_comiendo(math.cos(self.angulo) >= 0)
+            if cuadros:
+                return cuadros[int(self.tiempo_ms / (1000 / FPS_ANIMACION)) % len(cuadros)], datos
+        return self._frame_sprite()
+
     def _imagen(self):
         izquierda = math.cos(self.angulo) < 0
         estado = self._estado_figura()
@@ -248,17 +262,32 @@ class Guardia(Alien):
         return figura_guardia(estado, fase, izquierda)
 
     def _caja_figura(self, offset):
+        cuadro, datos = self._sprite()
+        if cuadro is not None:
+            rect = self._posicion_sprite(cuadro, datos, offset)
+            return datos["contenido"].move(rect.topleft)
         imagen = self._imagen()
         return imagen.get_rect(midbottom=(self.hitbox.centerx - offset[0],
                                           self.hitbox.bottom - offset[1] + 12))
 
     def dibujar(self, screen, offset):
-        imagen = self._imagen()
-        rect = self._caja_figura(offset)
-        sombra = pygame.Rect(0, 0, int(rect.width * 0.8), 28)
-        sombra.center = (rect.centerx, self.hitbox.bottom - offset[1] + 2)
-        pygame.draw.ellipse(screen, (10, 11, 16), sombra)
-        screen.blit(imagen, rect)
+        cuadro, datos = self._sprite()
+        if cuadro is not None:
+            # El arte del Guardia (de Anny): su sombra y el cuadro; lo de
+            # encima (notas, fruta, "ñam") se pone sobre lo que se ve de él.
+            pos = self._posicion_sprite(cuadro, datos, offset)
+            rect = datos["contenido"].move(pos.topleft)
+            sombra = pygame.Rect(0, 0, int(rect.width * 0.8), 24)
+            sombra.center = (rect.centerx, self.hitbox.bottom - offset[1] + 2)
+            pygame.draw.ellipse(screen, (10, 11, 16), sombra)
+            screen.blit(cuadro, pos)
+        else:
+            imagen = self._imagen()
+            rect = self._caja_figura(offset)
+            sombra = pygame.Rect(0, 0, int(rect.width * 0.8), 28)
+            sombra.center = (rect.centerx, self.hitbox.bottom - offset[1] + 2)
+            pygame.draw.ellipse(screen, (10, 11, 16), sombra)
+            screen.blit(imagen, rect)
         estado = self._estado_figura()
         if estado == "escucha":
             # Notitas que suben: está escuchando la señal del Resonante.
@@ -295,6 +324,45 @@ def _nota(screen, pos, color):
     pygame.draw.circle(screen, color, (x, y + 8), 4)
     pygame.draw.line(screen, color, (x + 3, y + 8), (x + 3, y - 4), 2)
     pygame.draw.line(screen, color, (x + 3, y - 4), (x + 9, y - 1), 2)
+
+
+# -- Comiendo (su hoja aparte: Alien_Guardia_eating_west.png) ------------------------
+_comiendo = {}
+
+
+def cuadros_comiendo(al_este=False):
+    """Los cuadros de comer, del tamaño y con los pies a la altura de los
+    demás cuadros del Guardia (volteados si mira al este). [] si no hay."""
+    if al_este in _comiendo:
+        return _comiendo[al_este]
+    cuadros = []
+    datos = sprites_de("guardia")
+    carpeta, escala = SPRITES_ALIEN["guardia"]
+    ruta = os.path.join(_RAIZ_PROYECTO, "Imagenes", "Aliens", carpeta, f"{carpeta}_eating_west.png")
+    if datos is not None and os.path.exists(ruta):
+        try:
+            hoja = pygame.image.load(ruta).convert_alpha()
+            lado = hoja.get_height()
+            muestra = datos["animaciones"]["breathing"]["west"][0]
+            tamano = muestra.get_size()
+            pies = max(muestra.get_bounding_rect().bottom, 1)
+            for i in range(hoja.get_width() // lado):
+                c = pygame.transform.scale(hoja.subsurface((i * lado, 0, lado, lado)), tamano)
+                if al_este:
+                    c = pygame.transform.flip(c, True, False)
+                cuadros.append(c)
+            dy = pies - max(c.get_bounding_rect().bottom for c in cuadros)
+            if dy:
+                corridos = []
+                for c in cuadros:
+                    nuevo = pygame.Surface(c.get_size(), pygame.SRCALPHA)
+                    nuevo.blit(c, (0, dy))
+                    corridos.append(nuevo)
+                cuadros = corridos
+        except (pygame.error, OSError, KeyError, IndexError):
+            cuadros = []
+    _comiendo[al_este] = cuadros
+    return cuadros
 
 
 # -- Su figura (formas, hasta que haya arte) ------------------------------------------

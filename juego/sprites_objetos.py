@@ -18,7 +18,7 @@ CARPETA = os.path.join(_RAIZ, "Imagenes", "Objetos")
 
 ARCHIVOS = {
     # Lo de la misión.
-    "consola": "OBJ-006_Consola_de_control.png",          # consolas de navegación
+    "consola": "OBJ-006_Consola_de_control_encendida.png",   # consolas de navegación (las 3 pantallas prendidas)
     "consola_apagada": "OBJ-006_Consola_de_control_apagada.png",   # ya apagada (de Anny)
     "terminal": "OBJ-043_Terminal_de_acceso.png",         # terminales del Tecnomante
     "fusibles": "OBJ-046_Camara_de_contencion.png",       # cajas de fusibles (trae el rayo)
@@ -143,6 +143,9 @@ def _pie(clave, rect):
     return rect.centerx, rect.bottom                # la consola: parada en su rect
 
 
+HUELLA_FIJA = {"consola": (127, 136)}
+
+
 def tamano_dibujo(clave):
     """(ancho, alto) del dibujo del objeto `clave` (con o sin imagen)."""
     archivo = "escondite_0" if clave == "escondite" else clave
@@ -170,7 +173,9 @@ def hitbox(clave, rect):
     por encima: las patas de la consola, las terminales y los casilleros."""
     if clave not in BASES:
         return None
-    ancho, alto = tamano_dibujo(clave)
+    # La consola choca como la 006 de siempre (127x136): el dibujo prendido
+    # nuevo es más ancho, y con él las patas cortaban rutas ya puestas.
+    ancho, alto = HUELLA_FIJA.get(clave) or tamano_dibujo(clave)
     fw, fh = BASES[clave]
     caja = pygame.Rect(0, 0, max(8, int(ancho * fw)), max(8, int(alto * fh)))
     x, y = _pie(clave, rect)
