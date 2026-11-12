@@ -34,11 +34,14 @@ from juego.diagnostico import Diagnostico
 from juego.transition_manager import TransitionManager
 
 from juego.fuentes import construir_fuentes
+from juego import idioma
 from juego.ui_components import construir_botones
 
 from juego.mundo import Mundo
 from juego import salas as salas_mapa
 from juego import salas_selladas
+from juego import decoracion
+from juego import sprites_objetos
 from entidades.jugador import Jugador, TECLAS_POR_PUESTO, NOMBRE_CONTROLES, NOMBRE_ESQUEMA
 from Movimiento.Personaje import Personaje, CONTROLES_WASD, CONTROLES_FLECHAS
 
@@ -54,6 +57,7 @@ from juego.mandos import (Mandos, tecla_virtual, PUESTOS_CON_MANDO, nombre_boton
                           EVENTOS_ENTRADA, EVENTOS_CONEXION)
 from juego.tutorial import Tutorial
 from juego.pausa import MenuPausa, mover_en_logros
+from juego.admin import MenuAdmin, INVENCIBLE_MS
 from juego.audio_manager import audio_manager
 from misiones.infiltrado import CasoInfiltrado
 from redes.nexus import RedNexus
@@ -95,6 +99,7 @@ from screens.resultados import render_resultados, opciones_resultados
 from screens.ayuda import render_ayuda
 from screens.creditos import render_creditos, reiniciar_scroll
 from screens.pausa import render_pausa
+from screens.admin import render_admin
 from screens.logros import render_aviso_logro, render_arbol_logros
 from screens import celular as dibujo_celular
 
@@ -136,9 +141,11 @@ CONTROLES_POR_PUESTO = [CONTROLES_WASD, CONTROLES_FLECHAS,
 def botones_menu(ancho, alto):
     """Los botones del menú van a la derecha, debajo del título NEXUS del
     fondo, para no tapar a los cuatro personajes ni el planeta."""
+    chica = alto < 700          # (en ventana, 960x600: más juntos para que quepan)
     return construir_botones(OPCIONES_MENU, ancho, alto,
-                             centro_x=ancho * 0.765, centro_y=alto * 0.56,
-                             ancho=min(380, int(ancho * 0.26)), alto=46, separacion=12)
+                             centro_x=ancho * 0.765, centro_y=alto * 0.6,
+                             ancho=min(380, int(ancho * 0.26)), alto=40 if chica else 46,
+                             separacion=8 if chica else 12)
 
 
 def _nombre(tecla):
@@ -203,6 +210,7 @@ class Game:
         self._abrir_segunda()
         self.clock = pygame.time.Clock()
 
+        idioma.cargar_preferencia()          # Guardado/opciones.json (español si no hay)
         self.fuentes = construir_fuentes()
         self.font = self.fuentes["subtitle"]
         self.small_font = self.fuentes["small"]
@@ -248,6 +256,7 @@ class Game:
         self.tiempo_jugado_ms = 0  # cronómetro de la partida (no hay límite)
         self.cambiaformas = None  # el alien que se disfraza de ellos (cambiaformas.py)
         self.guardia_planta = None  # el Guardia de la Bahía y la planta (misiones/guardia.py)
+        self.muebles = []       # la decoración del mapa (juego/decoracion.py)
         self.sombra = None        # el alien de los apagones (sombra.py); en self.aliens solo a oscuras
         self._apagon_ms = 0
         self.logros = None      # árbol de logros de la partida (logros.py)
@@ -259,6 +268,10 @@ class Game:
         self.catalogo_rects = {}
         self.puertas_dobles, self.compuertas = [], []   # puertas.py
         self.pausa = None     # MenuPausa mientras está abierto (Esc en la partida)
+        self.opciones_menu = None   # Menú > Opciones (otro MenuPausa, solo opciones)
+        self.admin = None     # MenuAdmin mientras está abierto (F1 en la partida: juego/admin.py)
+        self.admin_usado = False        # (esa partida no anota logros en el historial)
+        self.admin_invencible = False
         self._reiniciar_resultados()
         self.oscuridad = True # Pausa > Opciones la apaga (para probar o para quien la necesite)
         self.mandos = Mandos()  # controles de Xbox para los jugadores 3 y 4
@@ -602,6 +615,8 @@ class Game:
     def _preparar_partida(self):
         """Carga el mapa, arma los árboles y crea a los jugadores."""
         self.pausa = None
+        self.admin = None
+        self.admin_usado = self.admin_invencible = False
         if self.dificultad is not None:
             self.dificultad = Dificultad(self.dificultad.clave)    # el director arranca de cero
         nombre_mapa = objetos_mapa.mapa_activo()
@@ -615,6 +630,9 @@ class Game:
         # lo que no, de data/ (ver objetos_mapa.py).
         self.objetos = objetos_mapa.cargar(nombre_mapa)
         self.salas = salas_mapa.preparar(self.objetos, self.mundo)
+        # Los muebles de la decoración: sus hitboxes pasan a ser parte del mapa
+        # ANTES de armar nada más (rutas, puntos de paseo, navegación).
+        self.muebles = decoracion.crear(self.objetos, self.mundo)
         # Menos jugadores, menos salas: las que sobran se sellan y lo que había
         # adentro se quita de self.objetos antes de armar nada (salas_selladas.py).
         self.sellado = salas_selladas.aplicar(self.objetos, self.mundo, self.salas,
@@ -684,6 +702,8 @@ class Game:
         # La Sombra: existe desde el principio pero solo entra a self.aliens
         # en los apagones (_actualizar_sombra).
         self.sombra = Sombra(self, len(self.aliens) + 1) if self.mision.activa else None
+        if self.sombra is not None:
+            sprites_de("sombra")           # (sus hojas y sus ojos, ya cargados)
         self._apagon_ms = 0
         self._sombra_alcanzo = False
         self.sombra_al_volver_la_luz = None
@@ -764,6 +784,8 @@ class Game:
         apariencias = {n.usuario: Apariencia(n.apariencia.estilo, n.usuario, n.apariencia.numero,
                                              n.apariencia.sprite)
                        for n in self.npcs.npcs}
+        for n in self.npcs.npcs:          # su foto de perfil en NEXUS (juego/perfiles.py)
+            self.nexus.grafo.datos[n.nodo]["sprite"] = n.apariencia.sprite
         identidad = next(d["usuario"] for _, d in cuentas if d["nombre"] == culpable)
         doble = next(n for n in self.npcs.npcs if n.usuario == identidad)
         self.npcs.npcs.remove(doble)      # esa persona ES el Cambiaformas
@@ -822,7 +844,7 @@ class Game:
                 self._sombra_alcanzo = False
                 self.decir("sombra", forzar=True)
 
-    def _punto_para_sombra(self):
+    def _punto_para_sombra(self, minimo=650, maximo=1700, a_oscuras=True):
         """Dónde aparece la Sombra: un lugar caminable, a oscuras (fuera del
         campo de visión de todos), ni muy cerca ni muy lejos del jugador libre
         más cercano y conectado con él. None si no hay."""
@@ -849,7 +871,7 @@ class Game:
             if self.mundo.colisiona_alien(rect):
                 continue
             cerca = min(math.dist(punto, j.hitbox.center) for j in libres)
-            if not 650 <= cerca <= 1700 or any(c.ve_a(rect) for c in campos):
+            if not minimo <= cerca <= maximo or (a_oscuras and any(c.ve_a(rect) for c in campos)):
                 continue
             if any(nav.conectados(punto, j.hitbox.center) for j in libres):
                 buenos.append(rect.center)
@@ -907,6 +929,9 @@ class Game:
             escondite["rect"] = pygame.Rect(0, 0, ANCHO_ENTRADA, ALTO_ENTRADA)
             escondite["rect"].center = (int(datos["rx"] * self.mundo.ancho),
                                         int(datos["ry"] * self.mundo.alto))
+            # Las patas del casillero (se chocan; ya están en el mundo, con
+            # los muebles): el jugador entra parado en la mitad de abajo.
+            escondite["solido"] = sprites_objetos.hitbox("escondite", escondite["rect"])
             escondite["ocupante"] = None       # el jugador que está adentro
             escondite["revisado_por"] = None   # el alien que lo está revisando
             escondite["enfriamiento_ms"] = 0   # tiempo en que los aliens lo ignoran
@@ -915,7 +940,16 @@ class Game:
     def escondite_bajo(self, jugador):
         """Escondite libre frente al que está parado el jugador, o None."""
         for escondite in self.escondites:
-            if escondite["ocupante"] is None and escondite["rect"].colliderect(jugador.hitbox):
+            if (escondite["ocupante"] is None and escondite.get("npc") is None
+                    and escondite["rect"].colliderect(jugador.hitbox)):
+                return escondite
+        return None
+
+    def escondite_con_prisionero(self, jugador):
+        """El casillero frente al jugador en el que se metió un prisionero (rumor
+        viral de los casilleros, redes/nexus.py), o None."""
+        for escondite in self.escondites:
+            if escondite.get("npc") is not None and escondite["rect"].colliderect(jugador.hitbox):
                 return escondite
         return None
 
@@ -1126,6 +1160,10 @@ class Game:
             # Fácil: la ventana que presenta a un alien nuevo pausa todo.
             self.presentacion.actualizar(dt)
             return
+        if self.admin_invencible:
+            # Menú de admin: nadie los caza (aunque salgan de una celda).
+            for jugador in self.jugadores:
+                jugador.invulnerable_ms = max(jugador.invulnerable_ms, INVENCIBLE_MS)
         teclas = self.mandos.envolver(pygame.key.get_pressed())
         en_tutorial = self.en_tutorial
         if en_tutorial:
@@ -1180,6 +1218,11 @@ class Game:
         acciones_rol.actualizar(self, dt)
         if self.guardia_planta is not None:
             self.guardia_planta.actualizar(dt)
+        for jugador in self.jugadores:
+            zona = jugador.zona_cerca
+            if (zona is not None and zona.get("desconectada") and not jugador.pista_mision
+                    and not jugador.preso):
+                jugador.pista_mision = "Terminal NEXUS desconectada (rumor viral)"
         if self.sin_luz:
             for jugador in self.jugadores:
                 if jugador.pista_mision or jugador.preso:
@@ -1257,6 +1300,7 @@ class Game:
             "puertas_dobles": self.puertas_dobles, "compuertas": self.compuertas,
             "eventos": self.eventos, "tutorial": self.tutorial, "infiltrado": self.infiltrado,
             "guardia_planta": self.guardia_planta,
+            "muebles": getattr(self, "muebles", ()),
             # Campo de visión siempre; la oscuridad de la linterna, solo en un apagón.
             "vision": self.oscuridad,
             "oscuridad": self.oscuridad and self.eventos is not None and self.eventos.apagon,
@@ -1304,8 +1348,10 @@ class Game:
             self.mision.terminar_sin_escapar()   # si nadie ganó todavía (Terminar partida)
         if self.logros is not None:
             self.logros.al_terminar()
-            # Para Menú > Logros: los que salieron en esta partida.
-            historial_logros.agregar(n.clave for n in self.logros.arbol.preorden() if n.obtenido)
+            # Para Menú > Logros: los que salieron en esta partida (si no se
+            # usó el menú de admin: ahí se lanzan cosas a mano).
+            if not self.admin_usado:
+                historial_logros.agregar(n.clave for n in self.logros.arbol.preorden() if n.obtenido)
         if self.mision is not None and self.mision.activa:
             self.sonar("victoria" if self.mision.resultado == "victoria" else "derrota", 0.8)
         for jugador in self.jugadores:
@@ -1329,6 +1375,10 @@ class Game:
         exista, el caso del infiltrado (infiltrado.py)."""
         if self.sin_luz:
             jugador.avisar("La terminal NEXUS está apagada: no hay luz.", (245, 130, 120))
+            return
+        if zona.get("desconectada"):
+            jugador.avisar("Los prisioneros desconectaron esta terminal por el rumor de las cámaras. "
+                           "Desmiéntanlo en NEXUS y la vuelven a conectar.", (245, 130, 120))
             return
         if self.logros is not None:
             self.logros.conseguir("conectado", jugador)
@@ -1616,10 +1666,15 @@ class Game:
                                 else acciones_rol.estacion_bajo(self, jugador))
                     escondite = (None if self.zona_bajo(jugador) or estacion
                                  else self.escondite_bajo(jugador))
+                    ocupado = (None if escondite or estacion or self.zona_bajo(jugador)
+                               else self.escondite_con_prisionero(jugador))
                     if estacion is not None:
                         acciones_rol.usar_estacion(self, jugador, estacion)
                     elif escondite is not None:
                         jugador.esconderse(escondite)
+                    elif ocupado is not None:
+                        jugador.avisar(f"Ocupado: {ocupado['npc'].usuario} se metió aquí por el rumor "
+                                       "de los casilleros. Desmiéntanlo en NEXUS.", (245, 130, 120))
                     elif self.zona_bajo(jugador) is None and self.npcs is not None:
                         self.npcs.hablar(jugador)     # "¿vienes conmigo?" (npcs.py)
                     else:
@@ -1665,12 +1720,15 @@ class Game:
             if self.mostrar_fps and self.cazar_tirones:
                 self.diagnostico.empezar()
             t_eventos = time.perf_counter()
+            self.mandos.muestrear()          # centro del stick de los mandos recién conectados
             self._manejar_eventos()
             self._sonido_de_fondo()
             t0 = time.perf_counter()
             if self.current_screen == "partida" and self.transitions.is_idle():
                 if self.pausa is not None:
                     self.pausa.actualizar(dt)   # el juego queda congelado
+                elif self.admin is not None:
+                    pass                        # menú de admin: también congelado
                 else:
                     self._actualizar_partida(dt)
             self._actualizar_carga(dt)
@@ -1746,8 +1804,15 @@ class Game:
                 self._manejar_tecla(evento.key)
             elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 self._manejar_click(evento.pos)
+            elif (evento.type == pygame.MOUSEMOTION and self.current_screen == "menu"
+                  and self.opciones_menu is not None):
+                self.opciones_menu.mover_mouse(evento.pos)
             elif evento.type == pygame.MOUSEMOTION and self.current_screen == "partida":
-                if self.pausa is not None:
+                if self.admin is not None:
+                    i = self.admin.opcion_en(evento.pos)
+                    if i is not None:
+                        self.admin.cursor = i
+                elif self.pausa is not None:
                     self.pausa.mover_mouse(evento.pos)
                 else:
                     self._mouse_en_mapa(evento.pos)
@@ -1759,6 +1824,8 @@ class Game:
     def _tecla_mando(self, puesto, accion):
         """Un botón del mando: en partida y en la selección de rol es la tecla
         virtual de ese jugador; en los menús hace de flechas, Enter y Esc."""
+        if self.admin is not None:
+            return          # el menú de admin se maneja con el teclado y el mouse
         if self.current_screen == "controles":
             # Aquí el mando es suyo: A lo toma (o lo suelta), B vuelve.
             if accion in ("interactuar", "pausa"):
@@ -1844,6 +1911,12 @@ class Game:
         if key == pygame.K_F9:
             self.alternar_dos_pantallas()
             return
+        if key == pygame.K_F1:
+            self.alternar_admin()
+            return
+        if self.admin is not None:
+            self._tecla_admin(key)
+            return
         if key == pygame.K_F3:
             # Tres pasos: FPS solo (lo que de verdad va el juego) -> FPS y
             # cazador de tirones (perfila cada cuadro: todo va un poco más
@@ -1864,7 +1937,9 @@ class Game:
             elif key in TECLAS_OK_MENU:
                 self.sonar("menu_ok", 0.6)
 
-        if self.current_screen == "menu":
+        if self.current_screen == "menu" and self.opciones_menu is not None:
+            self._accion_pausa(self.opciones_menu.tecla(pygame.K_RETURN if key == pygame.K_e else key))
+        elif self.current_screen == "menu":
             if key in (pygame.K_UP, pygame.K_w):
                 self.menu_selected = (self.menu_selected - 1) % len(self.menu_buttons)
             elif key in (pygame.K_DOWN, pygame.K_s):
@@ -1982,9 +2057,15 @@ class Game:
                 self._activar_resultados(opciones_resultados(self.logros)[i][1])
                 return
 
+    def cambiar_idioma(self, signo=1):
+        """Español <-> inglés (Menú > Opciones y Pausa > Opciones)."""
+        idioma.cambiar(idioma.siguiente(signo))
+
     def _accion_pausa(self, accion):
-        """Lo que pidió el menú de pausa (pausa.py)."""
-        if accion == "continuar":
+        """Lo que pidió el menú de pausa (pausa.py), o el de Menú > Opciones."""
+        if accion == "cerrar":
+            self.opciones_menu = None
+        elif accion == "continuar":
             self.pausa = None
         elif accion == "terminar":
             self.pausa = None
@@ -1993,6 +2074,8 @@ class Game:
             self.transitions.request(self, "menu")
         elif accion == "pantalla_completa":
             self.alternar_pantalla_completa()
+        elif accion == "idioma":
+            self.cambiar_idioma()
 
     def _jugador_con_mapa_en(self, pos):
         """(jugador, punto del mundo) si `pos` cae en el mapa de la Emisión de
@@ -2013,6 +2096,38 @@ class Game:
                 return jugador, ((pos[0] - rect.x) / escala, (pos[1] - rect.y) / escala)
         return None, None
 
+    # -- Menú de admin (F1) -------------------------------------------------------------
+
+    def alternar_admin(self):
+        """F1 en la partida abre (o cierra) el menú de admin (juego/admin.py)."""
+        if self.admin is not None:
+            self.admin = None
+            return
+        if (self.current_screen == "partida" and self.mundo is not None and self.pausa is None
+                and not self.transitions.active):
+            self.admin = MenuAdmin(self)
+            self.sonar("pausa", 0.5)
+
+    def _tecla_admin(self, key):
+        if key == pygame.K_ESCAPE:
+            self.admin = None
+        elif key in (pygame.K_UP, pygame.K_w):
+            self.admin.mover(-1)
+            self.sonar("menu_mover", 0.5)
+        elif key in (pygame.K_DOWN, pygame.K_s):
+            self.admin.mover(1)
+            self.sonar("menu_mover", 0.5)
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_e, pygame.K_SPACE):
+            self._activar_admin()
+
+    def _activar_admin(self, i=None):
+        """Hace lo escogido, cierra el menú y avisa a todos qué pasó."""
+        mensaje = self.admin.activar(i)
+        self.admin = None
+        self.sonar("menu_ok", 0.6)
+        for jugador in self.jugadores:
+            jugador.avisar(f"[Admin] {mensaje}", (236, 120, 120))
+
     def _mouse_en_mapa(self, pos):
         jugador, punto = self._jugador_con_mapa_en(pos)
         if jugador is not None:
@@ -2020,6 +2135,11 @@ class Game:
 
     def _manejar_click(self, pos):
         if self.current_screen == "partida":
+            if self.admin is not None:
+                i = self.admin.opcion_en(pos)
+                if i is not None:
+                    self._activar_admin(i)
+                return
             if self.pausa is not None:
                 if not self.transitions.active:
                     self._accion_pausa(self.pausa.click(pos))
@@ -2050,6 +2170,9 @@ class Game:
                     self.catalogo_nodo = nodo
             return
         if self.current_screen != "menu" or self.transitions.active:
+            return
+        if self.opciones_menu is not None:
+            self._accion_pausa(self.opciones_menu.click(pos))
             return
         for i, boton in enumerate(self.menu_buttons):
             if boton.contains(pos):
@@ -2082,6 +2205,9 @@ class Game:
             lanzador.abrir(self)
         elif accion == "logros":
             self.abrir_catalogo_logros()
+        elif accion == "opciones":
+            # Las mismas opciones de la pausa (sin las de prueba), encima del menú.
+            self.opciones_menu = MenuPausa(self, desde_menu=True)
         else:
             # Los créditos siempre arrancan desde el principio: si no, entrar y
             # salir varias veces los retomaba a mitad de camino.
@@ -2100,6 +2226,8 @@ class Game:
                          carga.get("consejo", ""), carga.get("roles"))
         elif self.current_screen == "menu":
             render_menu(self.screen, self.menu_buttons, self.menu_selected)
+            if self.opciones_menu is not None:
+                render_pausa(self.screen, self.opciones_menu)
         elif self.current_screen == "cantidad":
             self.rects_opciones = render_cantidad(self.screen, self.cantidad_seleccionada)
         elif self.current_screen == "dificultad":
@@ -2133,6 +2261,8 @@ class Game:
                     render_aviso_logro(self.screen, self.logros)   # (con la presentación, espera)
             else:
                 render_pausa(self.screen, self.pausa)
+            if self.admin is not None:
+                render_admin(self.screen, self.admin)
         elif self.current_screen == "resultados":
             if self.resultados_vista == "logros" and self.logros is not None:
                 self.resultados_rects_logros = render_arbol_logros(

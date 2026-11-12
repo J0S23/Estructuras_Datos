@@ -48,7 +48,11 @@ def obstaculos(mundo, puertas_dobles=(), compuertas=()):
     firma = (id(mundo), id(mundo.paredes), len(mundo.paredes),
              tuple(not p["abierta"] for p in puertas_dobles), tuple(c["cerrada"] for c in compuertas))
     if _obstaculos["firma"] != firma:
-        rects = list(mundo.paredes)
+        # (Los muebles de la decoración no tapan: se ve por encima de ellos.)
+        es_mueble = getattr(mundo, "es_mueble", None)
+        muebles = getattr(mundo, "muebles", None)
+        rects = ([p for p in mundo.paredes if not es_mueble(p)] if muebles and es_mueble
+                 else list(mundo.paredes))
         rects += [p["rect"] for p in puertas_dobles if not p["abierta"]]
         rects += [c["rect"] for c in compuertas if c["cerrada"]]
         _obstaculos.update(firma=firma, rects=rects, clave=tuple(tuple(r) for r in rects))

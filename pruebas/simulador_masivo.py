@@ -965,7 +965,7 @@ def revisar_alcance(g, mapa, reg):
     cosas += [("consumible_" + c["tipo"], c["rect"].center, 30) for c in m.consumibles]
     cosas += [("pieza", p["rect"].center, 20) for p in g.piezas]
     if g.eventos is not None:
-        cosas += [("caja_fusibles", c["rect"].center, RADIO_CAJA - 5) for c in g.eventos.cajas]
+        cosas += [("caja_fusibles", c.get("pie", c["rect"].center), RADIO_CAJA - 5) for c in g.eventos.cajas]
     for d in g.puertas_dobles:
         cosas += [("panel_puerta_doble", p.center, RADIO_PANEL - 5) for p in d["paneles"]]
     cosas += [("terminal_nexus", z["rect"].center, 30) for z in g.zonas]

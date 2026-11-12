@@ -38,6 +38,7 @@ import random
 
 import pygame
 
+from data.nexus import FUGA_VIRAL
 from data.notas import NOTAS, NOTA_CODIGO, NOTAS_CODIGO_VACIAS
 from misiones.logros import logro
 
@@ -55,6 +56,7 @@ PUNTOS_ESCAPE = 50
 PUNTOS_RESCATE = 10
 
 TAMANO_CONSOLA = (70, 50)
+MARGEN_CONSOLA = 22      # a cuánto de sus patas se la puede apagar
 TAMANO_CAPSULA = (210, 130)
 TAMANO_NOTA = (30, 30)
 TAMANO_CONSUMIBLE = (34, 34)
@@ -170,6 +172,23 @@ def _rect(centro, tamano):
     return rect
 
 
+def _consola(centro):
+    """Una consola de navegación. `base`: el rect del mapa (la consola se
+    para en él); `solido`: sus patas, que se chocan (las pone en el mundo
+    juego/decoracion.crear); `rect`: el piso de enfrente, donde se para quien
+    la apaga (la flecha y los prisioneros van ahí)."""
+    from juego import sprites_objetos
+    base = _rect(centro, TAMANO_CONSOLA)
+    return {"base": base, "solido": sprites_objetos.hitbox("consola", base),
+            "rect": sprites_objetos.frente("consola", base), "progreso": 0.0}
+
+
+def consola_cerca(consola, jugador):
+    """¿Está junto a la consola (enfrente o a un lado)?"""
+    return (consola["solido"].inflate(MARGEN_CONSOLA * 2, MARGEN_CONSOLA * 2).colliderect(jugador.hitbox)
+            or consola["rect"].colliderect(jugador.hitbox))
+
+
 class Mision:
     def __init__(self, juego, objetos, aleatorio=None):
         self.juego = juego
@@ -239,8 +258,7 @@ class Mision:
             })
 
         self.capsula = _rect(px(objetos["capsula"]), TAMANO_CAPSULA)
-        self.consolas = [{"rect": _rect(px(c), TAMANO_CONSOLA), "progreso": 0.0}
-                         for c in objetos.get("consolas", [])]
+        self.consolas = [_consola(px(c)) for c in objetos.get("consolas", [])]
         self.celdas = [{"punto": px(c), "preso": None} for c in objetos.get("celdas", [])]
         # Las puertas para dos también tapan al buscar dónde esconder el código.
         self._dobles = [_rect(px((d["rx"], d["ry"])), (max(8, int(d["ancho"] * ancho)), max(8, int(d["alto"] * alto))))
@@ -664,7 +682,7 @@ class Mision:
         if jugador.preso:
             fuga = jugador.preso.get("fuga_ms")
             if fuga is not None:
-                return f"Forzando la reja... sales en {max(1, int(fuga // 1000) + 1)} s"
+                return f"Forzando la reja... sales en {max(1, math.ceil(fuga / 1000))} s"
             return None
         c = jugador.hitbox.center
         for celda in self.celdas:
@@ -691,7 +709,7 @@ class Mision:
                 return "Leer nota"
         if self.fase == "sabotaje":
             for consola in self.consolas:
-                if consola["progreso"] < 1 and self._cerca(jugador, consola["rect"], 20):
+                if consola["progreso"] < 1 and consola_cerca(consola, jugador):
                     if getattr(self.juego, "sin_luz", False):
                         return "Consola sin energía"
                     return "Mantener: apagar consola"
@@ -759,7 +777,7 @@ class Mision:
                 return True
         if self.fase == "sabotaje":
             for consola in self.consolas:
-                if consola["progreso"] < 1 and self._cerca(jugador, consola["rect"], 20):
+                if consola["progreso"] < 1 and consola_cerca(consola, jugador):
                     jugador.avisar("Mantén la tecla para apagar la consola.", COLOR_AVISO)
                     return True
         return False
@@ -836,7 +854,7 @@ class Mision:
         paso = dt / 1000
         if self.fase == "sabotaje":
             for consola in self.consolas:
-                if consola["progreso"] >= 1 or not self._cerca(jugador, consola["rect"], 20):
+                if consola["progreso"] >= 1 or not consola_cerca(consola, jugador):
                     continue
                 if getattr(self.juego, "sin_luz", False):
                     # Sin energía no hay sistema que desconectar.
@@ -1043,7 +1061,11 @@ class Mision:
             jugadores = self.juego.jugadores
         for celda in self.celdas:
             if celda["preso"] is not None and celda.get("fuga_ms") is not None:
-                celda["fuga_ms"] -= dt
+                # Rumor viral de las celdas (redes/nexus.py): nadie se acerca a
+                # ayudar con la reja, así que se tarda más en salir.
+                red = getattr(self.juego, "nexus", None)
+                lento = red is not None and red.efecto_activo("celda")
+                celda["fuga_ms"] -= dt * (FUGA_VIRAL if lento else 1)
                 if celda["fuga_ms"] <= 0:
                     self.fugarse(celda)
         # Todos encerrados = derrota, salvo que alguien pueda fugarse solo.

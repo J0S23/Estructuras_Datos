@@ -59,6 +59,16 @@ EJE_X, EJE_Y = 0, 1          # stick izquierdo
 EJE_LT = 4                   # gatillo izquierdo (-1 suelto, 1 a fondo)
 ZONA_MUERTA = 0.45           # el stick tiene que pasar de aquí para contar
 
+# Mandos con "drift" (el stick suelto no queda en 0): al conectar un mando se
+# mira el stick suelto un rato (al menos CALIBRAR_MS y MUESTRAS_CALIBRAR
+# lecturas) y eso queda como su centro; después cada eje se mide desde ahí y
+# se reescala para que todavía llegue a -1 y 1. Mientras calibra, el stick no
+# mueve (la cruceta sí). Un centro de más de CENTRO_MAX ya no es drift (el
+# stick estaba empujado al conectar): se deja en 0.
+CALIBRAR_MS = 600
+MUESTRAS_CALIBRAR = 8
+CENTRO_MAX = 0.8
+
 # Los mismos botones con la API game controller (por posición, en todo mando).
 # Los valores de SDL; getattr por si alguna versión no trae la constante.
 BOTONES_CONTROLLER = {
@@ -208,18 +218,41 @@ class MandoSDL:
     def eje(self, eje):
         return _normalizar(self.controlador.get_axis(eje))
 
-    def direccion(self):
+    def stick(self):
+        """(x, y) del stick izquierdo, sin calibrar, de -1 a 1."""
+        return self.eje(EJE_C_X), self.eje(EJE_C_Y)
+
+    def direccion(self, ajustar=None):
         c = self.controlador
         dx = int(bool(c.get_button(CRUCETA_INV["derecha"]))) - int(bool(c.get_button(CRUCETA_INV["izquierda"])))
         dy = int(bool(c.get_button(CRUCETA_INV["abajo"]))) - int(bool(c.get_button(CRUCETA_INV["arriba"])))
         if dx == 0 and dy == 0:
-            ax, ay = self.eje(EJE_C_X), self.eje(EJE_C_Y)
+            ax, ay = self.stick()
+            if ajustar is not None:
+                ax, ay = ajustar(self, ax, ay)
             dx = -1 if ax < -ZONA_MUERTA else (1 if ax > ZONA_MUERTA else 0)
             dy = -1 if ay < -ZONA_MUERTA else (1 if ay > ZONA_MUERTA else 0)
         return dx, dy
 
 
 CRUCETA_INV = {accion: boton for boton, accion in CRUCETA_CONTROLLER.items()}
+
+
+def desde_centro(valor, centro):
+    """Un eje medido desde su centro de reposo y reescalado: el centro da 0 y
+    los topes siguen dando -1 y 1."""
+    if valor >= centro:
+        return 0.0 if centro >= 1 else (valor - centro) / (1 - centro)
+    return 0.0 if centro <= -1 else (valor - centro) / (1 + centro)
+
+
+def _stick_crudo(mando):
+    """(x, y) del stick izquierdo de un mando (MandoSDL o Joystick), sin calibrar."""
+    if es_controller(mando):
+        return mando.stick()
+    if mando.get_numaxes() > EJE_Y:
+        return mando.get_axis(EJE_X), mando.get_axis(EJE_Y)
+    return 0.0, 0.0
 
 
 def _normalizar(valor):
@@ -295,6 +328,8 @@ class Mandos:
         self.por_puesto = {}       # puesto -> MandoSDL o pygame.joystick.Joystick
         self._stick_y = {}         # puesto -> -1/0/1 (para no repetir en los menús)
         self._stick_x = {}
+        # instance_id -> {"desde": ms, "muestras": n, "centro": [x, y]} (drift)
+        self._calibracion = {}
         Mandos.activo = self
         try:
             pygame.joystick.init()
@@ -344,6 +379,8 @@ class Mandos:
                 if not es_controller(joy):
                     joy.init()
                 self.por_puesto[puesto] = joy
+                self._calibracion[joy.get_instance_id()] = {
+                    "desde": pygame.time.get_ticks(), "muestras": 0, "centro": [0.0, 0.0]}
                 return puesto
         return None
 
@@ -351,10 +388,53 @@ class Mandos:
         for puesto, joy in list(self.por_puesto.items()):
             if joy.get_instance_id() == instance_id:
                 del self.por_puesto[puesto]
+                self._calibracion.pop(instance_id, None)
                 self._stick_x.pop(puesto, None)
                 self._stick_y.pop(puesto, None)
                 return puesto
         return None
+
+    # -- Drift: el centro de cada stick ------------------------------------------------
+
+    def calibrando(self, mando):
+        """¿Todavía está midiendo el stick suelto de este mando?"""
+        cal = self._calibracion.get(mando.get_instance_id())
+        if cal is None:
+            return False
+        return (cal["muestras"] < MUESTRAS_CALIBRAR
+                or pygame.time.get_ticks() - cal["desde"] < CALIBRAR_MS)
+
+    def muestrear(self):
+        """Una lectura del stick suelto de los mandos que están calibrando. La
+        llama el juego una vez por cuadro."""
+        for mando in self.por_puesto.values():
+            if not self.calibrando(mando):
+                continue
+            cal = self._calibracion[mando.get_instance_id()]
+            try:
+                x, y = _stick_crudo(mando)
+            except pygame.error:
+                continue
+            cal["muestras"] += 1
+            cal["centro"] = [v if abs(v) <= CENTRO_MAX else 0.0 for v in (x, y)]
+
+    def centro(self, mando):
+        """[x, y] de reposo del stick (0, 0 si no se calibró)."""
+        cal = self._calibracion.get(mando.get_instance_id())
+        return cal["centro"] if cal else [0.0, 0.0]
+
+    def ajustar(self, mando, x, y):
+        """El stick medido desde su centro; (0, 0) mientras calibra."""
+        if self.calibrando(mando):
+            return 0.0, 0.0
+        cx, cy = self.centro(mando)
+        return desde_centro(x, cx), desde_centro(y, cy)
+
+    def _eje_de_evento(self, mando, indice, valor):
+        """Un eje del stick que llega en un evento, ya desde su centro."""
+        if self.calibrando(mando):
+            return 0.0
+        return desde_centro(valor, self.centro(mando)[indice])
 
     def hay_mando(self, puesto):
         return puesto in self.por_puesto
@@ -399,10 +479,9 @@ class Mandos:
         except pygame.error:
             return False
 
-    @staticmethod
-    def _presionada_controller(mando, accion):
+    def _presionada_controller(self, mando, accion):
         if accion in ("arriba", "abajo", "izquierda", "derecha"):
-            dx, dy = mando.direccion()
+            dx, dy = mando.direccion(self.ajustar)
             return {"arriba": dy < 0, "abajo": dy > 0,
                     "izquierda": dx < 0, "derecha": dx > 0}[accion]
         if accion == "sigilo":
@@ -410,19 +489,19 @@ class Mandos:
             return mando.boton("LB") or mando.eje(EJE_C_LT) > 0.3
         return mando.boton(BOTON_DE_ACCION[accion])
 
-    @staticmethod
-    def _direccion(joy):
+    def _direccion(self, joy):
         dx = dy = 0
         if joy.get_numhats() > 0:
             hx, hy = joy.get_hat(0)
             dx, dy = hx, -hy                 # en la cruceta, arriba es +1
         if dx == 0 and dy == 0 and joy.get_numaxes() > EJE_Y:
-            ax, ay = joy.get_axis(EJE_X), joy.get_axis(EJE_Y)
+            ax, ay = self.ajustar(joy, joy.get_axis(EJE_X), joy.get_axis(EJE_Y))
             dx = -1 if ax < -ZONA_MUERTA else (1 if ax > ZONA_MUERTA else 0)
             dy = -1 if ay < -ZONA_MUERTA else (1 if ay > ZONA_MUERTA else 0)
         return dx, dy
 
     def envolver(self, teclas):
+        self.muestrear()
         return _TeclasConMando(teclas, self)
 
     # -- Lo que se presiona una vez -------------------------------------------------------
@@ -457,9 +536,11 @@ class Mandos:
                 return [(puesto, accion)] if accion else []
             if ev.type == _EV("CONTROLLERAXISMOTION"):
                 if ev.axis == EJE_C_Y:
-                    return self._stick(puesto, _normalizar(ev.value), self._stick_y, ("arriba", "abajo"))
+                    valor = self._eje_de_evento(mando, 1, _normalizar(ev.value))
+                    return self._stick(puesto, valor, self._stick_y, ("arriba", "abajo"))
                 if ev.axis == EJE_C_X:
-                    return self._stick(puesto, _normalizar(ev.value), self._stick_x, ("izquierda", "derecha"))
+                    valor = self._eje_de_evento(mando, 0, _normalizar(ev.value))
+                    return self._stick(puesto, valor, self._stick_x, ("izquierda", "derecha"))
             return []
         if ev.type == pygame.JOYBUTTONDOWN:
             nombre = next((n for n, b in BOTONES.items() if b == ev.button), None)
@@ -478,9 +559,11 @@ class Mandos:
                 return [(puesto, "derecha")]
             return []
         if ev.type == pygame.JOYAXISMOTION and ev.axis == EJE_Y:
-            return self._stick(puesto, ev.value, self._stick_y, ("arriba", "abajo"))
+            valor = self._eje_de_evento(mando, 1, ev.value)
+            return self._stick(puesto, valor, self._stick_y, ("arriba", "abajo"))
         if ev.type == pygame.JOYAXISMOTION and ev.axis == EJE_X:
-            return self._stick(puesto, ev.value, self._stick_x, ("izquierda", "derecha"))
+            valor = self._eje_de_evento(mando, 0, ev.value)
+            return self._stick(puesto, valor, self._stick_x, ("izquierda", "derecha"))
         return []
 
     @staticmethod

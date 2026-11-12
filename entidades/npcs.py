@@ -28,6 +28,8 @@ import zlib
 
 import pygame
 
+from juego import idioma
+
 from juego import navegacion
 from juego.fuentes import fuente_de_tamano
 from Movimiento.Personaje import DireccionSuave, detectar_hojas, cargar_animaciones
@@ -37,7 +39,8 @@ from data.npcs import (ESTILOS, VELOCIDAD_NPC, ESPERA_NPC_MS, RADIO_CHARLA,
                        FRASES_VERDE, FRASES_GRIS, FRASES_ROJO, RADIO_HABLAR, DISTANCIA_SEGUIR,
                        RADIO_RESCATE_CAPSULA, PUNTOS_RESCATE, FRASE_PIDE_RESCATE, FRASE_ACEPTA, FRASE_DUDA,
                        FRASE_NIEGA, FRASE_RESCATADO, FRASES_ADVIERTE_ESCOLTA,
-                       FRASE_ESPERA, RADIO_SOLTAR, ESPERA_SOLTADO_MS)
+                       FRASE_ESPERA, RADIO_SOLTAR, ESPERA_SOLTADO_MS, FRASE_RINDE,
+                       FRASE_SE_ESCONDE, FRASE_SALE_ESCONDITE, TIEMPO_MAX_ESCONDERSE_MS)
 
 LIENZO_W, LIENZO_H, ESCALA = 48, 72, 2    # el muñeco se dibuja a 48x72 y se agranda x2
 COLOR_ESTADO = {"verde": (90, 210, 120), "gris": (170, 172, 185), "rojo": (230, 80, 80)}
@@ -45,11 +48,13 @@ ANCHO_HITBOX, ALTO_HITBOX = 34, 20
 
 _poses = {}       # (estilo, número, dirección, paso) -> (imagen agrandada, alto de la cabeza)
 _carteles = {}    # letrero -> imagen con su fondo
+idioma.al_cambiar(_carteles.clear)
 
 # Sprites de los prisioneros: una carpeta por prisionero en
 # Imagenes/Prisioneros/ con el formato de PixelLab
 # (<carpeta>_<idle|breathing|walking>_<direccion>.png). Para agregar uno basta
-# con poner su carpeta ahí: se reparten solos entre los que caminan.
+# con poner su carpeta ahí: se reparten solos entre los que caminan, según lo
+# que diga "sprites" de cada cuenta en data/nexus.py (repartir_sprites).
 _RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CARPETA_PRISIONEROS = os.path.join(_RAIZ_PROYECTO, "Imagenes", "Prisioneros")
 ESCALA_SPRITE = 1.65       # la de los jugadores: cuadros de 96 px, figura de ~60
@@ -82,6 +87,24 @@ def sprites_prisionero(carpeta):
                      "arriba": contenido.top}                           # aire sobre la cabeza
     _sprites[carpeta] = resultado
     return resultado
+
+
+def repartir_sprites(cuentas, carpetas):
+    """Qué carpeta de sprites le toca a cada cuenta (o None si no hay
+    ninguna). Cada cuenta dice en "sprites" (data/nexus.py) cuáles le quedan
+    bien (que la abuela Rosa no salga de muchacho): la primera de esas que
+    nadie use todavía en la partida o, si ya están todas, la menos usada. Sin
+    "sprites" (o si no está ninguna), la menos usada de todas."""
+    if not carpetas:
+        return [None] * len(cuentas)
+    usadas = {c: 0 for c in carpetas}
+    elegidas = []
+    for cuenta in cuentas:
+        opciones = [c for c in cuenta.get("sprites") or () if c in usadas] or carpetas
+        elegida = min(opciones, key=lambda c: usadas[c])     # (empate: la primera)
+        usadas[elegida] += 1
+        elegidas.append(elegida)
+    return elegidas
 
 
 VECINOS_PASEO = 6     # entre cuántos puntos cercanos escoge a dónde ir
@@ -282,6 +305,11 @@ class NPC:
         self._resto = [0.0, 0.0]
         self.siguiendo = None       # el jugador que lo lleva a la cápsula
         self.lejos_ms = 0
+        # Rumor viral de los casilleros (redes/nexus.py): el casillero al que
+        # va a meterse, y en el que está metido (no se ve ni camina).
+        self.va_a_esconderse = None
+        self.escondido_en = None
+        self.yendo_ms = 0
 
     @property
     def centro(self):
@@ -293,8 +321,20 @@ class NPC:
     def actualizar(self, dt, juego, puntos):
         self.burbuja_ms = max(0, self.burbuja_ms - dt)
         self.charla_ms = max(0, self.charla_ms - dt)
+        if self.escondido_en is not None:
+            return
         antes = self.hitbox.center
-        if self.siguiendo is not None:
+        if self.va_a_esconderse is not None:
+            destino = self.va_a_esconderse["rect"].midbottom
+            self.yendo_ms += dt
+            if math.dist(self.centro, destino) <= 34 or self.yendo_ms >= TIEMPO_MAX_ESCONDERSE_MS:
+                self.escondido_en, self.va_a_esconderse = self.va_a_esconderse, None
+                self.hitbox.center = destino
+                return
+            if not self.ruta:
+                self.destino_paseo = destino
+            caminar(self, dt, juego, [destino], VELOCIDAD_NPC * 1.6)
+        elif self.siguiendo is not None:
             self._seguir(dt, juego)
         else:
             caminar(self, dt, juego, puntos, VELOCIDAD_NPC)
@@ -325,6 +365,8 @@ class NPC:
             self.ruta = []
 
     def dibujar(self, screen, offset):
+        if self.escondido_en is not None:
+            return                  # metido en un casillero (rumor viral)
         color = None
         juego = getattr(self, "juego", None)
         red = getattr(juego, "nexus", None) if juego is not None else None
@@ -412,11 +454,10 @@ class GestorNPCs:
         self.npcs = []
         self.rescatados = []
         self.avisados_rescate = set()   # a quién ya le pidió un verde que lo rescate
-        carpetas = carpetas_prisioneros()
+        sprites = repartir_sprites([c for _, c in cuentas], carpetas_prisioneros())
         for i, (nodo, cuenta) in enumerate(cuentas):
             apariencia = Apariencia(ESTILOS[i % len(ESTILOS)], cuenta["usuario"],
-                                    self.rng.randint(10, 99),
-                                    carpetas[i % len(carpetas)] if carpetas else None)
+                                    self.rng.randint(10, 99), sprites[i])
             punto = self.rng.choice(self.puntos) if self.puntos else (100, 100)
             npc = NPC(nodo, cuenta["usuario"], apariencia, punto, self.rng)
             npc.juego = juego
@@ -462,6 +503,8 @@ class GestorNPCs:
         mision = getattr(juego, "mision", None)
         for npc in list(self.npcs):
             npc.actualizar(dt, juego, self.puntos)
+            if npc.escondido_en is not None or npc.va_a_esconderse is not None:
+                continue
             if npc.siguiendo is not None:
                 if (mision is not None and mision.capsula is not None
                         and distancia_a_rect(npc.centro, mision.capsula) <= RADIO_RESCATE_CAPSULA):
@@ -473,7 +516,7 @@ class GestorNPCs:
 
     def cerca(self, jugador):
         """El prisionero (o el Cambiaformas disfrazado) con el que puede hablar."""
-        candidatos = [n for n in self.npcs if n.siguiendo is None]
+        candidatos = [n for n in self.npcs if n.siguiendo is None and n.escondido_en is None]
         cf = getattr(self.juego, "cambiaformas", None)
         if cf is not None and cf.disfrazado and cf.siguiendo is None:
             candidatos.append(cf)
@@ -563,7 +606,12 @@ class GestorNPCs:
             return True
         red = getattr(self.juego, "nexus", None)
         color = red.color(quien.nodo) if red is not None and quien.nodo in red.grafo else "gris"
-        if color == "verde":
+        if red is not None and red.efecto_activo("capsula"):
+            # El rumor de la cápsula se volvió viral: nadie quiere ir.
+            quien.decir(FRASE_RINDE)
+            jugador.avisar(f"{quien.usuario} se rindió: cree que la cápsula explotó. "
+                           "Desmientan el rumor en NEXUS.", COLOR_ESTADO["rojo"])
+        elif color == "verde":
             quien.siguiendo, quien.ruta, quien.espera_ms = jugador, [], 0
             quien.decir(FRASE_ACEPTA)
             jugador.avisar(f"{quien.usuario} te sigue. Llévalo a la cápsula.", COLOR_ESTADO["verde"])
@@ -574,6 +622,59 @@ class GestorNPCs:
             quien.decir(FRASE_DUDA)
             jugador.avisar(f"{quien.usuario} todavía no les cree.", (210, 210, 220))
         return True
+
+    # -- Rumores virales (redes/nexus.py) --------------------------------------------------
+
+    def rendirse(self):
+        """El rumor de la cápsula se volvió viral: los que te seguían se rinden."""
+        for npc in self.npcs:
+            guia = npc.siguiendo
+            if guia is None:
+                continue
+            npc.siguiendo, npc.ruta, npc.lejos_ms = None, [], 0
+            npc.decir(FRASE_RINDE)
+            guia.avisar(f"{npc.usuario} dejó de seguirte: cree que la cápsula explotó.",
+                        COLOR_ESTADO["rojo"])
+
+    def esconderse(self, cuantos, cerca_de=None):
+        """El rumor de los casilleros se volvió viral: los que se lo creen (los
+        que no están en verde) corren a meterse en los casilleros libres. Cada
+        uno aparta el más cercano a él. Devuelve los casilleros que ocuparon."""
+        juego = self.juego
+        red = getattr(juego, "nexus", None)
+        libres = [e for e in getattr(juego, "escondites", [])
+                  if e.get("ocupante") is None and e.get("npc") is None]
+
+        def cree(npc):
+            return red is None or npc.nodo not in red.grafo or red.color(npc.nodo) != "verde"
+
+        candidatos = [n for n in self.npcs if n.siguiendo is None and n.escondido_en is None
+                      and n.va_a_esconderse is None and cree(n)]
+        if cerca_de is not None:
+            candidatos.sort(key=lambda n: math.dist(n.centro, cerca_de))
+        ocupados = []
+        for npc in candidatos[:cuantos]:
+            if not libres:
+                break
+            escondite = min(libres, key=lambda e: math.dist(e["rect"].center, npc.centro))
+            libres.remove(escondite)
+            escondite["npc"] = npc
+            npc.va_a_esconderse, npc.ruta, npc.yendo_ms, npc.espera_ms = escondite, [], 0, 0
+            npc.destino_paseo = None
+            npc.decir(FRASE_SE_ESCONDE)
+            ocupados.append(escondite)
+        return ocupados
+
+    def salir_de_escondites(self, escondites):
+        """Ya saben la verdad: salen de los casilleros que ocupaban."""
+        for escondite in escondites:
+            npc = escondite.get("npc")
+            escondite["npc"] = None
+            if npc is None:
+                continue
+            npc.va_a_esconderse = npc.escondido_en = None
+            npc.ruta, npc.destino_paseo, npc.espera_ms = [], None, 1500
+            npc.decir(FRASE_SALE_ESCONDITE)
 
     def rescatar(self, npc):
         """Llegó a la cápsula: queda a salvo y cuenta en NEXUS que lo salvaron."""

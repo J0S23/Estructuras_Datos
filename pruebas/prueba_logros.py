@@ -261,6 +261,53 @@ L2.tipos_vistos.add("sombra")
 L2.actualizar(DT)
 assert L2.tiene("conoce_a_tu_enemigo")
 print("'Conoce a tu enemigo' pide también al Cambiaformas (revelado) y a la Sombra")
+
+# "Primer encuentro": hay que VER al alien (en el campo de visión), no basta
+# con que esté cerca al otro lado de una pared.
+from juego import vision
+g4 = nueva_partida()
+g4.saltar_tutorial()
+g4.presentacion = None
+g4.quitar_cambiaformas()
+L4, j4 = g4.logros, g4.jugadores[0]
+otro = g4.jugadores[1]
+alien = next(a for a in g4.aliens if a.tipo != "guardia")
+for a in g4.aliens:
+    a.descanso_ms = 10 ** 9
+    if a is not alien:
+        a.hitbox.topleft = (5, 5)
+otro.eliminado = True              # (solo mira el jugador 1)
+assert not L4.tiene("primer_encuentro")
+detras = delante = None
+for punto in [p for a in g4.aliens for p in a.ruta]:   # un lugar con paredes cerca
+    poner(j4, punto)
+    if g4.mundo.colisiona(j4.hitbox):
+        continue
+    campo = vision.campo_de(j4.hitbox.center, vision.obstaculos(g4.mundo, g4.puertas_dobles, g4.compuertas))
+    detras = delante = None
+    cx, cy = j4.hitbox.center
+    for dx in range(-400, 401, 20):
+        for dy in range(-400, 401, 20):
+            r = alien.hitbox.copy()
+            r.center = (cx + dx, cy + dy)
+            d = (dx * dx + dy * dy) ** 0.5
+            if d > 420 or d < 120 or g4.mundo.colisiona_alien(r):
+                continue
+            if detras is None and not campo.ve_a(r):
+                detras = r.center
+            if delante is None and campo.ve_a(r) and d < 250:
+                delante = r.center
+    if detras is not None and delante is not None:
+        break
+assert detras is not None and delante is not None, "no encontré dónde poner al alien"
+alien.hitbox.center = detras
+for _ in range(5):
+    L4.actualizar(DT)
+assert not L4.tiene("primer_encuentro"), "lo dio con el alien detrás de la pared"
+alien.hitbox.center = delante
+L4.actualizar(DT)
+assert L4.tiene("primer_encuentro"), "con el alien a la vista no lo dio"
+print("'Primer encuentro': cerca pero detrás de una pared no cuenta; a la vista sí")
 # Menú > Logros: el árbol completo, con los que salieron alguna vez
 # (juego/historial_logros.py; aquí con un archivo de prueba).
 import tempfile

@@ -54,6 +54,8 @@ AJUSTES = {
     # NEXUS
     "rumor_cada":        [1.60,   1.40,  1.20,  1.00],    # multiplica el tiempo entre rumores
     "prob_creer":        [0.30,   0.33,  0.39,  0.45],    # prob. de que un gris se crea un rumor
+    "viral_cada":        [1.50,   1.25,  1.10,  1.00],    # multiplica el tiempo para que un rumor se vuelva viral
+    "bot_crece_cada":    [1.60,   1.35,  1.15,  1.00],    # multiplica el tiempo entre seguidores nuevos de un bot
     # La Sombra (sale en los apagones): si alcanza a alguien le apaga la
     # linterna. ¿Hasta que vuelva la luz? (>= 0.5 sí; si no, `sombra_apaga_ms`).
     "sombra_hasta_luz":  [0,      0,     0,     1],

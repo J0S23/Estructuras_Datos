@@ -65,12 +65,31 @@ class Mundo:
         # (a los jugadores, Game._colisiona_jugador). Aparte de los sellos
         # porque esa lista se rehace en cada cuadro y da el logro "Por aquí no".
         self.puertas_alien = []
+        # Lo que ocupan en el piso los muebles de la decoración
+        # (juego/decoracion.py): se choca con ellos como con una pared y los
+        # caminos los rodean, pero NO tapan el campo de visión del jugador
+        # (vision.obstaculos los salta): se ve por encima de un sofá.
+        self.muebles = []
+        self._rects_sellados = []
+
+    def poner_muebles(self, rects):
+        """Los muebles de esta partida pasan a ser parte del mapa fijo."""
+        self.muebles = [pygame.Rect(r) for r in rects]
+        self.__dict__.pop("_muebles_como_set", None)
+        self.sellar(self._rects_sellados)
+
+    def es_mueble(self, rect):
+        guardado = self.__dict__.get("_muebles_como_set")
+        if guardado is None:
+            guardado = self.__dict__["_muebles_como_set"] = {tuple(r) for r in self.muebles}
+        return tuple(rect) in guardado
 
     def sellar(self, rects):
         """Las paredes de las salas selladas de esta ronda (salas_selladas.py)
-        pasan a ser parte del mapa fijo. Si cambian, la navegación se vuelve a
-        armar (las celdas libres salen de `paredes_base`)."""
-        nuevas = self.paredes_archivo + list(rects)
+        pasan a ser parte del mapa fijo, junto con los muebles. Si cambian, la
+        navegación se vuelve a armar (las celdas libres salen de `paredes_base`)."""
+        self._rects_sellados = list(rects)
+        nuevas = self.paredes_archivo + self.muebles + list(rects)
         if nuevas != self.paredes_base:
             self.paredes_base = nuevas
             self.__dict__.pop("_navegaciones", None)
@@ -137,6 +156,19 @@ class Mundo:
         """Para los aliens: las paredes, los sellos activos y las puertas para
         dos cerradas."""
         return (self.colisiona(rect) or rect.collidelist(self.bloqueos_alien) != -1
+                or rect.collidelist(self.puertas_alien) != -1)
+
+    def tapa_vista_alien(self, rect):
+        """Lo que no deja VER a un alien: lo mismo que lo frena, menos los
+        muebles (ve por encima de ellos, igual que el jugador lo ve a él)."""
+        if not self.muebles:
+            return self.colisiona_alien(rect)
+        if rect.left < 0 or rect.top < 0 or rect.right > self.ancho or rect.bottom > self.alto:
+            return True
+        for i in rect.collidelistall(self.paredes):
+            if not self.es_mueble(self.paredes[i]):
+                return True
+        return (rect.collidelist(self.bloqueos_alien) != -1
                 or rect.collidelist(self.puertas_alien) != -1)
 
     def colisiona_npc(self, rect):

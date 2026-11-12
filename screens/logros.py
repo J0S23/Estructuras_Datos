@@ -10,6 +10,7 @@ import pygame
 
 from data.logros import COLOR_RAMA
 from juego.fuentes import fuente, fuente_de_tamano
+from juego.idioma import tr
 
 COLOR_FONDO_ARBOL = (14, 14, 28)
 COLOR_LINEA = (90, 96, 130)
@@ -188,6 +189,7 @@ def render_arbol_logros(screen, arbol, seleccionado=None, catalogo=None):
 
 def _renglones(texto, f, maximo, color):
     """El nombre en una línea, o en dos si no cabe (partido por una palabra)."""
+    texto = tr(texto)
     if f.size(texto)[0] <= maximo or " " not in texto:
         return [f.render(texto, True, color)]
     palabras = texto.split()

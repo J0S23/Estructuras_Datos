@@ -33,6 +33,7 @@ import random
 import pygame
 
 from juego.fuentes import fuente_de_tamano
+from juego import sprites_objetos
 from screens.flechas import flecha_alrededor, cerca_del_borde
 
 
@@ -54,7 +55,7 @@ EVENTOS = {
 # de circuitos) y desde qué distancia se puede usar.
 TIEMPO_FUSIBLES_S = 3.0
 TIEMPO_FUSIBLES_TECNOMANTE_S = 1.5
-RADIO_CAJA = 60
+RADIO_CAJA = 40               # hasta el borde de la caja (antes 60 hasta su centro)
 TAMANO_CAJA = (40, 46)
 PUNTOS_FUSIBLES = 15
 DISTANCIA_BRILLO_CAJA = 1300   # hasta dónde se ve su luz en la oscuridad
@@ -68,12 +69,27 @@ COLOR_AVISO = (255, 214, 64)
 COLOR_FLECHA_CAJA = (255, 76, 64)   # la flecha roja del apagón (en toda dificultad)
 
 
+def junto_a_caja(caja, jugador):
+    """¿Puede usar la caja? Medido hasta el borde de la caja, no hasta su
+    centro: una caja puesta en la pared (con medio cuerpo metido en ella) se
+    usa desde el piso de abajo, aunque su centro quede lejos."""
+    r = caja["rect"]
+    x, y = jugador.hitbox.center
+    dx = max(r.left - x, 0, x - r.right)
+    dy = max(r.top - y, 0, y - r.bottom)
+    return math.hypot(dx, dy) <= RADIO_CAJA
+
+
 def crear_cajas(objetos, mundo):
     cajas = []
     for rx, ry in objetos.get("fusibles", []):
         rect = pygame.Rect(0, 0, *TAMANO_CAJA)
         rect.center = (int(rx * mundo.ancho), int(ry * mundo.alto))
-        cajas.append({"rect": rect, "progreso": 0.0})
+        caja = {"rect": rect, "progreso": 0.0}
+        # El piso de enfrente (la caja puede ir en la pared): a donde se camina.
+        x, y = GestorEventos._pie_de(caja, mundo)
+        caja["pie"] = (x + 17, y + 10)
+        cajas.append(caja)
     return cajas
 
 
@@ -245,7 +261,7 @@ class GestorEventos:
     def caja_cerca(self, jugador):
         if not self.apagon or self.caja is None:
             return None
-        if math.dist(jugador.hitbox.center, self.caja["rect"].center) <= RADIO_CAJA:
+        if junto_a_caja(self.caja, jugador):
             return self.caja
         return None
 
@@ -254,8 +270,7 @@ class GestorEventos:
         if not self.apagon:
             return None
         for caja in self.cajas:
-            if caja is not self.caja and math.dist(jugador.hitbox.center,
-                                                   caja["rect"].center) <= RADIO_CAJA:
+            if caja is not self.caja and junto_a_caja(caja, jugador):
                 return caja
         return None
 
@@ -319,6 +334,9 @@ class GestorEventos:
 
 # -- Dibujo ------------------------------------------------------------------------
 
+ALTO_CAJA = 62
+
+
 def dibujar_cajas(screen, offset, camara, eventos, tiempo_ms):
     """Las cajas de fusibles, en el piso. La buena parpadea en rojo en un apagón."""
     if eventos is None:
@@ -329,13 +347,20 @@ def dibujar_cajas(screen, offset, camara, eventos, tiempo_ms):
             continue
         r = rect.move(-offset[0], -offset[1])
         buena = eventos.apagon and caja is eventos.caja
-        pygame.draw.rect(screen, (10, 12, 20), r.move(3, 3), border_radius=4)
-        pygame.draw.rect(screen, (96, 104, 120), r, border_radius=4)
-        pygame.draw.rect(screen, (40, 44, 58), r, 2, border_radius=4)
-        # Rayo pintado en la tapa.
-        cx, cy = r.center
-        pygame.draw.lines(screen, (255, 214, 64), False,
-                          [(cx + 3, cy - 12), (cx - 5, cy + 1), (cx + 4, cy + 1), (cx - 3, cy + 13)], 3)
+        img = sprites_objetos.sprite("fusibles", ALTO_CAJA, apagado=bool(eventos.apagon))
+        if img is not None:
+            # La caja de Anny (trae su rayo): sin luz se ve apagada.
+            pos = img.get_rect(midbottom=(r.centerx, r.bottom + 4))
+            screen.blit(img, pos)
+            r = pos
+        else:
+            pygame.draw.rect(screen, (10, 12, 20), r.move(3, 3), border_radius=4)
+            pygame.draw.rect(screen, (96, 104, 120), r, border_radius=4)
+            pygame.draw.rect(screen, (40, 44, 58), r, 2, border_radius=4)
+            # Rayo pintado en la tapa.
+            cx, cy = r.center
+            pygame.draw.lines(screen, (255, 214, 64), False,
+                              [(cx + 3, cy - 12), (cx - 5, cy + 1), (cx + 4, cy + 1), (cx - 3, cy + 13)], 3)
         if buena:
             luz = (255, 70, 60) if (tiempo_ms // 350) % 2 else (110, 30, 30)
         else:

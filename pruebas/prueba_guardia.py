@@ -9,9 +9,11 @@
    No le hacen nada el hackeo ni el señuelo.
 3. Resonante: con la tecla de interactuar cerca, el Guardia se distrae (se
    va a su rincón y no ve a nadie) un rato; después vuelve. Hay recarga.
-4. Biomante: manteniendo la tecla en la planta, crece y suelta una fruta.
-   Otro la recoge y se la da al Guardia: se va a su rincón a comer, para
-   siempre, y la Bahía queda libre.
+4. Biomante: manteniendo la tecla en la planta, crece (cuadro a cuadro de su
+   animación) y da una fruta, que queda en la planta hasta que alguien la
+   arranca con la tecla de interactuar (después se dibuja sin fruta). Otro la
+   recoge y se la da al Guardia: se va a su rincón a comer, para siempre, y
+   la Bahía queda libre.
 5. Sin Biomante aparece abono, y con él cualquiera hace crecer la planta. Si
    eliminan al Biomante, suelta abono.
 6. Capturas: pruebas/capturas/guardia_*.png.
@@ -207,13 +209,27 @@ lejos(res)
 planta = bahia.planta
 poner(bio, (planta["rect"].centerx, planta["rect"].bottom + 30))
 assert bahia.pista(bio) == "Mantener: hacer crecer la planta"
+from misiones.guardia import imagenes_planta
+cuadros, sin_fruta = imagenes_planta()
+assert bahia.imagen_planta() is cuadros[0], "antes de crecer: el brote"
 mantener(bio, CRECER_BIOMANTE_MS // 2)
 assert 0.3 < planta["progreso"] < 1
+assert bahia.imagen_planta() in cuadros[4:-1], "a la mitad, un cuadro del medio"
 g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "guardia_planta.png"))
 mantener(bio, CRECER_BIOMANTE_MS)
 assert planta["crecida"] and g.logros.tiene("jardinero")
-# La fruta va derecho al inventario del que hizo crecer la planta...
+# La fruta queda en la planta: no va sola al inventario.
+assert planta["fruta"] and "fruta" not in bio.objetos
+assert bahia.imagen_planta() is cuadros[-1]
+assert bahia.pista(bio) == "Arrancar la fruta"
+assert bahia.hay_camino_permanente()
+g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "guardia_planta_fruta.png"))
+interactuar(bio)
+assert not planta["fruta"] and bahia.imagen_planta() is sin_fruta
 assert "fruta" in bio.objetos and ("fruta", 1) in g._inventario(bio)
+interactuar(bio)                          # otra vez: ya no hay más fruta
+assert bio.objetos["fruta"] == 1
+g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "guardia_planta_sin_fruta.png"))
 assert not any(c["tipo"] == "fruta" for c in g.mision.consumibles)
 from screens.paneles import render_inventario
 render_inventario(g.screen, g.screen.get_rect(), bio)
@@ -269,7 +285,7 @@ frames(200)
 assert res.preso is None, "comiendo ya no atrapa a nadie"
 poner(res, (G.centro[0] - 120, G.centro[1] + 40))
 g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "guardia_comiendo.png"))
-print("Biomante: la planta crece y la fruta va a su inventario (se puede soltar); "
+print("Biomante: la planta crece, la fruta se arranca y va al inventario (se puede soltar); "
       "el Guardia se la come y se queda en su rincón para siempre")
 
 # ---------- 5. Sin Biomante: abono ----------
@@ -297,6 +313,9 @@ assert "abono" in tec.objetos
 poner(tec, (bahia.planta["rect"].centerx, bahia.planta["rect"].bottom + 30))
 mantener(tec, CRECER_ABONO_MS + 200)
 assert bahia.planta["crecida"] and "abono" not in tec.objetos
+assert g.mision.punto_objetivo(g.jugadores[1])[1] == "Arranca la fruta de la planta"
+interactuar(tec)
+assert "fruta" in tec.objetos
 print("sin Biomante: aparece abono y con él cualquiera hace crecer la planta")
 # Si eliminan al Biomante, suelta abono.
 g = nueva_partida(["Biomante", "Forjador"])
@@ -342,6 +361,8 @@ assert flecha(res) == "Distrae al Guardia (Sintonía)", "alguien lleva una pieza
 print("cápsula:", {j.rol: flecha(j) for j in g.jugadores})
 poner(bio, (bahia.planta["rect"].centerx, bahia.planta["rect"].bottom + 30))
 mantener(bio, CRECER_BIOMANTE_MS + 200)
+assert flecha(bio) == "Arranca la fruta de la planta"
+interactuar(bio)
 assert "fruta" in bio.objetos and flecha(bio) == "Dale la fruta al Guardia"
 G = bahia.guardia
 poner(bio, (G.centro[0], G.centro[1] + 120))

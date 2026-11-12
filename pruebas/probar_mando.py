@@ -56,6 +56,7 @@ def anotar(texto):
 
 
 while True:
+    m.muestrear()
     for ev in pygame.event.get():
         if ev.type == pygame.QUIT or (ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE):
             pygame.quit(); sys.exit()
@@ -109,6 +110,17 @@ while True:
         pantalla.blit(fuente.render(f"Mando {puesto - 1}: {como_se_toma(joy)}", True, (255, 214, 64)), (12, y))
         y += 22
         pantalla.blit(fuente.render(f"  ahora: {', '.join(activos) or '-'}", True, (235, 238, 250)), (12, y))
+        y += 22
+        # El stick tal cual, su centro de reposo (drift) y como lo usa el juego.
+        try:
+            x, yy = mandos._stick_crudo(joy)
+        except pygame.error:
+            x = yy = 0.0
+        cx, cy = m.centro(joy)
+        ax, ay = m.ajustar(joy, x, yy)
+        estado_cal = "calibrando..." if m.calibrando(joy) else f"centro ({cx:+.2f}, {cy:+.2f})"
+        pantalla.blit(fuente.render(f"  stick: ({x:+.2f}, {yy:+.2f})   {estado_cal}   juego: ({ax:+.2f}, {ay:+.2f})"
+                                    f"   (cuenta desde ±{mandos.ZONA_MUERTA})", True, (150, 200, 255)), (12, y))
         y += 30
     for linea in log:
         pantalla.blit(fuente.render(linea, True, (150, 156, 190)), (12, y))

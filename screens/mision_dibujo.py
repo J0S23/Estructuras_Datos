@@ -6,10 +6,12 @@ aquí sin tocar la lógica.
 """
 
 import math
+import os
 
 import pygame
 
 from juego.fuentes import fuente, fuente_de_tamano
+from juego import sprites_objetos, decoracion
 from screens.flechas import flecha_alrededor, cerca_del_borde
 
 
@@ -44,6 +46,7 @@ def _barra(screen, x, y, ancho, valor, color):
 
 
 COLOR_FLECHA = (255, 214, 64)
+ALTO_CONSOLA = sprites_objetos.ALTOS["consola"]
 
 
 def dibujar_flecha_objetivo(screen, vista, camara, dueño, mision, dificultad, red, tiempo_ms):
@@ -100,34 +103,31 @@ def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
         pygame.draw.circle(screen, luz if brillo > 0.8 else tuple(c // 2 for c in luz),
                            (r.centerx, r.top - 10), 6)
 
-    if mision.capsula is not None and mision.capsula.colliderect(camara):
+    if mision.capsula is not None and mision.capsula.inflate(120, 160).colliderect(camara):
         r = _en_pantalla(mision.capsula, offset)
         capa = pygame.Surface(r.size, pygame.SRCALPHA)
         alfa = int(60 + 60 * brillo) if mision.fase == "huida" else 40
         capa.fill((*COLOR_CAPSULA, alfa))
         screen.blit(capa, r.topleft)
-        pygame.draw.rect(screen, COLOR_CAPSULA, r, 3, border_radius=10)
-        _texto(screen, "Cápsula de escape", r.centerx, r.top - 40, COLOR_CAPSULA)
+        nave = imagen_nave(etapa_nave(mision))
+        if nave is not None:
+            # La nave de Anny encima del piso de la cápsula: rota, en partes o
+            # completa según la barra de reparación.
+            pos = nave.get_rect(midtop=(r.centerx, r.bottom + PIE_NAVE - BASE_NAVE * ESCALA_NAVE))
+            screen.blit(nave, pos)
+            pygame.draw.rect(screen, COLOR_CAPSULA, r, 2, border_radius=10)
+            arriba = min(r.top, pos.top + nave.get_bounding_rect().top)
+        else:
+            pygame.draw.rect(screen, COLOR_CAPSULA, r, 3, border_radius=10)
+            arriba = r.top
+        _texto(screen, "Cápsula de escape", r.centerx, arriba - 40, COLOR_CAPSULA)
         if mision.fase in ("capsula", "huida"):
             from misiones.mision import PIEZAS_NECESARIAS
             estado = (f"Piezas {mision.piezas_entregadas}/{PIEZAS_NECESARIAS}"
                       if mision.piezas_entregadas < PIEZAS_NECESARIAS else "Reparación")
-            _texto(screen, estado, r.centerx, r.top - 20, (230, 235, 250))
+            _texto(screen, estado, r.centerx, arriba - 20, (230, 235, 250))
             if mision.piezas_entregadas >= PIEZAS_NECESARIAS:
                 _barra(screen, r.x + 10, r.bottom + 6, r.width - 20, mision.reparacion, COLOR_LISTO)
-
-    for consola in mision.consolas:
-        if not consola["rect"].colliderect(camara):
-            continue
-        r = _en_pantalla(consola["rect"], offset)
-        lista = consola["progreso"] >= 1
-        color = COLOR_LISTO if lista else COLOR_CONSOLA
-        pygame.draw.rect(screen, (34, 30, 52), r, border_radius=6)
-        pygame.draw.rect(screen, tuple(int(c * (1 if lista else brillo)) for c in color),
-                         r.inflate(-14, -14), border_radius=4)
-        pygame.draw.rect(screen, color, r, 2, border_radius=6)
-        if mision.fase == "sabotaje" and not lista:
-            _barra(screen, r.x, r.bottom + 4, r.width, consola["progreso"], COLOR_CONSOLA)
 
     for nota in mision.notas:
         if not nota["rect"].colliderect(camara):
@@ -168,6 +168,97 @@ def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
         pygame.draw.rect(screen, color, r.inflate(-10, -10), border_radius=3)
         pygame.draw.rect(screen, color, r, 2, border_radius=5)
 
+
+
+# -- La nave de la cápsula (de Anny) ------------------------------------------------
+# Tres dibujos de 64x64: rota, en partes y completa. Cambia con cada tercio de
+# la barra de reparación (la que se llena después de entregar las piezas): de
+# 0 a 1/3 rota, de 1/3 a 2/3 en partes, de 2/3 en adelante (y en la huida)
+# completa. Si el Cambiaformas la sabotea y la barra baja, vuelve atrás.
+ARCHIVOS_NAVE = ("nave_rota.png", "nave_en_partes.png", "nave_completa.png")
+ESCALA_NAVE = 3          # como el mapa (ESCALA_MAPA): cada pixel del dibujo = 3 px
+PIE_NAVE = 8             # cuánto baja el dibujo del borde de abajo de la cápsula
+BASE_NAVE = 56           # fila (del dibujo de 64) donde apoya el casco: la misma en las tres
+_naves = {}
+
+
+def etapa_nave(mision):
+    """0 (rota), 1 (en partes) o 2 (completa)."""
+    if mision.fase == "huida" or mision.reparacion >= 2 / 3:
+        return 2
+    if mision.reparacion >= 1 / 3:
+        return 1
+    return 0
+
+
+def imagen_nave(etapa):
+    """El dibujo de esa etapa agrandado (entero: todas quedan alineadas), o None."""
+    if etapa not in _naves:
+        img = None
+        try:
+            original = pygame.image.load(os.path.join(sprites_objetos.CARPETA, ARCHIVOS_NAVE[etapa]))
+            try:
+                original = original.convert_alpha()
+            except pygame.error:
+                pass
+            img = pygame.transform.scale(original, (original.get_width() * ESCALA_NAVE,
+                                                    original.get_height() * ESCALA_NAVE))
+        except (pygame.error, OSError, FileNotFoundError, IndexError):
+            img = None
+        _naves[etapa] = img
+    return _naves[etapa]
+
+
+def erguidos(mision, camara, tiempo_ms):
+    """Las consolas de navegación como cosas paradas en el piso
+    (decoracion.Erguido): se dibujan ordenadas con los personajes, así quien
+    pasa por detrás queda tapado (screens/partida.py)."""
+    if mision is None or not mision.activa:
+        return []
+    brillo = 0.6 + 0.4 * math.sin(tiempo_ms / 280)
+    lista = []
+    for consola in mision.consolas:
+        img = sprites_objetos.sprite("consola", ALTO_CONSOLA)
+        caja = sprites_objetos.caja_dibujo("consola", consola["base"], img)
+        if not caja.inflate(20, 40).colliderect(camara):
+            continue
+        lista.append(decoracion.Erguido(
+            consola["solido"], caja,
+            lambda screen, offset, c=consola: _dibujar_consola(screen, offset, c, mision, brillo)))
+    return lista
+
+
+def _dibujar_consola(screen, offset, consola, mision, brillo):
+    r = _en_pantalla(consola["base"], offset)
+    lista = consola["progreso"] >= 1
+    color = COLOR_LISTO if lista else COLOR_CONSOLA
+    img = None
+    if lista:
+        # Apagada: su dibujo con las pantallas apagadas (si no está, la
+        # prendida en gris).
+        img = sprites_objetos.sprite("consola_apagada", ALTO_CONSOLA)
+    if img is None:
+        img = sprites_objetos.sprite("consola", ALTO_CONSOLA, apagado=lista)
+    if img is not None:
+        # La consola de Anny: prendida hasta que la apagan (queda apagada,
+        # con una palomita verde encima).
+        pos = sprites_objetos.caja_dibujo("consola", consola["base"], img).move(-offset[0], -offset[1])
+        screen.blit(img, pos)
+        if lista:
+            c = (pos.centerx, pos.y - 12)
+            pygame.draw.circle(screen, (20, 40, 28), c, 11)
+            pygame.draw.lines(screen, COLOR_LISTO, False,
+                              [(c[0] - 6, c[1]), (c[0] - 2, c[1] + 4), (c[0] + 6, c[1] - 5)], 3)
+        elif mision.fase == "sabotaje":
+            sprites_objetos.resaltar(screen, img, pos.topleft,
+                                     tuple(int(v * brillo) for v in COLOR_CONSOLA), 2)
+    else:
+        pygame.draw.rect(screen, (34, 30, 52), r, border_radius=6)
+        pygame.draw.rect(screen, tuple(int(c * (1 if lista else brillo)) for c in color),
+                         r.inflate(-14, -14), border_radius=4)
+        pygame.draw.rect(screen, color, r, 2, border_radius=6)
+    if mision.fase == "sabotaje" and not lista:
+        _barra(screen, r.x, r.bottom + 4, r.width, consola["progreso"], COLOR_CONSOLA)
 
 def dibujar_encima(screen, offset, camara, mision, tiempo_ms):
     """Barrotes delante de quien está encerrado, y su pedido de ayuda."""

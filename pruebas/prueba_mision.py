@@ -311,4 +311,19 @@ frames(g, 1)
 assert m.resultado == "derrota"
 print("todos encerrados -> DERROTA")
 
+# Dibujos de Anny: la nave de la cápsula por tercios de la reparación y la
+# consola apagada.
+from screens import mision_dibujo as md
+from juego import sprites_objetos
+m.fase = "capsula"
+for rep, etapa in ((0.0, 0), (0.32, 0), (0.34, 1), (0.66, 1), (0.67, 2), (1.0, 2)):
+    m.reparacion = rep
+    assert md.etapa_nave(m) == etapa, (rep, md.etapa_nave(m))
+m.fase, m.reparacion = "huida", 0.0
+assert md.etapa_nave(m) == 2, "en la huida, completa"
+naves = [md.imagen_nave(e) for e in range(3)]
+assert all(n is not None and n.get_size() == naves[0].get_size() for n in naves)
+assert sprites_objetos.sprite("consola_apagada", md.ALTO_CONSOLA) is not None
+print("nave de la cápsula: rota, en partes y completa por tercios; consola apagada con su dibujo")
+
 print("\nTODO OK")

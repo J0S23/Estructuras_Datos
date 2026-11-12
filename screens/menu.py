@@ -15,6 +15,7 @@ OPCIONES_MENU = [
     ("Jugar", "jugar"),
     ("Jugar en red", "red"),
     ("Logros", "logros"),
+    ("Opciones", "opciones"),
     ("Ayuda", "ayuda"),
     ("Créditos", "creditos"),
     ("Salir", "salir"),

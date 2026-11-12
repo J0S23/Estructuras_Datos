@@ -31,6 +31,7 @@ import pygame
 
 from juego import salas_selladas
 from juego.fuentes import fuente_de_tamano
+from juego import perfiles
 from screens.paneles import partir_lineas
 
 COLOR_FONDO = (14, 15, 28, 236)
@@ -193,17 +194,33 @@ def render_grafo_nexus(screen, red):
         tipo = datos["tipo"]
         relleno = COLOR_NODO.get(datos.get("color"), COLOR_NODO["gris"])
         r = radio + (3 if tipo == "jugador" else 0)
+        if tipo == "bot":
+            # Crece con los seguidores que gana mientras nadie lo reporta.
+            r = radio + min(radio, 2 * red.ganados(n))
         if n in frontera:
             pulso = 4 + int(3 * math.sin(ahora / 120))
             pygame.draw.circle(screen, frontera[n], c, r + pulso, 2)
-        pygame.draw.circle(screen, relleno, c, r)
-        if tipo == "jugador":
-            pygame.draw.circle(screen, COLOR_JUGADOR, c, r, 3)
-        elif tipo == "bot":
-            pygame.draw.circle(screen, (40, 10, 10), c, r, 3)
-            pygame.draw.line(screen, (40, 10, 10), (c[0] - r // 2, c[1]), (c[0] + r // 2, c[1]), 2)
+        cara = perfiles.de_nodo(red, n, 2 * r)
+        if cara is not None:
+            # Con foto de perfil: la foto y un aro del color de la cuenta.
+            screen.blit(cara, cara.get_rect(center=c))
+            pygame.draw.circle(screen, relleno, c, r + 1, max(2, r // 4))
+            if tipo == "jugador":
+                pygame.draw.circle(screen, COLOR_JUGADOR, c, r + 3, 2)
+            elif tipo == "bot":
+                pygame.draw.circle(screen, (40, 10, 10), c, r + 3, 2)
+                marca = (c[0] + r - 1, c[1] + r - 1)
+                pygame.draw.circle(screen, (40, 10, 10), marca, max(4, r // 3))
+                pygame.draw.line(screen, (240, 240, 240), (marca[0] - 3, marca[1]), (marca[0] + 3, marca[1]), 2)
         else:
-            pygame.draw.circle(screen, (20, 20, 30), c, r, 1)
+            pygame.draw.circle(screen, relleno, c, r)
+            if tipo == "jugador":
+                pygame.draw.circle(screen, COLOR_JUGADOR, c, r, 3)
+            elif tipo == "bot":
+                pygame.draw.circle(screen, (40, 10, 10), c, r, 3)
+                pygame.draw.line(screen, (40, 10, 10), (c[0] - r // 2, c[1]), (c[0] + r // 2, c[1]), 2)
+            else:
+                pygame.draw.circle(screen, (20, 20, 30), c, r, 1)
         if any(n in p.alcanzados for p in rumores):
             pygame.draw.circle(screen, COLOR_PUB["rumor"], (c[0] + r - 2, c[1] - r + 2), 3)
         etiqueta = datos.get("usuario", n)
@@ -228,6 +245,8 @@ def render_grafo_nexus(screen, red):
         (COLOR_TEXTO, f"Nodos: {len(grafo)}   Aristas: {grafo.aristas()}"),
         (COLOR_TEXTO, f"Componentes conexas: {len(grafo.componentes())}"),
         (COLOR_TEXTO, f"Prisioneros: {presos}   Bots: {len(red.bots())}"),
+        (COLOR_NODO["rojo"], "Seguidores de los bots: " +
+         (", ".join(f"{red.usuario(b)} {red.seguidores(b)}" for b in red.bots()) or "ninguno")),
         (COLOR_NODO["verde"], f"Verdes: {int(verde * 100)}%  (planos al {int(red.umbral_planos * 100)}%)"),
         (COLOR_NODO["rojo"], f"Rojos: {int(rojo * 100)}%"),
         (None, ""),
@@ -244,13 +263,14 @@ def render_grafo_nexus(screen, red):
     lineas += [
         (None, ""),
         (COLOR_TITULO, "Qué se ve"),
-        (COLOR_TENUE, "Nodo = cuenta; flecha = a quién le llega lo que publica. "
-                      "Borde azul: jugador. Raya negra: bot del Cambiaformas. "
+        (COLOR_TENUE, "Nodo = cuenta (con su foto); aro = de qué color está; flecha = a quién le "
+                      "llega lo que publica. Borde azul: jugador. Raya negra: bot del Cambiaformas. "
                       "Punto rojo: le llegó un rumor."),
         (COLOR_PUB["rumor"], "Rumor avanzando un nivel por tick (BFS): solo lo reenvían los rojos."),
         (COLOR_PUB["desmentido"], "Desmentido: lo reenvían los verdes."),
         (COLOR_CAMINO, "Amarillo: camino más corto del último \"¿De dónde salió esto?\"."),
         (COLOR_NODO["rojo"], "X: bot reportado (se borra el nodo y sus aristas)."),
+        (COLOR_NODO["rojo"], "Bot más grande: ganó seguidores (aristas nuevas) mientras nadie lo reportaba."),
     ]
     _columna_texto(screen, x, y0, panel.right - x - 14, lineas, f)
 

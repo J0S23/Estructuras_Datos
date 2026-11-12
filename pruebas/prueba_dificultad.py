@@ -171,7 +171,17 @@ assert all(j.preso for j in g.jugadores)
 g._actualizar_partida(DT)
 assert g.mision.resultado is None, "pueden fugarse: no es derrota"
 assert "reja" in (g.jugadores[0].pista_mision or "")
-for _ in range(int(21000 / DT)):
+# Lo que ve el encerrado: la cuenta regresiva para salir solo.
+from screens.paneles import texto_encerrado, segundos_para_salir
+j0 = g.jugadores[0]
+assert segundos_para_salir(j0) == 20 and texto_encerrado(j0) == \
+    "Encerrado: sales en 20 s o cuando alguien te libere", texto_encerrado(j0)
+for _ in range(int(5000 / DT)):
+    g._actualizar_partida(DT)
+assert segundos_para_salir(j0) in (14, 15), segundos_para_salir(j0)
+g._dibujar()
+pygame.image.save(g.screen, os.path.join(OUT, "encerrado_cuenta.png"))
+for _ in range(int(16000 / DT)):
     g._actualizar_partida(DT)
 assert not any(j.preso for j in g.jugadores), "se fugaron a los 20 s"
 print("normal: los encerrados se fugan solos a los 20 s")
@@ -192,6 +202,8 @@ for j in g.jugadores:
     j.invulnerable_ms = 0
     g._atrapar(j, g.aliens[0])
 assert all(j.preso and j.preso.get("fuga_ms") is None for j in g.jugadores)
+assert segundos_para_salir(g.jugadores[0]) is None
+assert texto_encerrado(g.jugadores[0]) == "Encerrado: espera a que alguien te libere"
 g._actualizar_partida(DT)
 assert g.mision.resultado == "derrota"
 print("difícil: sin fuga; solo sales si te liberan")

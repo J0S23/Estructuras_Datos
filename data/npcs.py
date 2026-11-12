@@ -57,6 +57,11 @@ RADIO_SOLTAR = 130              # junto al que te sigue, interactuar le dice que
 ESPERA_SOLTADO_MS = 45000       # cuánto se queda quieto esperándote antes de volver a pasear
 FRASE_DUDA = "No sé si creerles... primero convénzanme en NEXUS."
 FRASE_NIEGA = "¡Ni loco! NEXUS dice que ustedes mienten."
+# Cuando un rumor se vuelve viral (redes/nexus.py) la gente actúa como si fuera cierto.
+FRASE_RINDE = "¿Para qué? Dicen que la cápsula explotó. Me rindo."
+FRASE_SE_ESCONDE = "¡Dicen que van a sellar los casilleros! Me meto en uno ya."
+FRASE_SALE_ESCONDITE = "Ah, era mentira lo de los casilleros..."
+TIEMPO_MAX_ESCONDERSE_MS = 25000     # si no llega antes, igual se mete
 FRASE_RESCATADO = "¡Me rescataron! Confíen en ellos, dicen la verdad."
 FRASES_ADVIERTE_ESCOLTA = ["¿Por qué vas con {usuario}? Esa no es la persona que conozco...",
                            "Cuidado: {usuario} no me reconoció hace un rato."]

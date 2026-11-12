@@ -24,6 +24,7 @@ DURACION_AVISO_EN_COLA_MS = 2000     # si hay varios esperando, pasan más rápi
 MS_PASOS_DE_GATO = 30000
 DISTANCIA_SHHH = 100
 DISTANCIA_VER_ALIEN = 450
+ALCANCE_A_OSCURAS = 260       # en un apagón solo se ve lo que alumbra la linterna
 DISTANCIA_OJOS = 600          # a esta distancia se le ven los ojos a la Sombra
 MS_ELECTRICISTA = 30000
 FASES_SIN_RASTRO = ("sabotaje", "capsula")
@@ -185,8 +186,31 @@ class GestorLogros:
                     self.conseguir("sin_miedo", quien)
                 self.juego.sombra_al_volver_la_luz = None
 
+    def _ve_alien(self, jugador, alien, d, campos):
+        """Si el jugador de verdad tiene al alien a la vista: cerca, en su
+        campo de visión (sin una pared en medio: lo mismo que decide si se
+        dibuja en su pantalla) y, en un apagón, donde llega su luz. Antes
+        bastaba con estar cerca, y daba "Primer encuentro" con un alien al
+        otro lado de la pared."""
+        if d > DISTANCIA_VER_ALIEN or getattr(alien, "disfrazado", False) \
+                or not getattr(alien, "se_ve", True):
+            return False
+        juego = self.juego
+        eventos = getattr(juego, "eventos", None)
+        if (eventos is not None and getattr(eventos, "apagon", False) and alien.tipo != "sombra"
+                and d > ALCANCE_A_OSCURAS):
+            return False
+        if not getattr(juego, "oscuridad", True) or getattr(juego, "mundo", None) is None:
+            return True                       # (sin campo de visión, se ve todo lo de cerca)
+        if id(jugador) not in campos:
+            from juego import vision
+            campos[id(jugador)] = vision.campo_de(jugador.hitbox.center, vision.obstaculos(
+                juego.mundo, getattr(juego, "puertas_dobles", ()), getattr(juego, "compuertas", ())))
+        return campos[id(jugador)].ve_a(alien.hitbox)
+
     def _jugadores(self, dt):
         aliens = getattr(self.juego, "aliens", ())
+        campos = {}
         for jugador in self.juego.jugadores:
             if jugador.escondido and not jugador.eliminado and jugador.preso is None:
                 self.conseguir("sigiloso", jugador)
@@ -206,8 +230,9 @@ class GestorLogros:
                 # El Cambiaformas cuenta cuando se le ve como es (disfrazado
                 # es un prisionero más).
                 # A la Sombra, alumbrada (a oscuras solo se le ven los ojos).
-                if (d <= DISTANCIA_VER_ALIEN and not getattr(alien, "disfrazado", False)
-                        and getattr(alien, "se_ve", True)):
+                ya_todo = (alien.tipo in self.tipos_vistos and self.tiene("primer_encuentro")
+                           and (alien.tipo != "cambiaformas" or self.tiene("cara_a_cara")))
+                if not ya_todo and self._ve_alien(jugador, alien, d, campos):
                     self.tipos_vistos.add(alien.tipo)
                     self.conseguir("primer_encuentro", jugador)
                     if alien.tipo == "cambiaformas":

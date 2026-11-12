@@ -22,6 +22,7 @@ import math
 import pygame
 
 from juego.fuentes import fuente
+from juego import sprites_objetos
 
 
 TIEMPO_ABRIR_S = 1.4          # los dos manteniendo a la vez
@@ -131,6 +132,9 @@ def pista(puertas, jugador):
 
 # -- Dibujo ------------------------------------------------------------------------------
 
+ALTO_PANEL_PUERTA = 40
+
+
 def dibujar(screen, offset, camara, puertas, compuertas, tiempo_ms):
     for puerta in puertas:
         rect = puerta["rect"]
@@ -155,10 +159,17 @@ def dibujar(screen, offset, camara, puertas, compuertas, tiempo_ms):
                 luz = COLOR_AVISO
             else:
                 luz = (236, 70, 60) if (tiempo_ms // 500) % 2 else (120, 40, 40)
-            pygame.draw.rect(screen, (10, 12, 20), p.move(2, 2), border_radius=4)
-            pygame.draw.rect(screen, (70, 78, 100), p, border_radius=4)
-            pygame.draw.rect(screen, luz, p.inflate(-14, -14), border_radius=3)
-            pygame.draw.rect(screen, (20, 22, 34), p, 2, border_radius=4)
+            img = sprites_objetos.sprite("panel_puerta", ALTO_PANEL_PUERTA)
+            if img is not None:
+                # El escáner de mano de Anny, con el borde del color de su estado.
+                pos = img.get_rect(center=p.center)
+                screen.blit(img, pos)
+                sprites_objetos.resaltar(screen, img, pos.topleft, luz, 3)
+            else:
+                pygame.draw.rect(screen, (10, 12, 20), p.move(2, 2), border_radius=4)
+                pygame.draw.rect(screen, (70, 78, 100), p, border_radius=4)
+                pygame.draw.rect(screen, luz, p.inflate(-14, -14), border_radius=3)
+                pygame.draw.rect(screen, (20, 22, 34), p, 2, border_radius=4)
             # Una línea punteada del panel a la puerta: son pareja.
             if not puerta["abierta"]:
                 _punteada(screen, p.center, r.center, (255, 214, 64, 90))

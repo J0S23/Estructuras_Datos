@@ -41,7 +41,7 @@ Desde la carpeta del proyecto, en dos terminales:
 # Terminal 1: el servidor (tarda unos segundos en armar la partida)
 python -m cliente_servidor.servidor --jugadores 2
 
-# Terminal 2: el cliente, con J1 (WASD, E, F, Q, Shift, Tab, X) y J2 (flechas, Enter, -, Shift der., AltGr, punto, coma)
+# Terminal 2: el cliente, con J1 (WASD, E, F, Q, Espacio, Tab, X) y J2 (flechas, Enter, Alt der., Shift der., Ctrl der., punto, coma)
 python -m cliente_servidor.cliente --jugadores 2
 ```
 

@@ -17,6 +17,7 @@ from contextlib import contextmanager
 import pygame
 
 from juego.fuentes import fuente, fuente_de_tamano
+from juego.idioma import tr
 from juego import oscuridad
 from juego import vision
 from juego import navegacion
@@ -25,7 +26,9 @@ from misiones import puertas
 from misiones.eventos import dibujar_cajas, dibujar_brillo_caja, dibujar_flecha_caja
 from screens import flechas
 from juego import salas_selladas
-from screens.paneles import (render_panel, render_mosaico, render_hud, render_mensaje, render_pista_zona,
+from juego import sprites_objetos
+from juego import decoracion
+from screens.paneles import (segundos_para_salir, render_panel, render_mosaico, render_hud, render_mensaje, render_pista_zona,
                              render_pulso, render_tension, render_minijuego,
                              render_escondido, render_eliminado,
                              render_inventario, fila_bajo_hud, partir_lineas,
@@ -289,9 +292,11 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
 
     offset = (camara.x - vista.x, camara.y - vista.y)
 
-    for escondite in escondites:
-        if escondite["rect"].inflate(0, 120).colliderect(camara):
-            _dibujar_escondite(screen, escondite, offset, dueño)
+    # La decoración que va en el piso y en la pared: debajo de todo lo demás.
+    muebles = (extras or {}).get("muebles") or ()
+    for mueble in decoracion.de_fondo(muebles, camara):
+        mueble.dibujar(screen, offset)
+
     tiempo_ms = pygame.time.get_ticks()
     if extras:
         mision_dibujo.dibujar_piso(screen, offset, camara, dueño, extras.get("mision"), tiempo_ms)
@@ -334,7 +339,20 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
 
     # Jugadores y aliens juntos, ordenados por Y para que el de adelante tape
     # al de atrás.
-    for jugador in sorted(list(jugadores) + list(aliens) + npcs, key=lambda j: j.hitbox.bottom):
+    # Los muebles también: se pasa por detrás o por delante de ellos (y el
+    # que tapa a un jugador se vuelve medio transparente).
+    muebles_aqui = decoracion.con_personajes(muebles, camara)
+    if extras:
+        # Las consolas y las terminales también se paran en el piso.
+        muebles_aqui += mision_dibujo.erguidos(extras.get("mision"), camara, tiempo_ms)
+        muebles_aqui += dibujo_roles.erguidos(camara, dueño, extras, tiempo_ms)
+        if extras.get("guardia_planta") is not None:
+            muebles_aqui += extras["guardia_planta"].erguidos(camara, tiempo_ms)
+    muebles_aqui += erguidos_nexus(zonas, camara, dueño)
+    muebles_aqui += erguidos_escondites(escondites, camara, dueño)
+    decoracion.marcar_transparentes(muebles_aqui, jugadores)
+    for jugador in sorted(list(jugadores) + list(aliens) + npcs + muebles_aqui,
+                          key=lambda j: j.hitbox.bottom):
         jugador.dibujar(screen, offset)
         if mostrar_hitboxes:
             # Hitboxes del personaje: la de colisión y la de interacción.
@@ -481,7 +499,7 @@ def _dibujar_ruido(screen, offset, dueño):
 
 def _envolver(texto, f, ancho):
     lineas, actual = [], ""
-    for palabra in texto.split():
+    for palabra in tr(texto).split():
         prueba = f"{actual} {palabra}".strip()
         if f.size(prueba)[0] <= ancho or not actual:
             actual = prueba
@@ -491,6 +509,9 @@ def _envolver(texto, f, ancho):
     if actual:
         lineas.append(actual)
     return lineas
+
+
+AVISO_VIRAL = 0.7    # desde qué parte de la barra se avisa debajo de las vidas
 
 
 def render_escolta(screen, vista, jugador, escoltado, tapado=None, red=None):
@@ -511,6 +532,12 @@ def render_escolta(screen, vista, jugador, escoltado, tapado=None, red=None):
         elif yendo is not None and logica.es_mision_activa(red, yendo):
             lugar = logica.nombre_lugar(yendo) or "el lugar"
             lineas.append((f"Verificando: {lugar}  ->  sigue la flecha azul", (120, 190, 255)))
+        # Un rumor suyo a punto de volverse viral (redes/nexus.py).
+        apurados = [p for p in red.por_verificar_de(jugador)
+                    if p.tipo == "rumor" and not p.viral and red.progreso_viral(p) >= AVISO_VIRAL]
+        if apurados:
+            lineas.append((f"¡Un rumor se está volviendo viral! NEXUS [{jugador.nombre_tecla('celular')}]",
+                           (245, 150, 70)))
     jugador.hud_abajo = 0           # hasta dónde llega esto (el mensaje va debajo)
     if not lineas:
         return
@@ -700,7 +727,9 @@ def _fila_jugador(screen, f, chica, jugador, numero, rect):
     if getattr(jugador, "eliminado", False):
         texto, col = "Eliminado", (236, 64, 82)
     elif getattr(jugador, "preso", None) is not None:
-        texto, col = "Encerrado: ¡sáquenlo!", (255, 180, 90)
+        segundos = segundos_para_salir(jugador)
+        texto = "Encerrado: ¡sáquenlo!" if segundos is None else f"Encerrado: sale en {segundos} s"
+        col = (255, 180, 90)
     elif getattr(jugador, "escondido", False):
         texto, col = "Escondido", (170, 178, 214)
     else:
@@ -714,26 +743,70 @@ def _fila_jugador(screen, f, chica, jugador, numero, rect):
         screen.blit(img, (x, cy - img.get_height() // 2))
 
 
+ALTO_ESCONDITE = sprites_objetos.ALTOS["escondite"]
+
+
+def erguidos_escondites(escondites, camara, dueño):
+    """Los casilleros como cosas paradas en el piso (decoracion.Erguido): se
+    chocan sus patas (sprites_objetos.hitbox) y se dibujan ordenados con los
+    personajes; si tapan a alguien que pasa por detrás, transparentes."""
+    lista = []
+    for escondite in escondites:
+        img = sprites_objetos.sprite(sprites_objetos.modelo_escondite(escondite.get("clave", "")),
+                                     ALTO_ESCONDITE)
+        caja = sprites_objetos.caja_dibujo("escondite", escondite["rect"], img)
+        if not caja.inflate(40, 80).colliderect(camara):
+            continue
+        solido = escondite.get("solido") or sprites_objetos.hitbox("escondite", escondite["rect"])
+        lista.append(decoracion.Erguido(
+            solido, caja, lambda screen, offset, e=escondite: _dibujar_escondite(screen, e, offset, dueño)))
+    return lista
+
+
+def cerca_ocupado(escondite, dueño):
+    """¿El dueño de la vista está junto a un casillero que ocupó un prisionero?"""
+    return dueño is not None and escondite["rect"].inflate(40, 40).colliderect(dueño.hitbox)
+
+
 def _dibujar_escondite(screen, escondite, offset, dueño):
-    """Casillero provisional (falta el arte): una caja de metal con rendijas."""
+    """El casillero: un armario de Anny (Imagenes/Objetos/); sin la imagen,
+    una caja de metal con rendijas."""
     entrada = escondite["rect"]
     caja = pygame.Rect(0, 0, 50, 78)
-    caja.midbottom = (entrada.centerx - offset[0], entrada.top + 6 - offset[1])
+    caja.midbottom = (entrada.centerx - offset[0], entrada.centery - offset[1])    # (sprites_objetos._pie)
 
     mio = escondite["ocupante"] is dueño
     cerca = getattr(dueño, "escondite_cerca", None) is escondite
     revisado = escondite.get("revisado_por") is not None
 
-    pygame.draw.rect(screen, (10, 12, 20), caja.move(3, 3), border_radius=4)
-    pygame.draw.rect(screen, (78, 96, 120), caja, border_radius=4)
     borde = (236, 70, 60) if revisado else (255, 214, 64) if (cerca or mio) else (34, 40, 58)
-    pygame.draw.rect(screen, borde, caja, 3 if (cerca or mio or revisado) else 2, border_radius=4)
-    for i in range(4):
-        y = caja.y + 12 + i * 7
-        pygame.draw.line(screen, (34, 40, 58), (caja.x + 12, y), (caja.right - 12, y), 2)
-    pygame.draw.circle(screen, (200, 205, 220), (caja.right - 10, caja.centery + 8), 3)
+    img = sprites_objetos.sprite(sprites_objetos.modelo_escondite(escondite.get("clave", "")), ALTO_ESCONDITE)
+    if img is not None:
+        # El armario de Anny (dos modelos), parado a la mitad de su casilla.
+        caja = img.get_rect(midbottom=caja.midbottom)
+        sombra = pygame.Rect(0, 0, caja.width + 8, 14)
+        sombra.center = (caja.centerx, caja.bottom - 2)
+        pygame.draw.ellipse(screen, (10, 12, 20), sombra)
+        screen.blit(img, caja)
+        if cerca or mio or revisado:
+            sprites_objetos.resaltar(screen, img, caja.topleft, borde)
+    else:
+        pygame.draw.rect(screen, (10, 12, 20), caja.move(3, 3), border_radius=4)
+        pygame.draw.rect(screen, (78, 96, 120), caja, border_radius=4)
+        pygame.draw.rect(screen, borde, caja, 3 if (cerca or mio or revisado) else 2, border_radius=4)
+        for i in range(4):
+            y = caja.y + 12 + i * 7
+            pygame.draw.line(screen, (34, 40, 58), (caja.x + 12, y), (caja.right - 12, y), 2)
+        pygame.draw.circle(screen, (200, 205, 220), (caja.right - 10, caja.centery + 8), 3)
 
-    if cerca or mio:
+    if escondite.get("npc") is not None and cerca_ocupado(escondite, dueño):
+        texto = "Ocupado"
+        etiqueta = fuente("small").render(texto, True, (245, 130, 120))
+        sombra = fuente("small").render(texto, True, COLOR_SOMBRA)
+        pos = (caja.centerx - etiqueta.get_width() // 2, caja.y - etiqueta.get_height() - 4)
+        screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
+        screen.blit(etiqueta, pos)
+    elif cerca or mio:
         texto = "Escondido" if mio else escondite["nombre"]
         etiqueta = fuente("small").render(texto, True, (255, 214, 64))
         sombra = fuente("small").render(texto, True, COLOR_SOMBRA)
@@ -742,40 +815,54 @@ def _dibujar_escondite(screen, escondite, offset, dueño):
         screen.blit(etiqueta, pos)
 
 
-# Sprite de las terminales NEXUS (de Anny). Si no está, se marcan con un
-# círculo en el piso como las demás zonas.
-RUTA_SPRITE_NEXUS = os.path.join("Imagenes", "Objetos", "terminal.png")
-ESCALA_NEXUS = 1.5
-_sprite_nexus = []
-
+# Las terminales NEXUS (Imagenes/Objetos/terminal.png, de Anny) se paran en
+# el centro de su zona y se chocan como las consolas (sus patas:
+# sprites_objetos.hitbox). Si falta la imagen, la zona se marca con un círculo
+# en el piso como las demás.
 
 def sprite_nexus():
-    if not _sprite_nexus:
-        try:
-            base = pygame.image.load(RUTA_SPRITE_NEXUS).convert_alpha()
-            _sprite_nexus.append(pygame.transform.scale(
-                base, (int(base.get_width() * ESCALA_NEXUS), int(base.get_height() * ESCALA_NEXUS))))
-        except (pygame.error, FileNotFoundError):
-            _sprite_nexus.append(None)
-    return _sprite_nexus[0]
+    return sprites_objetos.sprite("nexus", sprites_objetos.ALTOS["nexus"])
 
 
-def _dibujar_terminal_nexus(screen, rect, zona, encima, sprite):
-    """La terminal parada al fondo de su zona: el jugador la usa parándose
-    enfrente. Con borde amarillo si está encima."""
-    color = zona.get("color", COLOR_ZONA)
-    # La base queda un poco arriba del centro: quien la usa se para enfrente
-    # (se dibuja encima de ella), no adentro.
-    caja = sprite.get_rect(midbottom=(rect.centerx, rect.centery - 24))
+def _es_terminal_nexus(zona):
+    return str(zona.get("clave", "")).startswith("nexus") and sprite_nexus() is not None
+
+
+def erguidos_nexus(zonas, camara, dueño):
+    """Las terminales NEXUS como cosas paradas en el piso (decoracion.Erguido):
+    se dibujan ordenadas con los personajes."""
+    lista = []
+    for zona in zonas:
+        if not _es_terminal_nexus(zona):
+            continue
+        caja = sprites_objetos.caja_dibujo("nexus", zona["rect"], sprite_nexus())
+        if not caja.inflate(40, 80).colliderect(camara):
+            continue
+        encima = getattr(dueño, "zona_cerca", None) is zona
+        lista.append(decoracion.Erguido(
+            sprites_objetos.hitbox("nexus", zona["rect"]), caja,
+            lambda screen, offset, z=zona, e=encima: _dibujar_terminal_nexus(screen, offset, z, e)))
+    return lista
+
+
+def _dibujar_terminal_nexus(screen, offset, zona, encima):
+    """La terminal parada en el centro de su zona: el jugador la usa parándose
+    cerca. Con borde amarillo si está encima."""
+    apagada = bool(zona.get("desconectada"))       # rumor viral de las terminales
+    sprite = (sprites_objetos.sprite("nexus", sprites_objetos.ALTOS["nexus"], apagado=True)
+              if apagada else sprite_nexus())
+    color = (150, 150, 160) if apagada else zona.get("color", COLOR_ZONA)
+    caja = sprites_objetos.caja_dibujo("nexus", zona["rect"], sprite).move(-offset[0], -offset[1])
     if encima:
         brillo = pygame.Surface(caja.inflate(24, 24).size, pygame.SRCALPHA)
         pygame.draw.ellipse(brillo, (*color, 60), brillo.get_rect())
         screen.blit(brillo, caja.inflate(24, 24).topleft)
     screen.blit(sprite, caja)
     if encima:
-        pygame.draw.rect(screen, (255, 214, 64), caja.inflate(6, 6), 2, border_radius=6)
-    etiqueta = fuente("small").render(zona["nombre"], True, color)
-    sombra = fuente("small").render(zona["nombre"], True, COLOR_SOMBRA)
+        sprites_objetos.resaltar(screen, sprite, caja.topleft, (255, 214, 64))
+    nombre = "Desconectada" if apagada else zona["nombre"]
+    etiqueta = fuente("small").render(nombre, True, color)
+    sombra = fuente("small").render(nombre, True, COLOR_SOMBRA)
     pos = (caja.centerx - etiqueta.get_width() // 2, caja.top - etiqueta.get_height() - 4)
     screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
     screen.blit(etiqueta, pos)
@@ -785,9 +872,8 @@ def _dibujar_zona(screen, rect, zona, dueño):
     """Marca una zona en el piso, más brillante si el jugador está encima."""
     encima = getattr(dueño, "zona_cerca", None) is zona
     color = zona.get("color", COLOR_ZONA)
-    if str(zona.get("clave", "")).startswith("nexus") and sprite_nexus() is not None:
-        _dibujar_terminal_nexus(screen, rect, zona, encima, sprite_nexus())
-        return
+    if _es_terminal_nexus(zona):
+        return            # (se dibuja con los personajes: erguidos_nexus)
     grosor = 4 if encima else 2
 
     marca = pygame.Surface(rect.size, pygame.SRCALPHA)

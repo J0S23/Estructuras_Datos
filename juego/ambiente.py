@@ -210,10 +210,13 @@ def _figura_alien(tipo, animacion="idle", direccion="south"):
     arte. Siempre la misma imagen: la caché de `_a_alto` va por id()."""
     clave = ("alien", tipo, animacion, direccion)
     if clave not in _figuras:
-        if tipo == "sombra":                 # sin arte: su figura se dibuja con formas
-            from entidades.sombra import figura_sombra
-            figura = figura_sombra()
-            _figuras[clave] = figura.subsurface(figura.get_bounding_rect())
+        if tipo == "sombra":
+            from entidades.sombra import figura_sombra, figura_de_frente
+            figura = figura_de_frente()[0]
+            if figura is None:               # sin arte: su figura se dibuja con formas
+                figura = figura_sombra()
+                figura = figura.subsurface(figura.get_bounding_rect())
+            _figuras[clave] = figura
         else:
             from entidades.alien import sprites_de
             _figuras[clave] = _recortar(sprites_de(tipo), animacion, direccion)
@@ -531,8 +534,8 @@ def _susto_vigia(screen, vista, t, puesto):
 
 
 def _susto_sombra(screen, vista, t, puesto):
-    """La Sombra: negro total y unos ojos que se acercan rápido; un parpadeo
-    de linterna y, de golpe, su boca llena de dientes."""
+    """La Sombra: negro total y sus ojos que se acercan rápido; un parpadeo
+    de linterna y, de golpe, su cara llenando la pantalla."""
     import pygame
     semilla = pygame.time.get_ticks() // 40 + puesto * 1000
     rng = random.Random(semilla)
@@ -540,7 +543,19 @@ def _susto_sombra(screen, vista, t, puesto):
     h = vista.height
     cx, cy = vista.center
     figura = _figura_alien("sombra")
-    if t < 0.5:
+    from entidades.sombra import figura_de_frente, dibujar_ojos_escalados
+    ojos = figura_de_frente()[1]
+    if t < 0.5 and ojos is not None:
+        # Sus seis ojos en la oscuridad, acercándose cada vez más rápido.
+        k = (t / 0.5) ** 2
+        alto = max(8, int(h * (0.25 + 1.1 * k)))
+        destino = pygame.Rect(0, 0, max(1, int(ojos.get_width() * alto / ojos.get_height())), alto)
+        destino.center = (cx, cy + int(alto * 0.25))
+        if 0.38 < t < 0.44:                      # la linterna parpadea y se ve algo
+            img = _a_alto(figura, alto)
+            screen.blit(_con_alfa(img, 120), img.get_rect(center=destino.center))
+        dibujar_ojos_escalados(screen, ojos, destino)
+    elif t < 0.5:
         k = (t / 0.5) ** 2                       # se acercan cada vez más rápido
         separacion = int(18 + 150 * k)
         radio = int(3 + 16 * k)
@@ -559,23 +574,30 @@ def _susto_sombra(screen, vista, t, puesto):
         k = (t - 0.5) / 0.5
         img = _a_alto(figura, h * (1.3 + 0.5 * min(1.0, k * 3)))
         temblor = 14 if k < 0.4 else 5
-        # La cabeza (arriba a la derecha de la figura) en el centro de la pantalla.
         rect = img.get_rect()
-        rect.center = (cx - int(rect.width * 0.28) + rng.randint(-temblor, temblor),
-                       cy + int(rect.height * 0.3) + rng.randint(-temblor, temblor))
-        screen.blit(img, rect)
-        # Sus ojos también brillan aquí (la figura viene recortada: se corre).
-        from entidades.sombra import figura_sombra, OJOS, ESCALA_FIGURA, _brillo
-        recorte = figura_sombra().get_bounding_rect()
-        escala = img.get_height() / figura.get_height()
-        for i, (x, y, r) in enumerate(OJOS):
-            px = rect.x + int((x * ESCALA_FIGURA - recorte.x) * escala)
-            py = rect.y + int((y * ESCALA_FIGURA - recorte.y) * escala)
-            radio = max(2, int(r * ESCALA_FIGURA * escala))
-            brillo = _brillo(radio * 3)
-            screen.blit(brillo, (px - brillo.get_width() // 2, py - brillo.get_height() // 2),
-                        special_flags=pygame.BLEND_RGB_ADD)
-            pygame.draw.circle(screen, (255, 250, 225), (px, py), radio)
+        if ojos is not None:
+            # De frente: la cabeza (arriba al centro) en el centro de la pantalla.
+            rect.center = (cx + rng.randint(-temblor, temblor),
+                           cy + int(rect.height * 0.3) + rng.randint(-temblor, temblor))
+            screen.blit(img, rect)
+            dibujar_ojos_escalados(screen, ojos, rect)
+        else:
+            # La figura de formas: la cabeza (arriba a la derecha) en el centro.
+            rect.center = (cx - int(rect.width * 0.28) + rng.randint(-temblor, temblor),
+                           cy + int(rect.height * 0.3) + rng.randint(-temblor, temblor))
+            screen.blit(img, rect)
+            # Sus ojos también brillan aquí (la figura viene recortada: se corre).
+            from entidades.sombra import figura_sombra, OJOS, ESCALA_FIGURA, _brillo
+            recorte = figura_sombra().get_bounding_rect()
+            escala = img.get_height() / figura.get_height()
+            for x, y, r in OJOS:
+                px = rect.x + int((x * ESCALA_FIGURA - recorte.x) * escala)
+                py = rect.y + int((y * ESCALA_FIGURA - recorte.y) * escala)
+                radio = max(2, int(r * ESCALA_FIGURA * escala))
+                brillo = _brillo(radio * 3)
+                screen.blit(brillo, (px - brillo.get_width() // 2, py - brillo.get_height() // 2),
+                            special_flags=pygame.BLEND_RGB_ADD)
+                pygame.draw.circle(screen, (255, 250, 225), (px, py), radio)
         if k < 0.3:
             _velo(screen, vista, (176, 150, 236), 200 * (1 - k / 0.3))
     _apagar_al_final(screen, vista, t)

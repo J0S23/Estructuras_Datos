@@ -14,6 +14,8 @@ CONTROLLER* a la vez, como hace con un mando reconocido). Revisa:
 - cada jugador ve los botones de SU mando (A / Cruz...), y la pantalla de
   controles dice "Mando 1 (Xbox)", "Mando 2 (PlayStation)";
 - conectar y desconectar con el juego abierto.
+- drift: un stick que suelto no queda en 0 (el Xbox de Diego marcaba arriba
+  sin tocarlo) se calibra al conectar y no mueve a nadie; empujado, sí.
 
 Corre igual con pygame y con pygame-ce.
 """
@@ -78,6 +80,11 @@ class SDLFalso:
     def Controller(self, i): return self.dispositivos[i][1]
     def joystick(self, i): return self.dispositivos[i][0]
 
+
+# Lo de antes se prueba sin el rato de calibrar el stick al conectar (abajo
+# hay una sección para eso).
+CALIBRAR = (M.CALIBRAR_MS, M.MUESTRAS_CALIBRAR)
+M.CALIBRAR_MS, M.MUESTRAS_CALIBRAR = 0, 0
 
 sdl = SDLFalso()
 M._sdl_controller = sdl
@@ -361,4 +368,41 @@ for _ in range(15):
 gen.ejes[M.EJE_X] = 0.0
 assert j_x.hitbox.x > x0, "el genérico mueve por joystick"
 print("conectar/desconectar: PS sale y vuelve (PS4), el Xbox se cambia por uno genérico")
+
+# ---------- Drift: el stick suelto no queda en 0 ----------
+M.CALIBRAR_MS, M.MUESTRAS_CALIBRAR = 0, CALIBRAR[1]
+m4 = M.Mandos()
+_, ctl_d, ev_d = conectar(5, 66, "Xbox 360 Controller")
+ctl_d.ejes[M.EJE_C_Y] = -19660                   # suelto marca -0.6: "arriba" con la zona muerta de 0.45
+ctl_d.ejes[M.EJE_C_X] = 3000
+acciones(m4, *ev_d)
+mando_d = m4.por_puesto[2]
+arriba, abajo = M.tecla_virtual(2, "arriba"), M.tecla_virtual(2, "abajo")
+assert m4.calibrando(mando_d) and not m4.presionada(arriba), "calibrando: el stick no mueve"
+for _ in range(M.MUESTRAS_CALIBRAR):
+    m4.muestrear()
+assert not m4.calibrando(mando_d)
+cx, cy = m4.centro(mando_d)
+assert abs(cy + 0.6) < 0.01 and abs(cx - 3000 / 32767) < 0.01, (cx, cy)
+assert not m4.presionada(arriba) and not m4.presionada(abajo), "suelto (con drift) no se mueve"
+ctl_d.ejes[M.EJE_C_Y] = -32768
+assert m4.presionada(arriba), "empujado arriba del todo sí"
+ctl_d.ejes[M.EJE_C_Y] = 32767
+assert m4.presionada(abajo), "y abajo también"
+ctl_d.ejes[M.EJE_C_Y] = -24000                    # un poco más arriba que el drift: todavía nada
+assert not m4.presionada(arriba)
+# En los menús (eventos): el drift no cuenta como empujón.
+assert acciones(m4, eje(66, M.EJE_C_Y, -19660), eje(66, M.EJE_C_Y, -20000)) == []
+assert acciones(m4, eje(66, M.EJE_C_Y, -32768)) == [(2, "arriba")]
+assert M.desde_centro(-0.6, -0.6) == 0 and M.desde_centro(-1, -0.6) == -1 and M.desde_centro(1, -0.6) == 1
+# Un stick empujado al conectar (más de CENTRO_MAX) no se toma como centro.
+m5 = M.Mandos()
+_, ctl_e, ev_e = conectar(6, 77, "Xbox 360 Controller")
+ctl_e.ejes[M.EJE_C_Y] = -32768
+acciones(m5, *ev_e)
+for _ in range(M.MUESTRAS_CALIBRAR):
+    m5.muestrear()
+assert m5.centro(m5.por_puesto[2]) == [0.0, 0.0]
+M.CALIBRAR_MS, M.MUESTRAS_CALIBRAR = CALIBRAR
+print("drift: el stick se calibra al conectar; suelto no mueve, empujado sí (menús y partida)")
 print(f"\nTODO OK ({pygame.version.ver})")

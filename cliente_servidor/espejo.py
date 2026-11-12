@@ -388,7 +388,7 @@ class Espejo:
         if objetos is not None:
             j.objetos.clear()
             j.objetos.update(objetos)
-        j.preso = _Preso() if datos.get("preso") else None
+        j.preso = _Preso(fuga_ms=datos.get("fuga")) if datos.get("preso") else None
         g = self.g
         j.escondite = _de(g.escondites, datos.get("escondite"))
         # Lo que tiene cerca, como el objeto del espejo (el dibujo pregunta

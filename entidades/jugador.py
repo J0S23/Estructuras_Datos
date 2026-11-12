@@ -38,7 +38,16 @@ TECLAS_PUESTO_1 = {
     "interactuar": (pygame.K_e,),
     "habilidades": (pygame.K_q,),
     "habilidad": (pygame.K_f,),
-    "sigilo": (pygame.K_LSHIFT,),
+    # Espacio (nov 12). Con Shift izquierdo, al mantenerlo a la vez que el
+    # sigilo del J2 (Ctrl derecho, la tecla Copilot de Diego remapeada)
+    # uno de los dos dejaba de contar: Ctrl+Shift es un atajo de Windows
+    # (cambiar el teclado) y la tecla Copilot de fábrica manda Win+Shift+F23,
+    # así que el remapeo suelta un Shift "de mentira" que apagaba el del J1.
+    # Se probó dejar los dos sigilos en Shift (izq J1, der J2), pero en el
+    # teclado de la laptop de Diego los dos Shift juntos no dejan pasar las
+    # flechas de arriba/abajo (ghosting: la matriz del teclado no manda esa
+    # combinación). Shift izquierdo sigue sirviendo, pero no se muestra.
+    "sigilo": (pygame.K_SPACE, pygame.K_LSHIFT),
     "celular": (pygame.K_TAB,),
     "soltar": (pygame.K_x,),             # soltar algo del inventario al piso
     # Izquierda/derecha solo sirven en menús del jugador (pestañas del celular);
@@ -52,14 +61,15 @@ TECLAS_PUESTO_2 = {
     "abajo": (pygame.K_DOWN,),
     "interactuar": (pygame.K_RETURN, pygame.K_KP_ENTER),
     "habilidades": (pygame.K_RSHIFT,),
-    # La tecla "-" (junto al Shift derecho en los teclados en español; en los
-    # de inglés es "/"). Ctrl derecho queda de respaldo: no todos los portátiles
-    # lo tienen.
-    "habilidad": (pygame.K_MINUS, pygame.K_SLASH, pygame.K_RCTRL),
-    # AltGr en los teclados en español (SDL lo reporta como RALT o MODE), o
-    # el 0 del teclado numérico, que queda junto a las flechas.
-    "sigilo": (pygame.K_RALT, pygame.K_MODE, pygame.K_KP0),
-    # El punto, junto al "-" de la habilidad (o el del teclado numérico).
+    # Alt derecho (AltGr en los teclados en español: SDL lo reporta como RALT
+    # o MODE). Antes era "-", pero en un teclado en inglés con Windows en
+    # español esa tecla dice "/" y el juego mostraba "-" (pedido de Diego).
+    "habilidad": (pygame.K_RALT, pygame.K_MODE),
+    # Ctrl derecho (o la tecla Copilot puesta como Ctrl derecho), pegado a la
+    # flecha izquierda: cómodo de mantener mientras se camina. O el 0 del
+    # teclado numérico. (No Shift derecho: ver el sigilo del J1.)
+    "sigilo": (pygame.K_RCTRL, pygame.K_KP0),
+    # El punto (o el del teclado numérico).
     "celular": (pygame.K_PERIOD, pygame.K_KP_PERIOD),
     # La coma, junto al punto del celular.
     "soltar": (pygame.K_COMMA,),
@@ -297,8 +307,8 @@ class Jugador:
             pygame.K_f: "F", pygame.K_p: "P", pygame.K_v: "V",
             pygame.K_i: "I", pygame.K_k: "K", pygame.K_o: "O", pygame.K_u: "U",
             pygame.K_t: "T", pygame.K_g: "G", pygame.K_y: "Y", pygame.K_r: "R",
-            pygame.K_LSHIFT: "SHIFT IZQ", pygame.K_RALT: "ALT GR",
-            pygame.K_MINUS: "-", pygame.K_SLASH: "/",
+            pygame.K_LSHIFT: "SHIFT IZQ", pygame.K_SPACE: "ESPACIO", pygame.K_RALT: "ALT DER",
+            pygame.K_MODE: "ALT DER", pygame.K_KP0: "0",
             pygame.K_TAB: "TAB", pygame.K_PERIOD: ".", pygame.K_KP_PERIOD: ".",
             pygame.K_j: "J", pygame.K_b: "B", pygame.K_a: "A", pygame.K_d: "D",
             pygame.K_LEFT: "IZQ", pygame.K_RIGHT: "DER",
@@ -356,8 +366,9 @@ class Jugador:
         """Se mete al escondite: deja de verse y de moverse."""
         self.escondite = escondite
         escondite["ocupante"] = self
-        # Se para en la entrada, para que al salir quede en el mismo sitio.
-        self.personaje.hitbox.center = escondite["rect"].center
+        # Se para en la entrada (la mitad de abajo, delante de las patas del
+        # casillero), para que al salir quede en el mismo sitio.
+        self.personaje.hitbox.midbottom = escondite["rect"].midbottom
         self.personaje.sync_sprite_from_hitbox()
 
     def salir_del_escondite(self):

@@ -50,7 +50,7 @@ USAR_ARCHIVOS = True
 PARTES = ("spawn", "rutas_aliens", "tipos_aliens", "escondites", "terminales", "paneles",
           "piezas", "celdas", "puertas_codigo", "puerta", "notas", "consolas", "capsula", "consumibles",
           "nexus", "compuertas", "puertas_dobles", "fusibles", "pruebas", "salas",
-          "guardia", "planta")
+          "guardia", "planta", "decoracion")
 
 
 def ruta_archivo(mapa):
@@ -103,6 +103,10 @@ def por_defecto():
         "salas": [],          # [{"nombre", "rx", "ry", "ancho", "alto"}]: el nombre en el HUD
         "guardia": None,      # [rx, ry]: el puesto del Guardia (misiones/guardia.py), en la sala de la cápsula
         "planta": None,       # [rx, ry]: la planta que da la fruta para el Guardia
+        # Muebles, luces y plantas (juego/decoracion.py, data/decoracion.py):
+        # [{"img": clave del catálogo, "rx", "ry" (el centro de su base),
+        #   "volteado"?: bool, "alzado"?: px (lo que va sobre una mesa)}]
+        "decoracion": [],
     }
 
 
@@ -188,6 +192,19 @@ def normalizar(datos):
                       "ancho": round(min(1.0, max(0.002, float(sala.get("ancho", 0.05)))), 4),
                       "alto": round(min(1.0, max(0.002, float(sala.get("alto", 0.05)))), 4)})
     datos["salas"] = salas
+    decoracion = []
+    for mueble in datos.get("decoracion") or []:
+        if not isinstance(mueble, dict) or not mueble.get("img"):
+            continue
+        # (5 decimales: al píxel, para que quede justo contra la pared)
+        limpio = {"img": str(mueble["img"]), "rx": round(min(1.0, max(0.0, float(mueble["rx"]))), 5),
+                  "ry": round(min(1.0, max(0.0, float(mueble["ry"]))), 5)}
+        if mueble.get("volteado"):
+            limpio["volteado"] = True
+        if mueble.get("alzado"):
+            limpio["alzado"] = int(mueble["alzado"])
+        decoracion.append(limpio)
+    datos["decoracion"] = decoracion
 
     # Un tipo por ruta: se rellena con el tipo por defecto o se recorta. Uno
     # que no es de ruta (o que ya no existe, como el Rastreador) pasa a ser el

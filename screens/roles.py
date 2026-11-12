@@ -15,6 +15,7 @@ import math
 import pygame
 
 from juego import salas_selladas
+from juego import sprites_objetos, decoracion
 from juego.fuentes import fuente, fuente_de_tamano
 
 
@@ -82,31 +83,72 @@ def _dibujar_sello(screen, offset, camara, panel, tiempo_ms):
 
 
 
-def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
-    """Terminales, paneles, piezas, señuelos y señales."""
-    cerca = getattr(dueño, "estacion_cerca", None)
+ALTO_TERMINAL = sprites_objetos.ALTOS["terminal"]
+ALTO_PANEL = sprites_objetos.ALTOS["panel"]
 
+
+def erguidos(camara, dueño, extras, tiempo_ms):
+    """Las terminales del Tecnomante como cosas paradas en el piso
+    (decoracion.Erguido): se dibujan ordenadas con los personajes."""
+    lista = []
     for t in extras.get("terminales", ()):
-        if not t["rect"].inflate(0, 120).colliderect(camara):
+        caja = sprites_objetos.caja_dibujo("terminal", t["rect"])
+        if not caja.inflate(20, 40).colliderect(camara) or t.get("solido") is None:
             continue
-        caja = pygame.Rect(0, 0, 44, 56)
-        caja.midbottom = (t["rect"].centerx - offset[0], t["rect"].top + 8 - offset[1])
-        pygame.draw.rect(screen, (30, 30, 52), caja, border_radius=4)
-        pantalla = caja.inflate(-12, -24).move(0, -6)
-        brillo = 0.6 + 0.4 * math.sin(tiempo_ms / 300)
-        apagada = t["recarga_ms"] > 0 or extras.get("sin_luz")
-        color = (90, 90, 110) if apagada else COLOR_TERMINAL
-        if extras.get("sin_luz"):
-            brillo = 0.35
-        pygame.draw.rect(screen, tuple(int(c * brillo) for c in color), pantalla)
-        pygame.draw.rect(screen, (255, 214, 64) if cerca is t else color, caja, 2, border_radius=4)
+        lista.append(decoracion.Erguido(
+            t["solido"], caja,
+            lambda screen, offset, t=t: _dibujar_terminal(screen, offset, t, dueño, extras, tiempo_ms)))
+    return lista
+
+
+def _dibujar_terminal(screen, offset, t, dueño, extras, tiempo_ms):
+    cerca = getattr(dueño, "estacion_cerca", None)
+    caja = pygame.Rect(0, 0, 44, 56)
+    caja.midbottom = (t["rect"].centerx - offset[0], t["rect"].centery - offset[1])    # (sprites_objetos._pie)
+    apagada = t["recarga_ms"] > 0 or extras.get("sin_luz")
+    img = sprites_objetos.sprite("terminal", ALTO_TERMINAL, apagado=bool(apagada))
+    if img is not None:
+        # La terminal de Anny: apagada (gris) mientras recarga o sin luz.
+        pos = sprites_objetos.caja_dibujo("terminal", t["rect"], img).move(-offset[0], -offset[1])
+        screen.blit(img, pos)
+        if cerca is t:
+            sprites_objetos.resaltar(screen, img, pos.topleft, (255, 214, 64))
+        return
+    pygame.draw.rect(screen, (30, 30, 52), caja, border_radius=4)
+    pantalla = caja.inflate(-12, -24).move(0, -6)
+    brillo = 0.6 + 0.4 * math.sin(tiempo_ms / 300)
+    color = (90, 90, 110) if apagada else COLOR_TERMINAL
+    if extras.get("sin_luz"):
+        brillo = 0.35
+    pygame.draw.rect(screen, tuple(int(c * brillo) for c in color), pantalla)
+    pygame.draw.rect(screen, (255, 214, 64) if cerca is t else color, caja, 2, border_radius=4)
+
+
+def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
+    """Paneles, piezas, señuelos y señales (las terminales: `erguidos`)."""
+    cerca = getattr(dueño, "estacion_cerca", None)
 
     for p in extras.get("paneles", ()):
         _dibujar_sello(screen, offset, camara, p, tiempo_ms)
         if not p["rect"].inflate(0, 120).colliderect(camara):
             continue
         caja = pygame.Rect(0, 0, 52, 40)
-        caja.midbottom = (p["rect"].centerx - offset[0], p["rect"].top + 8 - offset[1])
+        caja.center = (p["rect"].centerx - offset[0], p["rect"].centery - offset[1])    # adentro de su casilla
+        borde = (255, 214, 64) if cerca is p else (COLOR_BIOMANTE if p["reparado"] else COLOR_ALIEN)
+        img = sprites_objetos.sprite("panel", ALTO_PANEL, apagado=not p["reparado"])
+        if img is not None:
+            # El panel de Anny: apagado y echando chispas hasta que lo reparan.
+            pos = sprites_objetos.caja_dibujo("panel", p["rect"], img).move(-offset[0], -offset[1])
+            screen.blit(img, pos)
+            if not p["reparado"]:
+                for i in range(3):
+                    fase = (tiempo_ms / 90 + i * 37) % 20
+                    if fase < 6:
+                        x = pos.x + 10 + (i * 14 + int(tiempo_ms / 50)) % (pos.width - 16)
+                        pygame.draw.line(screen, (255, 230, 120), (x, pos.y + 8), (x + 5, pos.y - 4), 2)
+            if cerca is p or not p["reparado"]:
+                sprites_objetos.resaltar(screen, img, pos.topleft, borde, 2)
+            continue
         pygame.draw.rect(screen, (60, 64, 80), caja, border_radius=3)
         if p["reparado"]:
             pygame.draw.rect(screen, COLOR_BIOMANTE, caja.inflate(-14, -14))
@@ -118,7 +160,6 @@ def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
                     x = caja.x + 10 + (i * 14 + int(tiempo_ms / 50)) % (caja.width - 16)
                     pygame.draw.line(screen, (255, 230, 120), (x, caja.y + 6), (x + 5, caja.y - 4), 2)
             pygame.draw.line(screen, (30, 30, 40), caja.topleft, caja.bottomright, 3)
-        borde = (255, 214, 64) if cerca is p else (COLOR_BIOMANTE if p["reparado"] else COLOR_ALIEN)
         pygame.draw.rect(screen, borde, caja, 2, border_radius=3)
 
     # Las piezas solo las reconoce el Forjador (Ingenio mecánico); si no hay
@@ -155,7 +196,10 @@ def _ondas(screen, cosa, offset, color, tiempo_ms, cuerpo):
         capa = pygame.Surface((radio * 2 + 4, radio * 2 + 4), pygame.SRCALPHA)
         pygame.draw.circle(capa, (*color, int(200 * (1 - fase))), (radio + 2, radio + 2), radio, 3)
         screen.blit(capa, (cx - radio - 2, cy - radio - 2))
-    if cuerpo:
+    img = sprites_objetos.sprite("senuelo", 40) if cuerpo else None
+    if img is not None:
+        screen.blit(img, img.get_rect(midbottom=(cx, cy + 12)))     # el radio que hace de señuelo
+    elif cuerpo:
         pygame.draw.rect(screen, (60, 50, 30), (cx - 10, cy - 8, 20, 16), border_radius=3)
         pygame.draw.rect(screen, color, (cx - 10, cy - 8, 20, 16), 2, border_radius=3)
         pygame.draw.circle(screen, color, (cx, cy - 12), 3)

@@ -85,7 +85,7 @@ assert g.oscuridad is False
 g._manejar_tecla(pygame.K_RETURN); assert g.oscuridad is True
 # Las vistas de prueba: hitboxes y árbol del alien (ya no hay atajos H/B/N/L).
 acciones = [a for _, a in g.pausa.opciones()]
-assert acciones == ["efectos", "oscuridad", "pantalla_completa", "hitboxes", "arbol", "grafo", "volver"]
+assert acciones == ["efectos", "oscuridad", "pantalla_completa", "hitboxes", "arbol", "grafo", "idioma", "volver"]
 g.pausa.seleccion = 3; g._manejar_tecla(pygame.K_RETURN)
 assert g.mostrar_hitboxes is True
 g._manejar_tecla(pygame.K_RETURN); assert g.mostrar_hitboxes is False
