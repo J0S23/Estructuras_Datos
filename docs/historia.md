@@ -1,4 +1,4 @@
-# NEXUS: Operación Espejo
+# NEXUS
 
 ## De qué trata el juego
 
@@ -6,7 +6,7 @@ NEXUS es un juego cooperativo de 2 a 4 jugadores sobre el uso responsable de las
 
 No hay armas: solo sigilo, trabajo en equipo y un celular con NEXUS, la red social que los aliens usan para controlar a la Tierra. Cada noticia que llega puede ser verdad o una trampa, y los agentes deciden si la verifican, la desmienten o la comparten.
 
-Lo que compartan cambia la opinión pública. La verdad gana confianza; una mentira compartida a la ligera se la regala a los aliens.
+En la nave, los que leen NEXUS, comparten y deciden a quién creerle son los prisioneros. La verdad gana su confianza; una mentira compartida a la ligera se la regala a los aliens.
 
 ## Prólogo
 
@@ -16,7 +16,7 @@ Todas tienen algo en común: usan NEXUS, la red social que apareció de la nada 
 
 El gobierno de Colombia sospecha que NEXUS no es una aplicación: es la voz de la nave. Algunos de esos famosos tienen tratos con los aliens; otros, directamente, son aliens.
 
-Así nace la **Operación Espejo**: cuatro especialistas suben a la nave para encontrar la verdad y contársela al mundo. Hay un problema: allá arriba, la mentira también tiene cuenta.
+Por eso envía a cuatro especialistas a la nave para encontrar la verdad y contársela al mundo. Hay un problema: allá arriba, la mentira también tiene cuenta.
 
 ## Los cuatro agentes
 
@@ -37,11 +37,11 @@ La nave está llena de aliens que patrullan sus pasillos. Los agentes no pueden 
 - **La Sombra:** aparece cuando se va la luz. No avanza mientras la alumbras, pero si le das la espalda se acerca.
 - **El Guardia de la Bahía:** un alien enorme que cuida la cápsula, la única salida de la nave.
 
-En la nave también hay prisioneros humanos, usuarios de NEXUS que los aliens se llevaron. Algunos confían en los agentes y les ayudan; otros le creen a la red y los delatan.
+En la nave también hay prisioneros humanos que los aliens se llevaron. Ellos son los que se mueven en NEXUS: leen, comparten y deciden a quién creerle. Los que confían en los agentes les dan pistas y los siguen; los que le creen a los aliens los delatan.
 
 ### El Cambiaformas
 
-El villano principal no persigue: engaña. El Cambiaformas se disfraza de prisionero, suplanta cuentas y escribe los rumores de NEXUS. Sabe que no necesita atrapar a los agentes: si ellos publican una mentira, la Tierra deja de creerles y los aliens ganan.
+El villano principal no persigue: engaña. El Cambiaformas se disfraza de prisionero, suplanta cuentas y escribe los rumores de NEXUS. Sabe que no necesita atrapar a los agentes: si ellos publican una mentira, los prisioneros dejan de creerles y los aliens ganan.
 
 Sus trucos son los mismos que se ven en cualquier red social:
 
@@ -63,11 +63,11 @@ Ya libres, los agentes recorren la nave para apagar las consolas que conectan NE
 
 Mientras tanto, el celular no para. Llegan noticias sobre la nave y sobre los famosos: unas son reales y otras las inventó el Cambiaformas. Los agentes tienen que ir a comprobarlas con una foto, desmentir las falsas, reportar las cuentas falsas y compartir solo lo verificado.
 
-Cada noticia real compartida suma confianza en la Tierra. Cada mentira compartida la resta, y con ella los aliens se vuelven más rápidos y atentos.
+Cada noticia real compartida suma la confianza de los prisioneros. Cada mentira compartida la resta, y con ella los aliens se vuelven más rápidos y atentos.
 
 ### Acto 3: El escape
 
-Cuando la opinión pública llega al 80 % de confianza, los científicos de la Tierra por fin les creen y les envían los planos de la cápsula. Sin esa confianza no hay planos y no hay forma de volver.
+Cuando el 80 % de los prisioneros confía en los agentes, los que conocen la nave por fin les creen y les pasan los planos de la cápsula. Sin esa confianza no hay planos y no hay forma de volver.
 
 Con los planos, los agentes tienen que alejar al Guardia de la Bahía, reunir las piezas, reparar la cápsula y llegar a ella juntos, ahora con todos los aliens en alerta. Si el Cambiaformas logra colarse en el grupo disfrazado de prisionero, todavía puede sabotear la cápsula en el último momento.
 
