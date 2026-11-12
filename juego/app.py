@@ -1354,6 +1354,8 @@ class Game:
                 historial_logros.agregar(n.clave for n in self.logros.arbol.preorden() if n.obtenido)
         if self.mision is not None and self.mision.activa:
             self.sonar("victoria" if self.mision.resultado == "victoria" else "derrota", 0.8)
+            if self.mision.resultado == "victoria":
+                self.sonar("cohete", 0.9)      # la cápsula despega con todos adentro
         for jugador in self.jugadores:
             jugador.cerrar_panel()
         self._reiniciar_resultados()
@@ -1776,8 +1778,29 @@ class Game:
             else:
                 volumen = 0.12 if self.pausa is not None else 0.35
             audio_manager.bucle("ambiente", volumen)
-        elif audio_manager.sonando_bucle:
-            audio_manager.parar_bucle()
+            # Encima, la música: de tensión si un alien persigue a alguien, en
+            # un apagón o en la huida a la cápsula; si no, la tranquila.
+            audio_manager.musica("musica_tension" if self._hay_tension() else "musica_calma",
+                                 0.1 if self.pausa is not None else 0.3)
+        else:
+            if audio_manager.sonando_bucle:
+                audio_manager.parar_bucle()
+            if audio_manager.sonando_musica:
+                audio_manager.parar_musica()
+
+    def _hay_tension(self):
+        """¿Toca la música de tensión? Se queda unos segundos después de que
+        pasa el peligro, para no cambiar de música a cada rato."""
+        ahora = pygame.time.get_ticks()
+        peligro = False
+        if not self.en_tutorial:
+            peligro = (self.sin_luz
+                       or getattr(self.mision, "fase", None) == "huida"
+                       or any(a.accion in ("PERSEGUIR", "ATRAPAR", "REVISAR_ESCONDITE")
+                              for a in self._aliens_a_la_vista()))
+        if peligro:
+            self._tension_hasta = ahora + 6000
+        return ahora < getattr(self, "_tension_hasta", 0)
 
     def _manejar_eventos(self):
         for evento in pygame.event.get():

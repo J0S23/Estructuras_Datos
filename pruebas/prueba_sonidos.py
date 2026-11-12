@@ -27,9 +27,14 @@ for ruta in (glob.glob("*.py") + glob.glob("screens/*.py")
 # Las palabras entre comillas dentro de cada llamada a sonar(...) / bucle(...)
 # (incluye `"acierto" if ok else "fallo"` y `_sonar(juego, "curar", 0.7)`).
 pedidos = set()
-for llamada in re.findall(r"(?:sonar|bucle)\(([^()]*(?:\([^()]*\)[^()]*)*)\)", codigo):
+for llamada in re.findall(r"(?:sonar|bucle|musica)\(([^()]*(?:\([^()]*\)[^()]*)*)\)", codigo):
     pedidos |= set(re.findall(r"\"(\w+)\"", llamada))
 pedidos.discard("nombre")
+# Los que el ambiente saca de sus tablas (voces de los aliens, pasto, arreglos).
+from juego import ambiente as _ambiente
+for sonidos, _minimo, _maximo in _ambiente.VOCES.values():
+    pedidos |= set(sonidos)
+pedidos |= set(_ambiente.PASOS_PASTO) | {t[1] for t in _ambiente.TRABAJOS}
 hay = {os.path.splitext(os.path.basename(r))[0] for r in glob.glob("Audio/SFX/*")}
 faltan = pedidos - hay
 assert not faltan, f"el código pide sonidos que no existen: {sorted(faltan)}"
