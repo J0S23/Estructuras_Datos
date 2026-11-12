@@ -13,14 +13,17 @@
 """
 
 import math
+import os
 import zlib
 
 import pygame
 
 from juego.fuentes import fuente_de_tamano
+from juego.idioma import tr
+from juego import perfiles
 from screens.flechas import flecha_alrededor, cerca_del_borde
 from screens.paneles import partir_lineas
-from data.nexus import UMBRAL_PLANOS
+from data.nexus import UMBRAL_PLANOS, VIRAL_GENERICO
 
 COLOR_CARCASA = (18, 18, 26)
 COLOR_PANTALLA = (238, 240, 247)
@@ -39,7 +42,16 @@ AVATARES = [(239, 108, 110), (99, 160, 234), (120, 200, 140), (240, 180, 80),
             (176, 120, 220), (90, 196, 200), (230, 130, 190), (150, 160, 180)]
 
 
-def _avatar(screen, centro, radio, usuario, f):
+def _avatar(screen, centro, radio, usuario, f, red=None, nodo=None):
+    """La foto de perfil de la cuenta (juego/perfiles.py) o, si no hay, un
+    círculo de color con la inicial."""
+    if red is not None and nodo is None:
+        nodo = red.nodo_de_usuario(usuario)
+    img = perfiles.de_nodo(red, nodo, 2 * radio)
+    if img is not None:
+        screen.blit(img, img.get_rect(center=centro))
+        pygame.draw.circle(screen, (214, 218, 230), centro, radio, 1)
+        return
     color = AVATARES[zlib.crc32(usuario.encode("utf-8")) % len(AVATARES)]
     pygame.draw.circle(screen, color, centro, radio)
     letra = usuario.lstrip("@")[:1].upper() or "?"
@@ -236,6 +248,42 @@ def dibujar_lugar(screen, vista, camara, dueño, red, tiempo_ms):
 
 # -- El celular --------------------------------------------------------------------------------
 
+# El marco del teléfono (de Anny): Imagenes/UI/celular_marco.png, recortado al
+# cuerpo del teléfono. Su pantalla está en estas fracciones del dibujo
+# (izquierda, arriba, derecha, abajo; arriba, debajo de la cámara). El dibujo
+# es más angosto que el celular de antes: el teléfono no pasa de
+# ASPECTO_MIN (ancho / alto) para que el marco no se estire tanto.
+ARCHIVO_MARCO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "Imagenes", "UI", "celular_marco.png")
+PANTALLA_MARCO = (0.100, 0.083, 0.105, 0.068)
+ASPECTO_MIN = 0.46
+_marcos = {}        # (ancho, alto) -> Surface (None = no hay archivo)
+
+
+def _imagen_marco(tamano):
+    if tamano not in _marcos:
+        imagen = None
+        try:
+            original = _marcos.get("original")
+            if original is None:
+                original = pygame.image.load(ARCHIVO_MARCO)
+                try:
+                    original = original.convert_alpha()
+                except pygame.error:
+                    pass
+                _marcos["original"] = original
+            imagen = pygame.transform.smoothscale(original, tamano)
+        except (pygame.error, OSError, FileNotFoundError):
+            _marcos["original"] = None
+            imagen = None
+        _marcos[tamano] = imagen
+    return _marcos[tamano]
+
+
+def hay_marco():
+    return _imagen_marco((8, 8)) is not None
+
+
 def _marco(vista, tapado=None, jugador=None):
     """Rect del teléfono y de su pantalla, a la derecha del viewport, debajo
     de la franja de arriba. Si la barra de confianza cae encima (`tapado`),
@@ -251,9 +299,16 @@ def _marco(vista, tapado=None, jugador=None):
         arriba = max(arriba, tapado.bottom + 6)
     alto = vista.bottom - arriba - 12
     ancho = int(min(380, max(240, vista.width * 0.46), alto * 0.62 + 60))
+    if not hay_marco():
+        telefono = pygame.Rect(vista.right - ancho - 14, arriba, ancho, alto)
+        pantalla = telefono.inflate(-16, -34)
+        pantalla.y = telefono.y + 14
+        return telefono, pantalla
+    alto = min(alto, int(ancho / ASPECTO_MIN))
     telefono = pygame.Rect(vista.right - ancho - 14, arriba, ancho, alto)
-    pantalla = telefono.inflate(-16, -34)
-    pantalla.y = telefono.y + 14
+    izq, arr, der, aba = PANTALLA_MARCO
+    pantalla = pygame.Rect(telefono.x + round(ancho * izq), telefono.y + round(alto * arr),
+                           round(ancho * (1 - izq - der)), round(alto * (1 - arr - aba)))
     return telefono, pantalla
 
 
@@ -274,11 +329,16 @@ def render_celular(screen, vista, jugador, red, tapado=None):
     if panel is None or red is None or jugador not in red.vistas:
         return
     telefono, pantalla = _marco(vista, tapado, jugador)
-    pygame.draw.rect(screen, COLOR_SOMBRA, telefono.move(5, 5), border_radius=22)
-    pygame.draw.rect(screen, COLOR_CARCASA, telefono, border_radius=22)
-    pygame.draw.rect(screen, (70, 72, 92), telefono, 2, border_radius=22)
-    pygame.draw.rect(screen, COLOR_PANTALLA, pantalla, border_radius=10)
-    pygame.draw.circle(screen, (50, 52, 70), (telefono.centerx, telefono.bottom - 10), 4)
+    marco = _imagen_marco(telefono.size)
+    if marco is not None:
+        screen.blit(marco, telefono)
+        pygame.draw.rect(screen, COLOR_PANTALLA, pantalla, border_radius=max(4, pantalla.width // 40))
+    else:
+        pygame.draw.rect(screen, COLOR_SOMBRA, telefono.move(5, 5), border_radius=22)
+        pygame.draw.rect(screen, COLOR_CARCASA, telefono, border_radius=22)
+        pygame.draw.rect(screen, (70, 72, 92), telefono, 2, border_radius=22)
+        pygame.draw.rect(screen, COLOR_PANTALLA, pantalla, border_radius=10)
+        pygame.draw.circle(screen, (50, 52, 70), (telefono.centerx, telefono.bottom - 10), 4)
 
     tam = max(11, min(16, pantalla.width // 22))
     f = fuente_de_tamano(tam)
@@ -291,7 +351,12 @@ def render_celular(screen, vista, jugador, red, tapado=None):
     vista_cel = panel.get("vista")
     cab = pygame.Rect(pantalla.x, pantalla.y, pantalla.width, fb.get_linesize() + 30)
     pygame.draw.rect(screen, (24, 28, 52), cab, border_top_left_radius=10, border_top_right_radius=10)
-    screen.blit(fb.render("NEXUS", True, (150, 200, 255)), (cab.x + 12, cab.y + 5))
+    x_nombre = cab.x + 12
+    icono = perfiles.logo(fb.get_linesize() + 2)
+    if icono is not None:
+        screen.blit(icono, (x_nombre, cab.y + 3))
+        x_nombre += icono.get_width() + 6
+    screen.blit(fb.render("NEXUS", True, (150, 200, 255)), (x_nombre, cab.y + 5))
     sub = {"post": "Publicación", "origen": "¿De dónde salió?",
            "ubicacion": "Publicar foto", "mensaje": ""}.get(vista_cel, "")
     if sub:
@@ -325,6 +390,13 @@ def render_celular(screen, vista, jugador, red, tapado=None):
     img = fc.render(texto, True, COLOR_TENUE)
     if img.get_width() > pie.width - 8:
         img = fc.render("  ".join(partes), True, COLOR_TENUE)
+    tam_pie = max(10, tam - 2)
+    while img.get_width() > pie.width - 8 and tam_pie > 8:     # (pantalla angosta)
+        tam_pie -= 1
+        img = fuente_de_tamano(tam_pie).render("  ".join(partes), True, COLOR_TENUE)
+    if img.get_width() > pie.width - 8 and len(partes) > 2:
+        # Ni con la letra más chica: sin la pista de las pestañas.
+        img = fuente_de_tamano(max(10, tam - 2)).render("  ".join(partes[::2]), True, COLOR_TENUE)
     screen.blit(img, img.get_rect(center=pie.center))
     screen.set_clip(clip)
 
@@ -361,6 +433,7 @@ def _pestanas(screen, pantalla, y, jugador, red, panel, fc):
 
 def _cortar_linea(texto, f, ancho):
     """Una sola línea que quepa en `ancho`, con "..." si hubo que cortar."""
+    texto = tr(texto)
     if f.size(texto)[0] <= ancho:
         return texto
     while texto and f.size(texto + "...")[0] > ancho:
@@ -421,6 +494,20 @@ def _direccion(jugador, pub):
     return f"al {direccion_texto(jugador.hitbox.center, pub.lugar)}"
 
 
+def color_viral(progreso):
+    """Amarillo -> naranja -> rojo según qué tan cerca está de volverse viral."""
+    a, b = (240, 190, 60), (225, 60, 60)
+    t = max(0.0, min(1.0, progreso))
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def _barra_viral(screen, rect, progreso):
+    pygame.draw.rect(screen, (226, 228, 236), rect, border_radius=rect.height // 2)
+    lleno = rect.copy()
+    lleno.width = max(rect.height, int(rect.width * min(1.0, progreso)))
+    pygame.draw.rect(screen, color_viral(progreso), lleno, border_radius=rect.height // 2)
+
+
 def _tarjeta(red, jugador, pestana, pub, f, fb, fc, ancho):
     """Lo que lleva una tarjeta del inicio: título, líneas, chips y colores."""
     from redes import celular as logica
@@ -434,9 +521,16 @@ def _tarjeta(red, jugador, pestana, pub, f, fb, fc, ancho):
         # El título es el lugar: es lo que importa (a dónde hay que ir).
         titulo = lugar[:1].upper() + lugar[1:] if pub.tipo == "rumor" else f"Ayuda: {lugar}"
         hecha = estado in ("hecha", "reportada")
+        chips = [(texto_estado, color)]
+        if pub.tipo == "rumor" and pub.viral and not hecha:
+            chips.append(("¡Viral!", COLOR_ROJO))
+        if nuevo and not hecha:
+            chips.append(("nuevo", (230, 150, 40)))
+        # La barrita de "se está volviendo viral" (redes/nexus.py).
+        viral = red.progreso_viral(pub) if pub.tipo == "rumor" and not hecha else None
         return {"titulo": titulo, "icono": estado, "color": color, "franja": color,
                 "lineas": _recortar(f"\"{pub.texto}\"", fc, ancho, 2), "fuente_lineas": fc,
-                "chips": [(texto_estado, color)] + ([("nuevo", (230, 150, 40))] if nuevo and not hecha else []),
+                "chips": chips, "viral": viral,
                 "tiempo": _tiempo(pub.edad_ms), "apagada": hecha}
     usuario = red.usuario(pub.autor)
     chips = []
@@ -449,7 +543,7 @@ def _tarjeta(red, jugador, pestana, pub, f, fb, fc, ancho):
     if nuevo and pestana == "equipo":
         chips.append(("nuevo", (230, 150, 40)))
     texto = pub.texto
-    return {"titulo": usuario, "avatar": usuario, "color": COLOR_PESTANA[pestana], "franja": None,
+    return {"titulo": usuario, "avatar": usuario, "nodo": pub.autor, "color": COLOR_PESTANA[pestana], "franja": None,
             "lineas": _recortar(texto, f if pestana == "equipo" else fc, ancho, 3 if pestana == "equipo" else 2),
             "fuente_lineas": f if pestana == "equipo" else fc,
             "chips": chips, "tiempo": _tiempo(pub.edad_ms), "apagada": False}
@@ -470,6 +564,9 @@ def _feed(screen, cuerpo, jugador, red, panel, f, fb, fc):
     if not opciones:
         titulo, texto = VACIO[pestana]
         y = cuerpo.y + cuerpo.height // 3
+        icono = perfiles.logo(max(24, min(90, cuerpo.width // 3)))
+        if icono is not None and y - icono.get_height() - 10 > cuerpo.y:
+            screen.blit(icono, icono.get_rect(midbottom=(cuerpo.centerx, y - 10)))
         img = f.render(titulo, True, COLOR_TEXTO)
         screen.blit(img, img.get_rect(midtop=(cuerpo.centerx, y)))
         y += f.get_linesize() + 6
@@ -485,6 +582,7 @@ def _feed(screen, cuerpo, jugador, red, panel, f, fb, fc):
     for t in tarjetas:
         alto = 10 + f.get_linesize() + len(t["lineas"]) * t["fuente_lineas"].get_linesize()
         alto += (fc.get_linesize() + 8) if t["chips"] else 0
+        alto += 8 if t.get("viral") is not None else 0
         alturas.append(alto + 8)
     cursor = jugador.cursor % len(opciones)
     # Desde dónde se dibuja para que la seleccionada quede a la vista.
@@ -510,7 +608,7 @@ def _feed(screen, cuerpo, jugador, red, panel, f, fb, fc):
                          3 if sel else 1, border_radius=9)
         centro = (rect.x + 24, rect.y + 10 + f.get_linesize() // 2 + 2)
         if t.get("avatar"):
-            _avatar(screen, centro, 13, t["avatar"], fc)
+            _avatar(screen, centro, 13, t["avatar"], fc, red, t.get("nodo"))
         else:
             _icono(screen, t["icono"], centro, 13, t["color"])
         ty = rect.y + 8
@@ -531,6 +629,9 @@ def _feed(screen, cuerpo, jugador, red, panel, f, fb, fc):
                 break
             caja = _chip(screen, texto, color, x, ty + 4, fc)
             x = caja.right + 6
+        if t.get("viral") is not None:
+            _barra_viral(screen, pygame.Rect(rect.x + margen_texto, rect.bottom - 10,
+                                             rect.right - 12 - (rect.x + margen_texto), 5), t["viral"])
         y = rect.bottom + 6
     restantes = len(tarjetas) - i - 1 if rect.top <= cuerpo.bottom else len(tarjetas) - i
     if restantes > 0:
@@ -574,9 +675,13 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
         pub = panel["pub"]
         autor = red.via(jugador, pub) if pub.tipo in ("rumor", "trampa") else pub.autor
         usuario = red.usuario(autor)
-        _avatar(screen, (cuerpo.x + 20, y + 18), 16, usuario, f)
+        _avatar(screen, (cuerpo.x + 20, y + 18), 16, usuario, f, red, autor)
         screen.blit(f.render(usuario, True, COLOR_TEXTO), (cuerpo.x + 44, y + 4))
-        screen.blit(fc.render(_tiempo(pub.edad_ms), True, COLOR_TENUE), (cuerpo.x + 44, y + 6 + f.get_linesize()))
+        seguidores = red.seguidores(autor)
+        linea = _tiempo(pub.edad_ms)
+        if autor in red.grafo:
+            linea += f"  ·  {seguidores} seguidores" if seguidores != 1 else "  ·  1 seguidor"
+        screen.blit(fc.render(linea, True, COLOR_TENUE), (cuerpo.x + 44, y + 6 + f.get_linesize()))
         estado = panel.get("estado")
         if estado:
             texto_estado, color = ESTADOS[estado]
@@ -608,6 +713,14 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
             info.append(("Ya sacaste la foto: publícala para frenar el rumor.", COLOR_VERDE))
         if pub.tipo == "rumor" and pub.desmentida:
             info.append(("Alguien ya lo desmintió con una foto.", COLOR_VERDE))
+        elif pub.tipo == "rumor" and pub.viral:
+            info.append((f"¡Se volvió viral! {pub.rumor.get('viral') or VIRAL_GENERICO}", COLOR_ROJO))
+            info.append(("Como en la vida real: la desinformación no se queda en la pantalla, "
+                         "cambia lo que hace la gente. Desmentirlo lo deshace.", COLOR_TENUE))
+        elif pub.tipo == "rumor":
+            progreso = red.progreso_viral(pub)
+            info.append((f"Se está volviendo viral: {int(progreso * 100)}%. Si nadie lo desmiente, "
+                         "la nave va a actuar como si fuera cierto.", color_viral(progreso)))
         if pub.tipo == "trampa" and pub.reportada:
             info.append(("Reportada: no la escribió su dueño.", COLOR_ROJO))
         if pub.tipo in ("rumor", "trampa") and autor != pub.autor:
@@ -625,7 +738,7 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
             centro = (x0, y + 12)
             if i + 1 < len(camino):
                 pygame.draw.line(screen, (196, 200, 214), centro, (x0, y + 12 + paso), 3)
-            _avatar(screen, centro, 11, nombre if nombre != "tú" else "@tu", fc)
+            _avatar(screen, centro, 11, nombre if nombre != "tú" else "@tu", fc, red, nodo)
             color = COLOR_ROJO if i == 0 else COLOR_TEXTO
             etiqueta = nombre + ("  · lo publicó" if i == 0 else "")
             screen.blit(f.render(etiqueta, True, color), (x0 + 20, y + 12 - f.get_linesize() // 2))
@@ -637,8 +750,18 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
             caja_info([(f"Publicado desde: dispositivo desconocido. Alguien está usando "
                         f"la cuenta de {red.usuario(origen)}.", COLOR_ROJO)])
         elif origen in red.grafo:
-            caja_info([(f"Lo empezó {red.usuario(origen)}. Los demás solo lo pasaron: "
-                        "reportarlos a ellos no frena nada.", COLOR_TENUE)])
+            info = [(f"Lo empezó {red.usuario(origen)}. Los demás solo lo pasaron: "
+                     "reportarlos a ellos no frena nada.", COLOR_TENUE)]
+            if red.es_bot(origen):
+                ganados = red.ganados(origen)
+                if ganados > 0:
+                    info.append((f"{red.usuario(origen)} tiene {red.seguidores(origen)} seguidores y ganó "
+                                 f"{ganados} desde que abrió la cuenta. Mientras nadie la reporte sigue "
+                                 "creciendo, y cada rumor nuevo les llega a más.", COLOR_ROJO))
+                else:
+                    info.append((f"{red.usuario(origen)} tiene {red.seguidores(origen)} seguidores. Las cuentas "
+                                 "falsas que nadie reporta crecen: cortarla ahora la corta chica.", COLOR_TENUE))
+            caja_info(info)
         else:
             caja_info([("La cuenta que lo empezó ya no existe.", COLOR_TENUE)])
     elif vista == "ubicacion":

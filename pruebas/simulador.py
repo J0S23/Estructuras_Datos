@@ -249,8 +249,9 @@ class Bot:
         # 2. Apagón: a la caja buena (el más cercano, o los dos si el otro está lejos).
         ev = g.eventos
         if ev is not None and ev.apagon and ev.caja is not None:
-            caja = ev.caja["rect"].center
-            if math.dist(j.hitbox.center, caja) <= 50:
+            from misiones.eventos import junto_a_caja
+            caja = ev.caja.get("pie", ev.caja["rect"].center)
+            if junto_a_caja(ev.caja, j):
                 self.mantener = True
                 return None, 0
             return caja, 30

@@ -54,6 +54,9 @@ os.chdir(RAIZ)
 import pygame
 
 from juego import objetos_mapa
+from juego import decoracion
+from juego import sprites_objetos
+from data.decoracion import CATALOGO, GRUPOS
 from juego.mundo import Mundo, CARPETA_FONDOS
 from data.tipos_alien import TIPOS_ALIEN, ORDEN_TIPOS, TIPO_POR_DEFECTO
 from misiones.mision import notas_antes_de_la_puerta, sortear_candidatas, color_puerta
@@ -82,6 +85,7 @@ HERRAMIENTAS = [
     {"clave": "paneles", "nombre": "Paneles y sellos (Forjador)", "color": (255, 120, 80)},
     {"clave": "consumibles", "nombre": "Consumibles (si falta un rol)", "color": (120, 200, 160)},
     {"clave": "salas", "nombre": "Salas (nombre en el HUD)", "color": (150, 205, 255)},
+    {"clave": "decoracion", "nombre": "Decoración (muebles)", "color": (120, 235, 170)},
 ]
 TECLAS_HERRAMIENTA = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5,
                       pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9, pygame.K_0]
@@ -91,6 +95,8 @@ TECLAS_HERRAMIENTA = [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5
 LISTAS = ("piezas", "celdas", "notas", "consolas", "consumibles", "nexus", "fusibles", "pruebas")
 CON_NOMBRE = ("escondites", "terminales", "paneles")
 UNICOS = ("spawn", "capsula", "guardia", "planta")
+# Las que en el editor se ven con su imagen del juego (objetos_con_imagen).
+CON_IMAGEN = ("escondites", "terminales", "paneles", "consolas", "fusibles", "nexus")
 # Las notas de código de una puerta: normales (todas las dificultades) y
 # "solo Difícil" (Difícil e Inteligente). Cosa del editor -> lista del archivo.
 TIPO_NOTA_PUERTA = {"nota_codigo": "notas", "nota_dificil": "notas_dificil"}
@@ -124,6 +130,9 @@ TAMANOS = {
     "pruebas": (30, 30),
 }
 TAMANO_ALIEN = (34, 20)
+# Los muebles del catálogo, ordenados por grupo (T / Y los recorren).
+MUEBLES = sorted(CATALOGO, key=lambda c: (GRUPOS.index(CATALOGO[c]["grupo"])
+                                           if CATALOGO[c]["grupo"] in GRUPOS else 99, c))
 NOMBRES_ESCONDITE = ["Casillero", "Armario", "Contenedor", "Ducto"]
 # Los cuartos del modelo de la nave; T los recorre y Y escribe uno nuevo.
 NOMBRES_SALA = ["Control", "General", "Laboratorio", "Prisión", "Residencial", "Biosfera",
@@ -144,9 +153,13 @@ AYUDA_HERRAMIENTA = {
                      "alien patrulla su lado; abierta, toda."],
     "escondites": ["Clic: pone uno.  Arrastrar: lo mueve.",
                    "Clic derecho: lo borra.",
-                   "T sobre uno: cambia el nombre."],
-    "terminales": ["Clic: pone una.  Arrastrar: la mueve.",
-                   "Clic derecho: la borra."],
+                   "T sobre uno: cambia el nombre.",
+                   "Recuadro verde: sus patas, que se chocan;",
+                   "se entra parado en la mitad de abajo."],
+    "terminales": ["Clic: pone una (el punto es donde se para",
+                   "el Tecnomante; la terminal queda detrás).",
+                   "Recuadro verde: sus patas, que se chocan.",
+                   "Arrastrar: la mueve. Clic derecho: la borra."],
     "paneles": ["Clic: pone un panel; el clic siguiente",
                 "pone su sello (la barrera que levanta",
                 "al repararlo: frena solo a los aliens).",
@@ -179,8 +192,10 @@ AYUDA_HERRAMIENTA = {
               "sale de data/notas.py, en orden. El",
               "código va en las notas de código (las",
               "pone la herramienta Puerta)."],
-    "consolas": ["Clic: pone una consola.",
-                 "Hay que apagarlas todas (fase 2)."],
+    "consolas": ["Clic: pone una consola. Hay que apagarlas",
+                 "todas (fase 2). Recuadro verde: sus patas,",
+                 "que se chocan; se apaga desde enfrente",
+                 "o desde un lado."],
     "guardia": ["Clic: el puesto del Guardia (uno solo), frente a la cápsula.",
                 "No sale de la sala donde lo pongas (la Bahía).",
                 "Clic derecho lo quita."],
@@ -194,7 +209,8 @@ AYUDA_HERRAMIENTA = {
                     "Ahí aparece un decodificador o un kit",
                     "solo si falta el Tecnomante o el Forjador."],
     "nexus": ["Clic: pone una terminal NEXUS.",
-              "Abre el caso del infiltrado (infiltrado.py)."],
+              "Abre el caso del infiltrado (infiltrado.py).",
+              "Sus patas (en verde) se chocan: se usa desde debajo."],
     "compuertas": ["Clic: pone una compuerta en un pasillo.",
                    "Un evento al azar la baja 20 s.",
                    "+ / -: más alta o más baja (bajo el mouse).",
@@ -204,9 +220,10 @@ AYUDA_HERRAMIENTA = {
                 "del infiltrado (audio, expediente, captura).",
                 "Cada partida se usan 3 al azar: pongan más",
                 "de 3 y fuera de la prisión. Con menos, no hay caso."],
-    "fusibles": ["Clic: pone una caja de fusibles.",
-                 "En un apagón se sortea cuál es la buena:",
-                 "hay que encontrarla y encenderla.",
+    "fusibles": ["Clic: pone una caja de fusibles. Puede ir",
+                 "colgada en la pared: se usa desde el piso",
+                 "de abajo (rojo si no hay piso cerca).",
+                 "En un apagón se sortea cuál es la buena.",
                  "Sin cajas, el mapa no tiene apagones."],
     "salas": ["Arrastra en un lugar vacío: dibuja una",
               "sala. Arrastra una: la mueve; su esquina",
@@ -215,6 +232,13 @@ AYUDA_HERRAMIENTA = {
               "Y sobre una: escribir el nombre (ENTER).",
               "Varias con el mismo nombre = una sala.",
               "Clic derecho: la borra. G: piso sin sala."],
+    "decoracion": ["Clic: pone el mueble elegido (su base",
+                   "queda donde haces clic). Arrastra uno: lo",
+                   "mueve. T / Y: siguiente / anterior mueble.",
+                   "F sobre uno: lo voltea. + / -: lo sube o",
+                   "baja (para lo que va sobre una mesa).",
+                   "El recuadro verde es su hitbox: lo que no",
+                   "tiene, no se choca. Clic derecho: lo borra."],
     "puertas_dobles": ["Clic: pone la puerta; los dos clics",
                        "siguientes ponen sus dos paneles.",
                        "Se abre con dos jugadores, uno en cada",
@@ -288,6 +312,8 @@ class EditorMapa:
         self.confirmar = None         # acción que espera un segundo toque (R, ESC)
         self.nombre_sala = "Pasillo"  # el nombre que lleva la próxima sala que se dibuje
         self.escribiendo = None       # [índice de la sala, texto] mientras se escribe un nombre
+        self.mueble_elegido = 0       # herramienta Decoración: índice en MUEBLES
+        self._sprites_mueble = {}     # (clave, volteado, tamaño) -> imagen para dibujar
 
         self.mostrar_paredes = True
         self.mostrar_caminable = False
@@ -469,6 +495,15 @@ class EditorMapa:
                     if d <= mejor_d:
                         mejor, mejor_d = ("punto", i, j), d
             return mejor
+        if clave == "decoracion":
+            # El de más adelante (el último que se dibuja) primero.
+            orden = sorted(range(len(self.datos["decoracion"])),
+                           key=lambda i: self.datos["decoracion"][i]["ry"], reverse=True)
+            for i in orden:
+                caja = decoracion.rect_imagen(self.datos["decoracion"][i], self.mundo.ancho, self.mundo.alto)
+                if caja is not None and pygame.Rect(caja).inflate(4, 4).collidepoint(p):
+                    return ("obj", i)
+            return None
         for i, obj in enumerate(self.datos[clave]):
             rect = self.rect_de(clave, self.posicion(clave, obj))
             d = math.dist(p, rect.center)
@@ -518,6 +553,12 @@ class EditorMapa:
         elif cosa[0] == "sello":
             sello = self.datos["paneles"][cosa[1]]["sello"]
             sello["rx"], sello["ry"] = rx, ry
+        elif cosa[0] == "obj" and self.clave == "decoracion":
+            # (5 decimales: al píxel, para poder dejarlo justo contra la pared)
+            obj = self.datos["decoracion"][cosa[1]]
+            dx, dy = (cosa[2], cosa[3]) if len(cosa) > 3 else (0, 0)
+            obj["rx"] = round(min(1, max(0, (p[0] + dx) / self.mundo.ancho)), 5)
+            obj["ry"] = round(min(1, max(0, (p[1] + dy) / self.mundo.alto)), 5)
         elif cosa[0] == "obj":
             obj = self.datos[self.clave][cosa[1]]
             if self.clave in LISTAS:
@@ -569,6 +610,14 @@ class EditorMapa:
                     self.avisar(f"Puerta {nombre} elegida: los clics ponen sus notas de código "
                                 "(X termina).")
             self.arrastre = cosa
+            if clave == "decoracion":
+                # Se agarra de donde se hizo clic (no salta a poner su base en
+                # el mouse) y pasa a ser el mueble elegido.
+                obj = self.datos["decoracion"][cosa[1]]
+                base = self.px(obj["rx"], obj["ry"])
+                self.arrastre = ("obj", cosa[1], base[0] - p[0], base[1] - p[1])
+                if obj["img"] in MUEBLES:
+                    self.mueble_elegido = MUEBLES.index(obj["img"])
             return
         rx, ry = self.norm(p)
         if not (0 <= rx <= 1 and 0 <= ry <= 1):
@@ -628,6 +677,13 @@ class EditorMapa:
         elif clave in LISTAS:
             self.datos[clave].append([rx, ry])
             self.arrastre = ("obj", len(self.datos[clave]) - 1)
+        elif clave == "decoracion":
+            if not MUEBLES:
+                self.avisar("No hay imágenes en Imagenes/Objetos/.")
+                return
+            self.datos[clave].append({"img": MUEBLES[self.mueble_elegido % len(MUEBLES)],
+                                      "rx": round(rx, 5), "ry": round(ry, 5)})
+            self.arrastre = ("obj", len(self.datos[clave]) - 1, 0, 0)
         else:
             nombre = {"escondites": "Casillero", "terminales": "Terminal",
                       "paneles": "Panel dañado"}[clave]
@@ -865,6 +921,105 @@ class EditorMapa:
         else:
             self.avisar("Notas normales (salen en todas las dificultades).")
 
+    def cambiar_mueble(self, pos, voltear=False, alzar=0):
+        """F / + / - sobre un mueble: lo voltea o lo sube (lo que va en una mesa)."""
+        cosa = self.buscar("decoracion", pos)
+        if cosa is None:
+            self.avisar("Pon el mouse sobre un mueble.")
+            return
+        self._empezar_cambio()
+        obj = self.datos["decoracion"][cosa[1]]
+        if voltear:
+            if obj.pop("volteado", False) is False:
+                obj["volteado"] = True
+        if alzar:
+            obj["alzado"] = max(0, int(obj.get("alzado", 0)) + alzar)
+            if not obj["alzado"]:
+                obj.pop("alzado")
+            self.avisar(f"Alzado: {obj.get('alzado', 0)} px", 1200)
+        self._terminar_cambio()
+
+    def _sprite_mueble(self, dato):
+        """La imagen de un mueble al zoom de ahora (o None)."""
+        ficha = CATALOGO.get(dato.get("img"))
+        tam = decoracion.tamano(dato.get("img"))
+        if ficha is None or tam is None:
+            return None
+        ancho, alto = max(2, int(tam[0] * self.zoom)), max(2, int(tam[1] * self.zoom))
+        clave = (dato["img"], bool(dato.get("volteado")), ancho, alto)
+        if clave not in self._sprites_mueble:
+            base = sprites_objetos.imagen(ficha["archivo"], escala=ficha["escala"],
+                                          volteado=bool(dato.get("volteado")))
+            self._sprites_mueble[clave] = pygame.transform.scale(base, (ancho, alto))
+        return self._sprites_mueble[clave]
+
+    def _imagen_zoom(self, clave, img):
+        """`img` (del tamaño del mundo) al zoom de ahora, guardada."""
+        ancho, alto = max(2, int(img.get_width() * self.zoom)), max(2, int(img.get_height() * self.zoom))
+        llave = (clave, ancho, alto)
+        if llave not in self._sprites_mueble:
+            self._sprites_mueble[llave] = pygame.transform.scale(img, (ancho, alto))
+        return self._sprites_mueble[llave]
+
+    def objetos_con_imagen(self):
+        """Los objetos del juego que tienen imagen, como se ven en el juego:
+        [(herramienta, ident, imagen del mundo, Rect del dibujo, hitbox o None)]."""
+        lista = []
+
+        def agregar(herr, ident, nombre, rect, img):
+            if img is not None:
+                caja = sprites_objetos.caja_dibujo(nombre, rect, img)
+                lista.append((herr, ident, img, caja, sprites_objetos.hitbox(nombre, rect)))
+
+        altos = sprites_objetos.ALTOS
+        for i, obj in enumerate(self.datos.get("escondites", [])):
+            img = sprites_objetos.sprite(sprites_objetos.modelo_escondite(obj.get("clave", "")), altos["escondite"])
+            agregar("escondites", ("escondites", i), "escondite",
+                    self.rect_de("escondites", self.posicion("escondites", obj)), img)
+        for herr, nombre in (("terminales", "terminal"), ("paneles", "panel"),
+                             ("consolas", "consola"), ("fusibles", "fusibles")):
+            img = sprites_objetos.sprite(nombre, altos[nombre])
+            for i, obj in enumerate(self.datos.get(herr, [])):
+                agregar(herr, (herr, i), nombre, self.rect_de(herr, self.posicion(herr, obj)), img)
+        img = sprites_objetos.sprite("panel_puerta", altos["panel_puerta"])
+        for i, doble in enumerate(self.datos.get("puertas_dobles", [])):
+            for k, punto in enumerate(doble.get("paneles", [])):
+                rect = pygame.Rect(0, 0, *TAMANO_PANEL)
+                rect.center = tuple(map(int, self.px(*punto)))
+                agregar("puertas_dobles", ("puertas_dobles", i, k), "panel_puerta", rect, img)
+        img = sprites_objetos.sprite("nexus", altos["nexus"])
+        for i, punto in enumerate(self.datos.get("nexus", [])):
+            agregar("nexus", ("nexus", i), "nexus", self.rect_de("nexus", self.px(*punto)), img)
+        return lista
+
+    def _hitboxes_muebles(self):
+        """Todo lo que se choca y no es pared: los muebles con hitbox y las
+        patas de las consolas y las terminales (como en el juego,
+        decoracion.crear)."""
+        return [pygame.Rect(c) for c in (decoracion.rect_hitbox(d, self.mundo.ancho, self.mundo.alto)
+                                         for d in self.datos.get("decoracion", [])) if c is not None] \
+            + decoracion.hitboxes_estaciones(self.datos, self.mundo)
+
+    def rect_parado(self, clave, punto):
+        """Donde se para quien usa el objeto (lo que tiene que quedar libre
+        y alcanzable): la consola se usa desde el piso de enfrente."""
+        rect = self.rect_de(clave, punto)
+        if clave == "consolas":
+            return sprites_objetos.frente("consola", rect)
+        if clave == "terminales":
+            return sprites_objetos.frente("terminal", rect)    # (la mitad de arriba son sus patas)
+        if clave == "nexus":
+            return sprites_objetos.frente("nexus", rect)
+        if clave == "escondites":
+            return sprites_objetos.frente("escondite", rect)   # (y la de los casilleros)
+        return rect
+
+    def hitbox_objeto(self, clave, punto):
+        """Lo que se choca de una consola, una terminal o un casillero (o None)."""
+        nombre = {"consolas": "consola", "terminales": "terminal", "nexus": "nexus",
+                  "escondites": "escondite"}.get(clave)
+        return sprites_objetos.hitbox(nombre, self.rect_de(clave, punto)) if nombre else None
+
     def restaurar_herramienta(self):
         self._empezar_cambio()
         fabrica = objetos_mapa.normalizar(objetos_mapa.por_defecto())
@@ -922,6 +1077,17 @@ class EditorMapa:
             self._caminable_desde = desde
         return self._caminable
 
+    def _pie_caja(self, rect):
+        """El piso desde donde se usa una caja de fusibles metida en la pared
+        (un cuerpo de 34x20 a menos de RADIO_CAJA de su borde), o None."""
+        from misiones.eventos import GestorEventos, junto_a_caja
+        x, y = GestorEventos._pie_de({"rect": rect}, self.mundo)
+        pie = pygame.Rect(x, y, 34, 20)
+
+        class Quien:
+            hitbox = pie
+        return pie if junto_a_caja({"rect": rect}, Quien) else None
+
     def _alcanzable(self, rect):
         celdas = self._celdas_caminables()
         for cx in range(rect.left // 16 * 16 - 48, rect.right + 16, 16):
@@ -934,11 +1100,34 @@ class EditorMapa:
         """Revisa todo y deja en self.estado el color de cada cosa."""
         self.estado, self.problemas = {}, []
         nombres = NOMBRE_SINGULAR
+        # Los muebles con hitbox son pared para todo lo demás (lo alcanzable,
+        # las rutas de los aliens, lo que queda "en una pared"), como en el juego.
+        muebles = self._hitboxes_muebles()
+        if muebles != self.mundo.muebles:
+            self.mundo.poner_muebles(muebles)
+            self._caminable_desde = None
+        fijas = self.mundo.paredes_archivo
+        for i, dato in enumerate(self.datos.get("decoracion", [])):
+            ficha = CATALOGO.get(dato.get("img"))
+            if ficha is None or decoracion.tamano(dato["img"]) is None:
+                self.estado[("decoracion", i)] = "pared"
+                self.problemas.append(f"Mueble {i + 1}: no existe \"{dato.get('img')}\"")
+                continue
+            caja = decoracion.rect_hitbox(dato, self.mundo.ancho, self.mundo.alto)
+            if caja is None:
+                continue
+            caja = pygame.Rect(caja)
+            if caja.collidelist(fijas) != -1:
+                self.estado[("decoracion", i)] = "pared"
+                self.problemas.append(f"Mueble {i + 1} ({ficha['nombre']}): su hitbox se mete en una pared")
+            elif any(caja.colliderect(otro) for k, otro in enumerate(muebles) if otro != caja):
+                self.estado[("decoracion", i)] = "encima"
+                self.problemas.append(f"Mueble {i + 1} ({ficha['nombre']}): encima de otro mueble")
         ocupados = []   # (rect, id) de todo lo que ocupa espacio
 
         for clave in CON_NOMBRE + LISTAS:
             for i, obj in enumerate(self.datos.get(clave, [])):
-                rect = self.rect_de(clave, self.posicion(clave, obj))
+                rect = self.rect_parado(clave, self.posicion(clave, obj))
                 ocupados.append((rect, (clave, i)))
         # Las notas de código de cada puerta: ("nota_codigo", puerta, nota).
         nombres_nota = {}
@@ -962,6 +1151,23 @@ class EditorMapa:
                 if not self._alcanzable(rect.inflate(200, 200)):
                     self.estado[ident] = "lejos"
                     self.problemas.append(f"Celda {i + 1}: muy lejos del piso para liberarla")
+                continue
+            if clave == "fusibles" and self.mundo.colisiona(rect):
+                # La caja puede ir colgada en la pared: se usa desde el piso
+                # de abajo (o de al lado), si se llega a él.
+                pie = self._pie_caja(rect)
+                if pie is None:
+                    self.estado[ident] = "lejos"
+                    self.problemas.append(f"{quien}: en la pared, pero sin piso al lado para usarla")
+                elif not self._alcanzable(pie):
+                    self.estado[ident] = "lejos"
+                    self.problemas.append(f"{quien}: no se llega caminando")
+                continue
+            solido = self.hitbox_objeto(clave, self.posicion(clave, self.datos[clave][i])) \
+                if clave in ("consolas", "terminales", "nexus", "escondites") else None
+            if solido is not None and any(solido.colliderect(r2) for r2, otro in ocupados if otro != ident):
+                self.estado[ident] = "encima"
+                self.problemas.append(f"{quien}: sus patas tapan otra cosa")
                 continue
             if self.mundo.colisiona(rect):
                 self.estado[ident] = "pared"
@@ -1114,6 +1320,16 @@ class EditorMapa:
             self.herramienta = TECLAS_HERRAMIENTA.index(key)
             self.arrastre = None
             self.notas_de_puerta = False
+        elif self.clave == "decoracion" and key in (pygame.K_t, pygame.K_y) and MUEBLES:
+            self.mueble_elegido = (self.mueble_elegido + (1 if key == pygame.K_t else -1)) % len(MUEBLES)
+            ficha = CATALOGO[MUEBLES[self.mueble_elegido]]
+            self.avisar(f"{ficha['nombre']} ({ficha['grupo']})", 1800)
+        elif self.clave == "decoracion" and key == pygame.K_f:
+            self.cambiar_mueble(pygame.mouse.get_pos(), voltear=True)
+        elif self.clave == "decoracion" and key in (pygame.K_PLUS, pygame.K_KP_PLUS, pygame.K_EQUALS,
+                                                   pygame.K_MINUS, pygame.K_KP_MINUS):
+            self.cambiar_mueble(pygame.mouse.get_pos(),
+                                alzar=-4 if key in (pygame.K_MINUS, pygame.K_KP_MINUS) else 4)
         elif key == pygame.K_x and self.clave == "puertas_codigo":
             self.alternar_notas_de_puerta()
         elif key == pygame.K_f and self.clave == "puertas_codigo":
@@ -1266,9 +1482,33 @@ class EditorMapa:
 
         actual = self.clave
         apagado = lambda clave: clave != actual
+        colores = {h["clave"]: h for h in HERRAMIENTAS}
+
+        # Lo que tiene imagen (los muebles y los objetos del juego), como en
+        # el juego: los de atrás primero. Debajo de las marcas de colores,
+        # para poder seguir eligiendo cada cosa.
+        dibujos = []
+        for i, dato in enumerate(self.datos.get("decoracion", [])):
+            caja = decoracion.rect_imagen(dato, self.mundo.ancho, self.mundo.alto)
+            img = self._sprite_mueble(dato)
+            if caja is not None and img is not None:
+                capa = {"piso": 0, "pared": 1}.get(CATALOGO.get(dato.get("img"), {}).get("capa"), 2)
+                base = caja[1] + caja[3] + int(dato.get("alzado", 0))
+                dibujos.append((capa, base, "decoracion", (caja[0], caja[1]), img, None, ("decoracion", i)))
+        for herr, ident, img, caja, hb in self.objetos_con_imagen():
+            dibujos.append((2, caja.bottom, herr, caja.topleft, self._imagen_zoom(id(img), img), hb, ident))
+        for capa, base, herr, esquina, img, hb, ident in sorted(dibujos, key=lambda d: (d[0], d[1])):
+            if not area.colliderect(pygame.Rect(self.a_pantalla(esquina), img.get_size())):
+                continue
+            if apagado(herr) and not (herr == "puertas_dobles" and not apagado("puertas_dobles")):
+                img = img.copy()
+                img.set_alpha(150 if herr == "decoracion" else 190)
+            s.blit(img, self.a_pantalla(esquina))
+            if hb is not None and not apagado(herr):
+                # Las patas de la consola y la terminal: se chocan (en verde).
+                pygame.draw.rect(s, self._color(ident, (120, 235, 170)), self.rect_a_pantalla(hb, 3), 2)
 
         # Todo lo que es un punto o una lista de puntos.
-        colores = {h["clave"]: h for h in HERRAMIENTAS}
         for clave in CON_NOMBRE + LISTAS + ("capsula", "guardia", "planta"):
             herr = colores[clave]
             objetos = self.datos.get(clave)
@@ -1282,7 +1522,10 @@ class EditorMapa:
                 estado = self.estado.get(ident) or self.estado.get((clave, i))
                 color = self._color(ident if ident in self.estado else (clave, i), herr["color"])
                 relleno = pygame.Surface(r.size, pygame.SRCALPHA)
-                relleno.fill((*herr["color"], 110 if not apagado(clave) else 50))
+                if clave in CON_IMAGEN:      # (su imagen ya se ve: que no la tape)
+                    relleno.fill((*herr["color"], 45 if not apagado(clave) else 0))
+                else:
+                    relleno.fill((*herr["color"], 110 if not apagado(clave) else 50))
                 s.blit(relleno, r.topleft)
                 pygame.draw.rect(s, color if estado else herr["color"], r,
                                  3 if estado else (2 if not apagado(clave) else 1))
@@ -1420,6 +1663,31 @@ class EditorMapa:
             pygame.draw.circle(s, color, p, 4)
             self._etiqueta("Inicio", (p[0], p[1] - 12), color)
 
+        # Con la herramienta de decoración puesta, la hitbox de cada mueble en
+        # verde (sus imágenes ya se dibujaron, al principio).
+        for i, dato in enumerate(self.datos.get("decoracion", [])):
+            caja = decoracion.rect_imagen(dato, self.mundo.ancho, self.mundo.alto)
+            if caja is None:
+                continue
+            if not apagado("decoracion"):
+                hb = decoracion.rect_hitbox(dato, self.mundo.ancho, self.mundo.alto)
+                estado = self.estado.get(("decoracion", i))
+                color = self._color(("decoracion", i), colores["decoracion"]["color"])
+                if hb is not None:
+                    pygame.draw.rect(s, color, self.rect_a_pantalla(pygame.Rect(hb), 3), 3 if estado else 2)
+                elif estado:
+                    pygame.draw.rect(s, color, self.rect_a_pantalla(pygame.Rect(caja), 3), 2)
+        if actual == "decoracion" and MUEBLES and self.arrastre is None \
+                and area.collidepoint(pygame.mouse.get_pos()) \
+                and self.buscar("decoracion", pygame.mouse.get_pos()) is None:
+            # El que se va a poner, transparente, con su base en el mouse.
+            fantasma = self._sprite_mueble({"img": MUEBLES[self.mueble_elegido % len(MUEBLES)]})
+            if fantasma is not None:
+                fantasma = fantasma.copy()
+                fantasma.set_alpha(140)
+                mx, my = pygame.mouse.get_pos()
+                s.blit(fantasma, (mx - fantasma.get_width() // 2, my - fantasma.get_height()))
+
         # Lo que hay bajo el mouse.
         cosa = self.buscar(actual, pygame.mouse.get_pos()) if area.collidepoint(pygame.mouse.get_pos()) else None
         if cosa is not None:
@@ -1488,6 +1756,14 @@ class EditorMapa:
                       color_puerta(self.puerta_elegida)[1], self.f_chica)
             else:
                 linea("Clic: pone otra puerta (clic en una: la elige)", COLOR_TITULO, self.f_chica)
+        if self.clave == "decoracion" and MUEBLES:
+            clave_mueble = MUEBLES[self.mueble_elegido % len(MUEBLES)]
+            ficha = CATALOGO[clave_mueble]
+            linea(f"Mueble {self.mueble_elegido % len(MUEBLES) + 1}/{len(MUEBLES)}: {ficha['nombre']}",
+                  COLOR_TITULO, self.f_chica)
+            tipo = {"solido": "se choca con él", "encima": "va sobre una mesa", "pared": "va en la pared",
+                    "piso": "va en el piso"}[ficha["capa"]]
+            linea(f"{ficha['grupo']} · {tipo}", COLOR_TITULO, self.f_chica)
         if self.clave == "salas":
             linea(f"Próxima sala: {self.nombre_sala}", COLOR_TITULO, self.f_chica)
             if self.escribiendo is not None:

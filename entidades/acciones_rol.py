@@ -20,6 +20,8 @@ import math
 
 import pygame
 
+from juego import sprites_objetos
+
 
 # -- Números de cada habilidad (para ajustar el balance, solo aquí) -----------------
 DURACION_MAPA_TERMINAL_MS = 5000      # Conexión digital
@@ -30,6 +32,7 @@ RECARGA_HACKEO_MS = 15000
 DURACION_ESCANEO_MS = 6000            # Escaneo de sistemas
 DURACION_SENUELO_MS = 7000            # Fabricación improvisada
 RADIO_SENUELO = 600
+MARGEN_TERMINAL = 16                  # a cuánto de las patas de la terminal se la usa
 RADIO_AYUDA = 230                     # Regeneración e Impulso: hasta dónde llegan
 CALMA_REGENERACION = 35
 RECARGA_CURACION_MS = 40000           # Regeneración: cada cuánto puede devolver vidas
@@ -96,6 +99,9 @@ def preparar_estaciones(mundo, objetos=None):
     for datos in lista_t:
         t = dict(datos, tipo="terminal", recarga_ms=0)
         t["rect"] = _rect_en(datos["rx"], datos["ry"], TAMANO_ESTACION, mundo)
+        # Sus patas se chocan (las pone en el mundo juego/decoracion.crear); el
+        # rect es el piso de enfrente, donde se para el Tecnomante.
+        t["solido"] = sprites_objetos.hitbox("terminal", t["rect"])
         terminales.append(t)
     paneles = []
     for datos in lista_p:
@@ -132,13 +138,21 @@ def estacion_bajo(juego, jugador):
     """
     if jugador.arbol.tiene("CONEXION"):
         for t in juego.terminales:
-            if t["rect"].colliderect(jugador.hitbox):
+            if terminal_cerca(t, jugador):
                 return t
     if jugador.arbol.tiene("INGENIO"):
         for p in juego.paneles:
             if not p["reparado"] and p["rect"].colliderect(jugador.hitbox):
                 return p
     return None
+
+
+def terminal_cerca(terminal, jugador):
+    """¿Está parado frente a la terminal (o pegado a un lado de ella)?"""
+    if terminal["rect"].colliderect(jugador.hitbox):
+        return True
+    solido = terminal.get("solido")
+    return solido is not None and solido.inflate(MARGEN_TERMINAL * 2, MARGEN_TERMINAL * 2).colliderect(jugador.hitbox)
 
 
 def companeros_cerca(juego, jugador, radio=RADIO_AYUDA, incluirse=False):

@@ -65,8 +65,8 @@ trozo de pantalla y usa su tecla de interaccion con lo que tenga cerca.
 | Interactuar / confirmar | E | Enter | A (o O) | A (o Y) |
 | Elegir opcion | W / S | Flecha arriba / abajo | stick / cruceta (o I / K) | stick / cruceta (o T / G) |
 | Arbol de habilidades | Q | Shift derecho | Y (o U) | Y (o R) |
-| Usar habilidad | F | - (junto al Shift derecho) | X (o P) | X (o V) |
-| Caminar en sigilo (mantener) | Shift izquierdo | AltGr o 0 del numerico | LB o LT | LB o LT |
+| Usar habilidad | F | Alt derecho | X (o P) | X (o V) |
+| Caminar en sigilo (mantener) | Espacio (o Shift izquierdo) | Ctrl derecho o 0 del numerico | LB o LT | LB o LT |
 | Celular (NEXUS): abrir / atras | TAB | . (punto) | RB (o J) | RB (o B) |
 | Soltar algo del inventario | X | , (coma) | B (o L) | B (o N) |
 | Cerrar un panel | - | - | B | B |
@@ -258,7 +258,7 @@ se pueda terminar. Si falta un rol desde el principio, aparece **uno solo** de s
 consumible (decodificador, kit o abono), cada uno en un lugar de consumibles distinto.
 Lo que lleva cada uno se ve en el inventario, abajo a la derecha. Las consolas y la reparacion se hacen
 **manteniendo** la tecla de interactuar. La habilidad escogida se usa con **F**
-(jugador 1) o **-** (jugador 2, la tecla junto al Shift derecho) y se paga con puntos del equipo.
+(jugador 1) o **Alt derecho** (jugador 2) y se paga con puntos del equipo.
 
 Cada jugador tiene un **campo de vision**, como en Among Us: no ve a traves de
 las paredes ni de las compuertas bajadas; lo que queda detras se ve en penumbra
@@ -304,6 +304,9 @@ python pruebas/prueba_cambiaformas.py # prisioneros que caminan y el Cambiaforma
 python pruebas/prueba_dificultad.py   # las 4 dificultades, la flecha, la fuga y el director
 python pruebas/prueba_victoria.py     # una partida ganada en Normal (NEXUS, planos y Cambiaformas)
 python pruebas/prueba_vista_grafo.py  # la vista de los grafos (Pausa > Opciones > Grafo)
+python pruebas/prueba_idioma.py      # el juego en ingles (Menu > Opciones > Idioma)
+python pruebas/prueba_rumores_virales.py  # rumores que se vuelven virales y desmentidos tarde
+python pruebas/prueba_bots_crecen.py      # las cuentas falsas que nadie reporta ganan seguidores
 python pruebas/prueba_infiltrado.py # mision secundaria del infiltrado de NEXUS
 python pruebas/prueba_logros.py    # arbol de logros y cuando se consigue cada uno
 python pruebas/prueba_sonidos.py   # que todo sonido pedido exista y suene donde va
@@ -377,7 +380,9 @@ python pruebas/prueba_hitbox_editor.py  # zoom y paredes idénticas a las del ju
 - `Imagenes/` -- assets: `Fondos/` (la nave y el menu), `Personajes/<Rol>/`
   (`<Rol>_<animacion>_<direccion>.png`), `Aliens/` (incluido el Cambiaformas),
   `Prisioneros/<carpeta>/` (los que caminan; cada carpeta nueva se reparte
-  sola) y `Objetos/`.
+  sola), `Perfiles/` (fotos de perfil de NEXUS: una por rol y una por carpeta de
+  prisioneros, `NPC3.png` = `Prisioneros/NPC_3`), `UI/` (iconos de habilidades
+  y el logo de NEXUS) y `Objetos/`.
 - `Hitboxes/` -- los JSON que generan los editores (paredes, objetos del mapa,
   hitbox de cada rol). La nave es el unico mapa.
 - `Audio/`, `Fuentes/` -- efectos de sonido y la tipografia.

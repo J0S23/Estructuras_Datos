@@ -12,6 +12,28 @@ _RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 import pygame
 
+from juego.idioma import tr
+
+
+class Fuente(pygame.font.Font):
+    """La fuente del juego: traduce lo que mide y dibuja (juego/idioma.py).
+
+    En español `tr` devuelve el texto tal cual, así que no cambia nada."""
+
+    def render(self, texto, *args, **kwargs):
+        return super().render(tr(texto), *args, **kwargs)
+
+    def size(self, texto):
+        return super().size(tr(texto))
+
+
+def _de_sistema(ruta, tam, negrita, cursiva):
+    """Para pygame.font.SysFont(constructor=...): la misma clase Fuente."""
+    f = Fuente(ruta, tam)
+    f.set_bold(negrita)
+    f.set_italic(cursiva)
+    return f
+
 
 CARPETA_FUENTES = os.path.join(_RAIZ_PROYECTO, "Fuentes")
 
@@ -58,11 +80,12 @@ def construir_fuentes():
 
     ruta = ruta_fuente()
     if ruta:
-        _CACHE = {estilo: pygame.font.Font(ruta, tam) for estilo, tam in TAMANOS.items()}
+        _CACHE = {estilo: Fuente(ruta, tam) for estilo, tam in TAMANOS.items()}
     else:
         nombre = _fuente_del_sistema()
         _CACHE = {
-            estilo: pygame.font.SysFont(nombre, tam, bold=(estilo in ("title", "subtitle", "button")))
+            estilo: pygame.font.SysFont(nombre, tam, bold=(estilo in ("title", "subtitle", "button")),
+                                        constructor=_de_sistema)
             for estilo, tam in TAMANOS.items()
         }
     return _CACHE
@@ -89,8 +112,8 @@ def fuente_de_tamano(px):
 
     ruta = ruta_fuente()
     if ruta:
-        f = pygame.font.Font(ruta, px)
+        f = Fuente(ruta, px)
     else:
-        f = pygame.font.SysFont(_fuente_del_sistema(), px)
+        f = pygame.font.SysFont(_fuente_del_sistema(), px, constructor=_de_sistema)
     _CACHE_TAMANOS[px] = f
     return f

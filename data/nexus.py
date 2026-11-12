@@ -16,30 +16,39 @@ Cómo funciona, en corto:
 # -- Cuentas -----------------------------------------------------------------------
 # "usuario" es lo que se ve en el celular. Pueden agregar o quitar cuentas:
 # el grafo se arma solo con las que haya.
+# "sprites": qué carpetas de Imagenes/Prisioneros/ le quedan bien a esa persona
+# (la primera que no esté usada en la partida; si ya están todas, la menos
+# usada). Sin "sprites", o si no existe ninguna, le toca cualquiera.
+#   NPC_1 joven de pelo corto       NPC_2 señor mayor, canoso
+#   NPC_3 joven de pelo castaño     NPC_4 joven con la venda en el ojo
+#   NPC_5 señora mayor, canosa      NPC_6 niño con el brazo en cabestrillo
+#   NPC_7 joven de pelo afro        NPC_8 joven de pelo largo y claro
 CUENTAS = [
-    {"nombre": "Dra. Vega", "usuario": "@dra_vega"},
-    {"nombre": "Mecánico Ruiz", "usuario": "@ruiz_llaves"},
-    {"nombre": "Lía, la piloto", "usuario": "@lia_vuela"},
-    {"nombre": "Cabo Duarte", "usuario": "@cabo_duarte"},
-    {"nombre": "El Profe", "usuario": "@elprofe"},
-    {"nombre": "Nadia (cocina)", "usuario": "@nadia_cocina"},
-    {"nombre": "Tomás", "usuario": "@tomas_17"},
-    {"nombre": "Sofi", "usuario": "@sofi.estrellas"},
-    {"nombre": "Don Hernán", "usuario": "@don_hernan"},
-    {"nombre": "Mariana", "usuario": "@mari_ana"},
-    {"nombre": "Kevin", "usuario": "@kevin_gamer"},
-    {"nombre": "Abuela Rosa", "usuario": "@abuela_rosa"},
-    {"nombre": "Julián", "usuario": "@julian_foto"},
-    {"nombre": "Valen", "usuario": "@valen.v"},
+    {"nombre": "Dra. Vega", "usuario": "@dra_vega", "sprites": ["NPC_7", "NPC_3", "NPC_8"]},
+    {"nombre": "Mecánico Ruiz", "usuario": "@ruiz_llaves", "sprites": ["NPC_4", "NPC_1"]},
+    {"nombre": "Lía, la piloto", "usuario": "@lia_vuela", "sprites": ["NPC_3", "NPC_8", "NPC_7"]},
+    {"nombre": "Cabo Duarte", "usuario": "@cabo_duarte", "sprites": ["NPC_1", "NPC_4"]},
+    {"nombre": "El Profe", "usuario": "@elprofe", "sprites": ["NPC_2"]},
+    {"nombre": "Nadia (cocina)", "usuario": "@nadia_cocina", "sprites": ["NPC_7", "NPC_8", "NPC_3"]},
+    {"nombre": "Tomás", "usuario": "@tomas_17", "sprites": ["NPC_6", "NPC_1", "NPC_4"]},
+    {"nombre": "Sofi", "usuario": "@sofi.estrellas", "sprites": ["NPC_8", "NPC_3", "NPC_7"]},
+    {"nombre": "Don Hernán", "usuario": "@don_hernan", "sprites": ["NPC_2"]},
+    {"nombre": "Mariana", "usuario": "@mari_ana", "sprites": ["NPC_7", "NPC_8", "NPC_3"]},
+    {"nombre": "Kevin", "usuario": "@kevin_gamer", "sprites": ["NPC_6", "NPC_4", "NPC_1"]},
+    {"nombre": "Abuela Rosa", "usuario": "@abuela_rosa", "sprites": ["NPC_5"]},
+    {"nombre": "Julián", "usuario": "@julian_foto", "sprites": ["NPC_1", "NPC_4"]},
+    {"nombre": "Valen", "usuario": "@valen.v", "sprites": ["NPC_8", "NPC_3", "NPC_7"]},
 ]
 
-# Cuentas falsas del Cambiaformas: se ven como prisioneros cualquiera.
+# Cuentas falsas del Cambiaformas: se ven como prisioneros cualquiera, con
+# la foto de alguien de verdad ("sprites": la foto de perfil que usan, como
+# las de CUENTAS; Imagenes/Perfiles/).
 BOTS = [
-    {"nombre": "Prisionero 47", "usuario": "@p47_libre"},
-    {"nombre": "Ana Verdad", "usuario": "@la_verdad_ana"},
-    {"nombre": "Info Nave 24/7", "usuario": "@infonave247"},
-    {"nombre": "Camila", "usuario": "@cami_real"},
-    {"nombre": "Noticias Ya", "usuario": "@noticias_ya"},
+    {"nombre": "Prisionero 47", "usuario": "@p47_libre", "sprites": ["NPC_6"]},
+    {"nombre": "Ana Verdad", "usuario": "@la_verdad_ana", "sprites": ["NPC_7"]},
+    {"nombre": "Info Nave 24/7", "usuario": "@infonave247", "sprites": ["NPC_1"]},
+    {"nombre": "Camila", "usuario": "@cami_real", "sprites": ["NPC_8"]},
+    {"nombre": "Noticias Ya", "usuario": "@noticias_ya", "sprites": ["NPC_4"]},
 ]
 
 # Cuántas cuentas (al azar) recibe lo que publica cada uno.
@@ -53,12 +62,14 @@ BOTS_AL_EMPEZAR = 3
 # -- Rumores --------------------------------------------------------------------------
 # "lugar" dice dónde se verifica: capsula, consola, celda, fusibles, escondite,
 # terminal, panel o puerta_doble (lo que exista en el mapa). "foto" es lo que se
-# ve al llegar; "desmentido" es lo que se publica con la foto.
+# ve al llegar; "desmentido" es lo que se publica con la foto. "viral" es lo
+# que pasa en la nave si nadie lo desmiente a tiempo (ver VIRAL_S abajo).
 RUMORES = [
     {"lugar": "capsula",
      "texto": "Se los juro: la cápsula de escape explotó. No hay salida, mejor ríndanse.",
      "foto": "La cápsula está entera. Solo le faltan piezas.",
-     "desmentido": "Fui a la cápsula: está entera. NO explotó. Foto aquí."},
+     "desmentido": "Fui a la cápsula: está entera. NO explotó. Foto aquí.",
+     "viral": "Los prisioneros se rindieron: ya nadie quiere ir a la cápsula contigo."},
     {"lugar": "consola",
      "texto": "Las consolas de navegación dan una descarga mortal si las tocas. No se acerquen.",
      "foto": "La consola funciona normal. No hay ninguna trampa.",
@@ -66,7 +77,8 @@ RUMORES = [
     {"lugar": "celda",
      "texto": "Las celdas tienen gas venenoso. Si alguien cae preso, no vayan a rescatarlo.",
      "foto": "Las celdas están limpias. No hay ningún gas.",
-     "desmentido": "Estuve en las celdas: no hay gas. Si atrapan a alguien, ¡vayan por él!"},
+     "desmentido": "Estuve en las celdas: no hay gas. Si atrapan a alguien, ¡vayan por él!",
+     "viral": "Nadie se acerca a las celdas: el que caiga preso tarda el doble en forzar la reja."},
     {"lugar": "fusibles",
      "texto": "Si tocas una caja de fusibles la nave se autodestruye. No las toquen nunca.",
      "foto": "Es una caja de fusibles normal, nada de autodestrucción.",
@@ -74,11 +86,13 @@ RUMORES = [
     {"lugar": "escondite",
      "texto": "Los aliens sellaron todos los casilleros. Ya no hay dónde esconderse.",
      "foto": "El casillero abre bien. Se puede usar.",
-     "desmentido": "Abrí un casillero hace un momento: no están sellados. Foto de prueba."},
+     "desmentido": "Abrí un casillero hace un momento: no están sellados. Foto de prueba.",
+     "viral": "Los prisioneros corrieron a meterse en los casilleros que quedan: hay menos escondites para ustedes."},
     {"lugar": "terminal",
      "texto": "Las terminales graban tu cara y se la mandan a los aliens. No las usen.",
      "foto": "La terminal no tiene cámara. Solo muestra el mapa de la nave.",
-     "desmentido": "Las terminales no tienen cámara, miren. Ese rumor es falso."},
+     "desmentido": "Las terminales no tienen cámara, miren. Ese rumor es falso.",
+     "viral": "Los prisioneros desconectaron una terminal NEXUS por miedo: quedó fuera de servicio."},
     {"lugar": "panel",
      "texto": "Los paneles de reparación están rotos para siempre. Los aliens ganaron.",
      "foto": "El panel se puede reparar con piezas.",
@@ -130,6 +144,36 @@ POTENCIA_VELOCIDAD = 0.30       # +30% de velocidad al máximo
 POTENCIA_VISION = 0.35          # +35% de alcance de visión al máximo
 
 RADIO_FOTO = 70                 # qué tan cerca del lugar hay que estar
+
+# -- Rumores que se vuelven virales ------------------------------------------------
+# La desinformación no se queda en la pantalla: si nadie desmiente un rumor en
+# VIRAL_S segundos (× "viral_cada" de la dificultad), se vuelve viral. A los
+# grises les llega a todos y se lo creen con PROB_CREER_VIRAL, y la gente de la
+# nave actúa como si fuera verdad ("viral" de cada rumor; los que no traen,
+# solo se riegan). Al desmentirlo, la gente vuelve a lo de antes.
+VIRAL_S = 90
+PROB_CREER_VIRAL = 0.5
+VIRAL_GENERICO = "Ya casi toda la nave se lo cree."
+ESCONDITES_VIRAL = 3            # casilleros que ocupan los prisioneros (rumor de casilleros)
+FUGA_VIRAL = 0.5                # rumor de las celdas: la fuga avanza a esta velocidad
+
+# Llegar tarde convence menos: con la barra de "se vuelve viral" por encima de
+# TARDE_DESDE, el desmentido convence cada vez menos, hasta CONVENCE_TARDE (la
+# fracción de lo normal) cuando ya se volvió viral. "La mentira da la vuelta al
+# mundo antes de que la verdad se ponga los zapatos."
+TARDE_DESDE = 0.3
+CONVENCE_TARDE = 0.5
+
+# Las cuentas falsas que nadie reporta crecen: cada bot gana un seguidor cada
+# BOT_GANA_SEGUIDOR_S segundos (× "bot_crece_cada" de la dificultad), hasta
+# BOT_MAX_SEGUIDORES. Prefiere a amigos de sus seguidores (como cuando alguien
+# ve que un conocido sigue una cuenta). Con más seguidores, cada rumor que
+# publica les llega de una vez a más prisioneros. Reportarlo temprano corta
+# una cuenta chica; tarde, una que ya le llegaba a media nave.
+BOT_GANA_SEGUIDOR_S = 30
+BOT_MAX_SEGUIDORES = 10
+AVISOS_SEGUIDORES = (6, BOT_MAX_SEGUIDORES)   # a cuántos seguidores avisa a todos
+SEGUIDORES_PARA_CONSEJO = 8     # ganados en la partida sin reportar ningún bot: consejo en resultados
 
 PUNTOS_DESMENTIR = 15
 PUNTOS_REPORTAR_BOT = 10

@@ -81,6 +81,7 @@ SPRITES_ALIEN = {
     "cazador": ("Alien_Rapido", 1.8),
     "vigia": ("Alien_Vision", 1.9),
     "cambiaformas": ("Alien_Cambiaformas", 2.3),
+    "sombra": ("Alien_Sombra", 1.7),
 }
 FPS_ANIMACION = 8
 # Ángulo -> dirección del sprite (0 = este, va en sentido horario en pantalla).
@@ -101,21 +102,53 @@ def sprites_de(tipo):
         ruta = os.path.join(_RAIZ_PROYECTO, "Imagenes", "Aliens", carpeta)
         if os.path.isdir(ruta):
             from Movimiento.Personaje import cargar_animaciones
-            animaciones = cargar_animaciones(ruta, escala=escala, ancho_ratio=1.0)
+            animaciones = cargar_animaciones(ruta, escala=1.0, ancho_ratio=1.0)
+            # Ojos/ (la Sombra): las mismas hojas con solo los pixeles de los
+            # ojos, para dibujarlos brillando encima de la oscuridad.
+            ruta_ojos = os.path.join(ruta, "Ojos")
+            ojos = (cargar_animaciones(ruta_ojos, escala=1.0, ancho_ratio=1.0)
+                    if os.path.isdir(ruta_ojos) else None)
+            base = (animaciones.get("idle", {}).get("south") or [None])[0]
+            if base is not None:
+                for anims in (animaciones, ojos):
+                    _escalar_a_celda(anims, base.get_height(), escala)
             muestra = (animaciones.get("idle", {}).get("south") or [None])[0]
             if muestra is not None:
                 contenido = muestra.get_bounding_rect()
-                _alinear_pies(animaciones, contenido.bottom)
+                _alinear_pies(animaciones, contenido.bottom, ojos)
                 # Cuánto aire transparente hay debajo de los pies, y la caja de
                 # lo que se ve (para poner encima el "!" y los ojos).
                 resultado = {"animaciones": animaciones,
                              "pie": muestra.get_height() - contenido.bottom,
-                             "contenido": contenido}
+                             "contenido": contenido,
+                             "ojos": ojos}
     _cache_sprites[tipo] = resultado
     return resultado
 
 
-def _alinear_pies(animaciones, base):
+def _escalar_a_celda(animaciones, celda, escala):
+    """Agranda cada cuadro `escala` veces, pero midiendo con la celda de la
+    hoja de quieto (`celda` px): una hoja dibujada en una celda más grande
+    (la de respirar del Cambiaformas viene en celdas de 96 px y las demás en
+    80, con el monstruo dibujado 1.2 veces más grande) se achica para que
+    todas queden del mismo tamaño. Con todas las celdas iguales es escalar
+    `escala` y ya, como antes."""
+    if not animaciones:
+        return
+    hechos = {}
+    for por_direccion in animaciones.values():
+        for direccion, cuadros in list(por_direccion.items()):
+            nuevos = []
+            for cuadro in cuadros:
+                if id(cuadro) not in hechos:
+                    k = escala * celda / cuadro.get_height()
+                    hechos[id(cuadro)] = pygame.transform.scale(
+                        cuadro, (max(1, int(cuadro.get_width() * k)), max(1, int(cuadro.get_height() * k))))
+                nuevos.append(hechos[id(cuadro)])
+            por_direccion[direccion] = nuevos
+
+
+def _alinear_pies(animaciones, base, acompanantes=None):
     """Corre cada dirección para que los pies queden a la misma altura.
 
     Las hojas no vienen todas alineadas: en la del Vigía caminando al oeste
@@ -123,8 +156,18 @@ def _alinear_pies(animaciones, base):
     el noroeste, así que al caminar a la izquierda, cada vez que cambiaba
     entre esas direcciones parecía que saltaba. Los pies de una dirección son
     lo más bajo de sus cuadros (el pie que pisa); todas se llevan a `base`
-    (la de quieto de frente, con la que se calcula dónde se dibuja)."""
-    for por_direccion in animaciones.values():
+    (la de quieto de frente, con la que se calcula dónde se dibuja).
+    `acompanantes`: otras animaciones del mismo tamaño (los ojos de la
+    Sombra) que se corren igual."""
+    def correr(cuadros, dy):
+        corridos = []
+        for cuadro in cuadros:
+            nuevo = pygame.Surface(cuadro.get_size(), pygame.SRCALPHA)
+            nuevo.blit(cuadro, (0, dy))
+            corridos.append(nuevo)
+        return corridos
+
+    for animacion, por_direccion in animaciones.items():
         for direccion, cuadros in list(por_direccion.items()):
             cajas = [c.get_bounding_rect() for c in cuadros]
             pies = [caja.bottom for caja in cajas if caja.height]
@@ -132,12 +175,10 @@ def _alinear_pies(animaciones, base):
                 continue
             dy = base - max(pies)
             if dy:
-                corridos = []
-                for cuadro in cuadros:
-                    nuevo = pygame.Surface(cuadro.get_size(), pygame.SRCALPHA)
-                    nuevo.blit(cuadro, (0, dy))
-                    corridos.append(nuevo)
-                por_direccion[direccion] = corridos
+                por_direccion[direccion] = correr(cuadros, dy)
+                otros = (acompanantes or {}).get(animacion, {})
+                if otros.get(direccion):
+                    otros[direccion] = correr(otros[direccion], dy)
 
 
 def _distancia(a, b):
@@ -202,8 +243,9 @@ class Alien:
         distancia = math.hypot(dx, dy)
         # Tacto: lo que tiene casi encima lo nota aunque no lo vea (el Ciego
         # solo "ve" así).
-        # Los sellos del Forjador son opacos para ellos: ni ven a través.
-        choca = getattr(mundo, "colisiona_alien", None)
+        # Los sellos del Forjador son opacos para ellos: ni ven a través. Los
+        # muebles de la decoración no tapan (mundo.tapa_vista_alien).
+        choca = getattr(mundo, "tapa_vista_alien", None) or getattr(mundo, "colisiona_alien", None)
         if distancia <= self.datos["tacto"]:
             return mundo.linea_libre(self.centro, punto, colisiona=choca) if choca \
                 else mundo.linea_libre(self.centro, punto)
@@ -690,14 +732,15 @@ class Alien:
         cuerpo.midbottom = (pie_x, pie_y - 4 + flote)
         return cuerpo, pie_x, pie_y
 
-    def _frame_sprite(self):
-        """(superficie, datos) del cuadro que toca ahora, o (None, None)."""
+    def _frame_sprite(self, capa="animaciones"):
+        """(superficie, datos) del cuadro que toca ahora, o (None, None).
+        `capa` = "ojos": el mismo cuadro, solo con los ojos (la Sombra)."""
         datos = sprites_de(self.tipo)
-        if datos is None:
+        if datos is None or not datos.get(capa):
             return None, None
         estado = "walking" if self.moviendose else "breathing"
         indice = self._indice_direccion()
-        frames = datos["animaciones"].get(estado, {}).get(_DIRECCIONES_ANGULO[indice]) or []
+        frames = datos[capa].get(estado, {}).get(_DIRECCIONES_ANGULO[indice]) or []
         if not frames:
             return None, None
         cuadro = int(self.tiempo_ms / (1000 / FPS_ANIMACION)) % len(frames)

@@ -23,6 +23,7 @@ import math
 import pygame
 
 from juego.fuentes import fuente_de_tamano
+from juego.idioma import tr
 from juego.mandos import botones_conectados
 from juego.ui_components import Button
 
@@ -105,6 +106,7 @@ def _panel(screen, rect, titulo=None, f_titulo=None, color=COLOR_TITULO):
 def _texto(screen, texto, f, x, y, ancho, color):
     """Una línea que se encoge si no cabe (y si ni así, se corta con "...");
     devuelve su alto."""
+    texto = tr(texto)
     if f.size(texto)[0] > ancho:
         minimo = max(10, int(f.get_height() * 0.7))
         for px in range(f.get_height(), minimo - 1, -1):
@@ -436,7 +438,9 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
                 ("Fotos recortadas (sin ubicación)", r.get("fotos_recortadas", 0))]
         mal = [("Compartidos sin verificar", r.get("compartidos_falsos", 0)),
                ("Reportes a gente real", r.get("reportes_injustos", 0)),
-               ("Fotos con su ubicación", r.get("fotos_ubicacion", 0))]
+               ("Fotos con su ubicación", r.get("fotos_ubicacion", 0)),
+               ("Rumores que se volvieron virales", r.get("virales", 0)),
+               ("Seguidores que ganaron los bots", r.get("seguidores_bots", 0))]
         col = texto_ancho // 2
         for k, (lista, c, bueno, titulo) in enumerate(((bien, COLOR_BIEN, True, "Lo que hicieron bien"),
                                                        (mal, COLOR_MAL, False, "Lo que hay que cuidar"))):

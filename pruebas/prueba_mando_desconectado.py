@@ -25,6 +25,7 @@ import pygame; pygame.init()
 from juego import app as App
 from juego import objetos_mapa
 from juego import mandos as M
+M.CALIBRAR_MS = 0      # (el stick de un mando recién conectado se calibra unos cuadros, no 0.6 s)
 objetos_mapa.mapa_activo = lambda: "Nave"
 DT = 1000 // 60
 

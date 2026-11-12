@@ -2,8 +2,8 @@
 
 Solo existe mientras la nave está a oscuras: aparece unos segundos después de
 que se va la luz, lejos de todos y donde nadie la ve, y se disuelve cuando
-alguien prende la caja de fusibles (Game._actualizar_sombra). Es mediana,
-encorvada, de brazos largos y una boca llena de dientes.
+alguien prende la caja de fusibles (Game._actualizar_sombra). Una criatura
+oscura de cuatro patas de araña y seis ojos que brillan.
 
 - En la oscuridad solo se le ven los ojos, que brillan (se dibujan encima de
   la capa de oscuridad: `dibujar_ojos`). Cuando una linterna la alumbra se
@@ -21,8 +21,15 @@ encorvada, de brazos largos y una boca llena de dientes.
 
 Su comportamiento es un árbol binario de decisión, como el de los demás
 aliens (data/comportamiento_sombra.py); este archivo responde sus preguntas
-(percibir) y ejecuta sus hojas (_ejecutar). No tiene arte todavía: su figura
-se dibuja con formas (`figura_sombra`).
+(percibir) y ejecuta sus hojas (_ejecutar).
+
+Arte (nov 11): Imagenes/Aliens/Alien_Sombra/ (como los demás aliens: idle,
+breathing y walking en 8 direcciones), una criatura con 4 patas de araña y
+SEIS ojos. Alien_Sombra/Ojos/ tiene las mismas hojas con solo los pixeles de
+los ojos (sacados por color: el amarillo pálido y los brillos blancos), que
+`dibujar_ojos` pinta encima de la oscuridad con un halo. De espaldas
+(norte) no se le ven. Sin la carpeta, vuelve la figura de formas
+(`figura_sombra`).
 """
 
 import math
@@ -30,7 +37,7 @@ import random
 
 import pygame
 
-from entidades.alien import Alien, DISTANCIA_ATRAPAR, _distancia
+from entidades.alien import Alien, DISTANCIA_ATRAPAR, _distancia, sprites_de
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 from data.comportamiento_sombra import ARBOL_SOMBRA
 from juego import vision
@@ -193,6 +200,9 @@ class Sombra(Alien):
     def dibujar(self, screen, offset):
         if self.oculta:
             return
+        if sprites_de("sombra") is not None:
+            super().dibujar(screen, offset)          # su sprite (Alien_Sombra)
+            return
         imagen, _, _ = self._imagen()
         rect = self._rect_figura(imagen, offset)
         sombra = pygame.Rect(0, 0, 40, 10)
@@ -201,6 +211,8 @@ class Sombra(Alien):
         screen.blit(imagen, rect)
 
     def _caja_figura(self, offset):
+        if sprites_de("sombra") is not None:
+            return super()._caja_figura(offset)
         imagen, _, _ = self._imagen()
         return self._rect_figura(imagen, offset)
 
@@ -209,6 +221,13 @@ class Sombra(Alien):
         Parpadean de vez en cuando."""
         if self.oculta or (self.tiempo_ms + self.numero * 977) % 3700 < 130:
             return
+        ojos, datos = self._frame_sprite("ojos")
+        if ojos is not None:
+            rect = self._posicion_sprite(ojos, datos, offset)
+            dibujar_capa_ojos(screen, ojos, rect.topleft)
+            return
+        if sprites_de("sombra") is not None:
+            return                                   # de espaldas: no se le ven
         imagen, izquierda, fase = self._imagen()
         rect = self._rect_figura(imagen, offset)
         e = ESCALA_FIGURA
@@ -241,6 +260,63 @@ PIEL_CLARA = (170, 146, 190)
 CONTORNO = (14, 8, 20)
 BOCA = (168, 28, 50)
 DIENTE = (244, 236, 214)
+
+
+_ojos_capa = {}
+
+
+def ojos_en(capa):
+    """[(centro, radio)] de cada ojo de una capa de ojos (sus pedazos
+    conectados), para ponerle a cada uno su halo. Se guarda por capa."""
+    clave = id(capa)
+    if clave not in _ojos_capa:
+        lista = []
+        for parte in pygame.mask.from_surface(capa, 40).connected_components(3):
+            caja = parte.get_bounding_rects()[0]
+            area = parte.count()
+            lista.append((caja.center, max(5, int(math.sqrt(area) * 2.0))))
+        _ojos_capa[clave] = (capa, lista)       # (la capa, para que su id no se reuse)
+    return _ojos_capa[clave][1]
+
+
+def dibujar_capa_ojos(screen, capa, pos, escala_halo=1.0):
+    """Los ojos de la Sombra brillando: un halo que se suma a lo de debajo
+    (BLEND_RGB_ADD) en cada ojo y encima sus pixeles tal cual."""
+    for (cx, cy), radio in ojos_en(capa):
+        brillo = _brillo(max(4, int(radio * escala_halo)))
+        screen.blit(brillo, (pos[0] + cx - brillo.get_width() // 2, pos[1] + cy - brillo.get_height() // 2),
+                    special_flags=pygame.BLEND_RGB_ADD)
+    screen.blit(capa, pos)
+
+
+def dibujar_ojos_escalados(screen, ojos, rect):
+    """La capa de ojos `ojos` (sin escalar) agrandada a `rect`, con sus
+    halos (para el susto: ahí la figura va a todo lo alto de la vista)."""
+    escala = rect.height / ojos.get_height()
+    for (cx, cy), radio in ojos_en(ojos):
+        brillo = _brillo(max(4, min(70, int(radio * escala * 0.55))))
+        x, y = rect.x + int(cx * escala), rect.y + int(cy * escala)
+        screen.blit(brillo, (x - brillo.get_width() // 2, y - brillo.get_height() // 2),
+                    special_flags=pygame.BLEND_RGB_ADD)
+    screen.blit(pygame.transform.scale(ojos, rect.size), rect)
+
+
+def figura_de_frente():
+    """(figura, ojos) de la Sombra quieta de frente, recortadas igual (para el
+    susto y la ventana que la presenta), o (None, None) sin su arte. Siempre
+    las mismas (las cachés de los halos y de las escalas van por id())."""
+    if "frente" in _ojos_capa:
+        return _ojos_capa["frente"]
+    datos = sprites_de("sombra")
+    if datos is None:
+        return None, None
+    figura = (datos["animaciones"].get("idle", {}).get("south") or [None])[0]
+    ojos = ((datos.get("ojos") or {}).get("idle", {}).get("south") or [None])[0]
+    if figura is None:
+        return None, None
+    caja = figura.get_bounding_rect()
+    _ojos_capa["frente"] = (figura.subsurface(caja), ojos.subsurface(caja) if ojos is not None else None)
+    return _ojos_capa["frente"]
 
 
 def _brillo(radio=11):

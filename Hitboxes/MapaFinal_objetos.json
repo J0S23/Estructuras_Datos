@@ -279,11 +279,11 @@
         0.6927
       ],
       [
-        0.3177,
+        0.3145,
         0.6927
       ],
       [
-        0.319,
+        0.3158,
         0.7923
       ],
       [
@@ -445,20 +445,20 @@
     {
       "clave": "casillero_control",
       "nombre": "Casillero",
-      "rx": 0.6708,
-      "ry": 0.5889
+      "rx": 0.6482,
+      "ry": 0.5865
     },
     {
       "clave": "casillero_general",
       "nombre": "Casillero",
-      "rx": 0.3174,
-      "ry": 0.5005
+      "rx": 0.3134,
+      "ry": 0.4941
     },
     {
       "clave": "casillero_general_2",
       "nombre": "Casillero",
-      "rx": 0.4971,
-      "ry": 0.5005
+      "rx": 0.4981,
+      "ry": 0.4948
     },
     {
       "clave": "casillero_prision",
@@ -505,7 +505,7 @@
     {
       "clave": "casillero_comando_2",
       "nombre": "Casillero",
-      "rx": 0.9776,
+      "rx": 0.9549,
       "ry": 0.513
     },
     {
@@ -571,8 +571,8 @@
     {
       "clave": "escondite_23",
       "nombre": "Casillero",
-      "rx": 0.3261,
-      "ry": 0.7668
+      "rx": 0.3259,
+      "ry": 0.7592
     },
     {
       "clave": "escondite_24",
@@ -590,7 +590,7 @@
       "clave": "escondite_26",
       "nombre": "Casillero",
       "rx": 0.9017,
-      "ry": 0.8435
+      "ry": 0.8415
     },
     {
       "clave": "escondite_27",
@@ -691,8 +691,8 @@
     {
       "clave": "escondite_43",
       "nombre": "Casillero",
-      "rx": 0.8108,
-      "ry": 0.3015
+      "rx": 0.8113,
+      "ry": 0.2993
     },
     {
       "clave": "escondite_44",
@@ -705,6 +705,12 @@
       "nombre": "Casillero",
       "rx": 0.084,
       "ry": 0.704
+    },
+    {
+      "clave": "escondite_46",
+      "nombre": "Casillero",
+      "rx": 0.4839,
+      "ry": 0.7408
     }
   ],
   "terminales": [
@@ -718,7 +724,7 @@
       "clave": "terminal_general",
       "nombre": "Terminal",
       "rx": 0.3516,
-      "ry": 0.4727
+      "ry": 0.4665
     },
     {
       "clave": "terminal_motores",
@@ -735,8 +741,8 @@
     {
       "clave": "terminal_comando",
       "nombre": "Terminal",
-      "rx": 0.9607,
-      "ry": 0.5143
+      "rx": 0.8713,
+      "ry": 0.5146
     },
     {
       "clave": "terminal_6",
@@ -753,8 +759,8 @@
     {
       "clave": "terminal_8",
       "nombre": "Terminal",
-      "rx": 0.2116,
-      "ry": 0.7536
+      "rx": 0.1677,
+      "ry": 0.6946
     },
     {
       "clave": "terminal_9",
@@ -889,8 +895,8 @@
       0.5811
     ],
     [
-      0.6467,
-      0.5884
+      0.6763,
+      0.4848
     ],
     [
       0.1864,
@@ -1141,8 +1147,8 @@
   ],
   "consolas": [
     [
-      0.2445,
-      0.264
+      0.2484,
+      0.2641
     ],
     [
       0.8954,
@@ -1206,7 +1212,7 @@
     ],
     [
       0.1679,
-      0.752
+      0.7503
     ],
     [
       0.66,
@@ -1221,8 +1227,8 @@
       0.5581
     ],
     [
-      0.5036,
-      0.1567
+      0.6691,
+      0.1322
     ],
     [
       0.4279,
@@ -1315,9 +1321,9 @@
       "alto": 0.005
     },
     {
-      "rx": 0.0513,
-      "ry": 0.2427,
-      "ancho": 0.039,
+      "rx": 0.0527,
+      "ry": 0.2413,
+      "ancho": 0.03,
       "alto": 0.005
     }
   ],
@@ -1333,8 +1339,8 @@
           0.3343
         ],
         [
-          0.266,
-          0.2806
+          0.2272,
+          0.281
         ]
       ]
     },
@@ -1357,40 +1363,40 @@
   ],
   "fusibles": [
     [
-      0.7213,
-      0.588
+      0.6199,
+      0.5512
     ],
     [
       0.4654,
-      0.4646
+      0.4552
     ],
     [
-      0.3271,
-      0.7324
+      0.272,
+      0.6625
     ],
     [
-      0.9656,
-      0.5613
+      0.9749,
+      0.5043
     ],
     [
-      0.6055,
-      0.8275
+      0.604,
+      0.8079
     ],
     [
-      0.4264,
-      0.9628
+      0.5394,
+      0.8993
     ],
     [
       0.9514,
-      0.2169
+      0.2077
     ],
     [
-      0.6709,
-      0.1562
+      0.6259,
+      0.0876
     ],
     [
-      0.8645,
-      0.7701
+      0.9171,
+      0.7598
     ]
   ],
   "pruebas": [
@@ -2270,6 +2276,391 @@
   "planta": [
     0.8484,
     0.7836
+  ],
+  "decoracion": [
+    {
+      "img": "OBJ-035_Sofa_de_tres_puestos",
+      "rx": 0.32727,
+      "ry": 0.57512
+    },
+    {
+      "img": "OBJ-024_Plataforma_de_operaciones",
+      "rx": 0.32686,
+      "ry": 0.59098
+    },
+    {
+      "img": "OBJ-067_Planta_tropical_de_hojas_grandes",
+      "rx": 0.89679,
+      "ry": 0.82464
+    },
+    {
+      "img": "OBJ-076_Planta_de_hojas_variegadas",
+      "rx": 0.82346,
+      "ry": 0.8139
+    },
+    {
+      "img": "OBJ-067_Planta_tropical_de_hojas_grandes",
+      "rx": 0.8792,
+      "ry": 0.79001
+    },
+    {
+      "img": "OBJ-030_Estanteria_metalica",
+      "rx": 0.37567,
+      "ry": 0.471
+    },
+    {
+      "img": "OBJ-028_Archivador_metalico",
+      "rx": 0.33923,
+      "ry": 0.50008
+    },
+    {
+      "img": "OBJ-003_Estacion_de_monitoreo",
+      "rx": 0.83805,
+      "ry": 0.51774
+    },
+    {
+      "img": "OBJ-007_Estacion_multipantalla",
+      "rx": 0.85616,
+      "ry": 0.51774
+    },
+    {
+      "img": "OBJ-013_Consola_de_radar",
+      "rx": 0.91797,
+      "ry": 0.51758
+    },
+    {
+      "img": "OBJ-011_Centro_de_comunicaciones_satelitales",
+      "rx": 0.93392,
+      "ry": 0.51758
+    },
+    {
+      "img": "OBJ-048_Proyector_holografico",
+      "rx": 0.89169,
+      "ry": 0.55424
+    },
+    {
+      "img": "OBJ-021_Tanque_industrial",
+      "rx": 0.81074,
+      "ry": 0.27747
+    },
+    {
+      "img": "OBJ-039_Capsula_de_energia",
+      "rx": 0.89502,
+      "ry": 0.30436
+    },
+    {
+      "img": "OBJ-061_Ventilador_industrial",
+      "rx": 0.8404,
+      "ry": 0.26803
+    },
+    {
+      "img": "OBJ-061_Ventilador_industrial",
+      "rx": 0.88714,
+      "ry": 0.26829
+    },
+    {
+      "img": "OBJ-057_Baliza_de_advertencia_naranja",
+      "rx": 0.89995,
+      "ry": 0.21745
+    },
+    {
+      "img": "OBJ-017_Plataforma_tecnologica",
+      "rx": 0.24593,
+      "ry": 0.2946
+    },
+    {
+      "img": "OBJ-025_Mesa_de_operaciones_vieja",
+      "rx": 0.22384,
+      "ry": 0.72376
+    },
+    {
+      "img": "OBJ-027_Caja_de_seguridad",
+      "rx": 0.32338,
+      "ry": 0.67776
+    },
+    {
+      "img": "OBJ-070_Maceta_floral",
+      "rx": 0.56999,
+      "ry": 0.72852
+    },
+    {
+      "img": "OBJ-072_Terrario_decorativo",
+      "rx": 0.59993,
+      "ry": 0.72868
+    },
+    {
+      "img": "OBJ-036_Sofa_curvo",
+      "rx": 0.63338,
+      "ry": 0.81767
+    },
+    {
+      "img": "OBJ-017_Plataforma_tecnologica",
+      "rx": 0.63291,
+      "ry": 0.83126
+    },
+    {
+      "img": "OBJ-031_Estanteria_de_contenedores",
+      "rx": 0.68469,
+      "ry": 0.78268
+    },
+    {
+      "img": "OBJ-073_Jardinera_hexagonal",
+      "rx": 0.92123,
+      "ry": 0.78935
+    },
+    {
+      "img": "OBJ-071_Cactus_ornamental",
+      "rx": 0.84798,
+      "ry": 0.83721
+    },
+    {
+      "img": "OBJ-069_Arreglo_floral",
+      "rx": 0.8486,
+      "ry": 0.81481
+    },
+    {
+      "img": "OBJ-077_Jardinera_rectangular",
+      "rx": 0.92383,
+      "ry": 0.82454
+    },
+    {
+      "img": "OBJ-069_Arreglo_floral",
+      "rx": 0.8792,
+      "ry": 0.81448
+    },
+    {
+      "img": "OBJ-014_Unidad_de_procesamiento",
+      "rx": 0.5284,
+      "ry": 0.96716
+    },
+    {
+      "img": "OBJ-052_Panel_luminoso",
+      "rx": 0.52393,
+      "ry": 0.15007
+    },
+    {
+      "img": "OBJ-052_Panel_luminoso",
+      "rx": 0.65202,
+      "ry": 0.15007
+    },
+    {
+      "img": "OBJ-017_Plataforma_tecnologica",
+      "rx": 0.19698,
+      "ry": 0.29479
+    },
+    {
+      "img": "OBJ-039_Capsula_de_energia",
+      "rx": 0.12513,
+      "ry": 0.26562
+    },
+    {
+      "img": "OBJ-039_Capsula_de_energia",
+      "rx": 0.18685,
+      "ry": 0.26549
+    },
+    {
+      "img": "OBJ-076_Planta_de_hojas_variegadas",
+      "rx": 0.82523,
+      "ry": 0.78637
+    },
+    {
+      "img": "OBJ-044_Camara_de_Luz",
+      "rx": 0.64883,
+      "ry": 0.10031
+    },
+    {
+      "img": "OBJ-044_Camara_de_Luz",
+      "rx": 0.52757,
+      "ry": 0.0997,
+      "volteado": true
+    },
+    {
+      "img": "OBJ-074_Maceta_colgante",
+      "rx": 0.84537,
+      "ry": 0.75605
+    },
+    {
+      "img": "OBJ-074_Maceta_colgante",
+      "rx": 0.88342,
+      "ry": 0.75565
+    },
+    {
+      "img": "OBJ-068_Ramas_ornamentales",
+      "rx": 0.90818,
+      "ry": 0.76737,
+      "volteado": true
+    },
+    {
+      "img": "OBJ-068_Ramas_ornamentales",
+      "rx": 0.82319,
+      "ry": 0.76663
+    },
+    {
+      "img": "OBJ-059_Enredadera",
+      "rx": 0.8649,
+      "ry": 0.7587
+    },
+    {
+      "img": "OBJ-016_Mesa_metalica",
+      "rx": 0.48729,
+      "ry": 0.58983
+    },
+    {
+      "img": "OBJ-036_Sofa_curvo",
+      "rx": 0.48688,
+      "ry": 0.5703
+    },
+    {
+      "img": "OBJ-063_Lampara_doble",
+      "rx": 0.5884,
+      "ry": 0.04639
+    },
+    {
+      "img": "OBJ-041_Pantalla_tactil",
+      "rx": 0.71132,
+      "ry": 0.47491
+    },
+    {
+      "img": "OBJ-041_Pantalla_tactil",
+      "rx": 0.61648,
+      "ry": 0.47548
+    },
+    {
+      "img": "OBJ-026_Silla_de_operador",
+      "rx": 0.6997,
+      "ry": 0.57131,
+      "volteado": true
+    },
+    {
+      "img": "OBJ-026_Silla_de_operador",
+      "rx": 0.69949,
+      "ry": 0.54099,
+      "volteado": true
+    },
+    {
+      "img": "OBJ-030_Estanteria_metalica",
+      "rx": 0.69539,
+      "ry": 0.83093
+    },
+    {
+      "img": "OBJ-075_Suculenta",
+      "rx": 0.81811,
+      "ry": 0.83459
+    },
+    {
+      "img": "OBJ-058_Maceta_decorativa",
+      "rx": 0.53713,
+      "ry": 0.76765
+    },
+    {
+      "img": "OBJ-039_Capsula_de_energia",
+      "rx": 0.44374,
+      "ry": 0.9115
+    },
+    {
+      "img": "OBJ-041_Pantalla_tactil",
+      "rx": 0.52085,
+      "ry": 0.89399
+    },
+    {
+      "img": "OBJ-054_Emisor_de_luz",
+      "rx": 0.79837,
+      "ry": 0.2
+    },
+    {
+      "img": "OBJ-054_Emisor_de_luz",
+      "rx": 0.94242,
+      "ry": 0.2
+    },
+    {
+      "img": "OBJ-041_Pantalla_tactil",
+      "rx": 0.12452,
+      "ry": 0.23459
+    },
+    {
+      "img": "OBJ-041_Pantalla_tactil",
+      "rx": 0.18637,
+      "ry": 0.23438
+    },
+    {
+      "img": "OBJ-060_Lampara_cilindrica",
+      "rx": 0.42848,
+      "ry": 0.96643
+    },
+    {
+      "img": "OBJ-025_Mesa_de_operaciones_vieja",
+      "rx": 0.28945,
+      "ry": 0.72331
+    },
+    {
+      "img": "OBJ-026_Silla_de_operador",
+      "rx": 0.24141,
+      "ry": 0.72174
+    },
+    {
+      "img": "OBJ-026_Silla_de_operador",
+      "rx": 0.20664,
+      "ry": 0.72187,
+      "volteado": true
+    },
+    {
+      "img": "OBJ-026_Silla_de_operador",
+      "rx": 0.30664,
+      "ry": 0.72161
+    },
+    {
+      "img": "OBJ-026_Silla_de_operador",
+      "rx": 0.27278,
+      "ry": 0.72187,
+      "volteado": true
+    },
+    {
+      "img": "OBJ-034_Silla_giratoria",
+      "rx": 0.21146,
+      "ry": 0.29414
+    },
+    {
+      "img": "OBJ-034_Silla_giratoria",
+      "rx": 0.25937,
+      "ry": 0.29414
+    },
+    {
+      "img": "OBJ-042_Consola_de_operaciones",
+      "rx": 0.50833,
+      "ry": 0.16055
+    },
+    {
+      "img": "OBJ-065_Lampara_de_pared",
+      "rx": 0.82686,
+      "ry": 0.19451
+    },
+    {
+      "img": "OBJ-065_Lampara_de_pared",
+      "rx": 0.91313,
+      "ry": 0.19451,
+      "volteado": true
+    },
+    {
+      "img": "OBJ-053_Indicador_de_estado",
+      "rx": 0.5888,
+      "ry": 0.05104
+    },
+    {
+      "img": "OBJ-042_Consola_de_operaciones",
+      "rx": 0.95931,
+      "ry": 0.56419,
+      "volteado": true
+    },
+    {
+      "img": "OBJ-071_Cactus_ornamental",
+      "rx": 0.88118,
+      "ry": 0.83723
+    },
+    {
+      "img": "OBJ-075_Suculenta",
+      "rx": 0.90458,
+      "ry": 0.77803
+    }
   ],
   "mapa": "MapaFinal"
 }

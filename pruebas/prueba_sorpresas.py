@@ -115,9 +115,9 @@ cap(g, "sorpresas_a_tutorial_esperando.png")
 # Ya listo, F vuelve a ser su habilidad y no cambia nada del tutorial.
 g._tecla_en_partida(pygame.K_f)
 assert g.en_tutorial
-# J2 también ("-"): ahí sí despiertan los aliens.
+# J2 también (Alt der): ahí sí despiertan los aliens.
 for _ in range(len(T.PASOS)):
-    g._tecla_en_partida(pygame.K_MINUS)
+    g._tecla_en_partida(pygame.K_RALT)
 assert not g.en_tutorial and all(not a.aturdido for a in g.aliens)
 assert any(d[0] == "despertar" for d in g.narrador.dichas)
 frames(g, 30)

@@ -21,6 +21,9 @@ import re
 import pygame
 
 from juego.fuentes import fuente_de_tamano
+from juego import idioma
+from juego.idioma import tr
+from juego import perfiles
 
 
 COLOR_FONDO = (22, 24, 42, 238)
@@ -37,8 +40,9 @@ MARGEN = 18
 
 
 def partir_lineas(texto, f, ancho_max):
-    """Parte un párrafo en líneas que quepan en `ancho_max`."""
-    palabras = texto.split()
+    """Parte un párrafo en líneas que quepan en `ancho_max` (ya traducido:
+    juego/idioma.py)."""
+    palabras = tr(texto).split()
     if not palabras:
         return [""]
     lineas, actual = [], palabras[0]
@@ -341,12 +345,18 @@ def render_mosaico(screen, vista, jugador):
     f_tit = fuente_de_tamano(max(13, min(24, ancho // 30)))
     f_peq = fuente_de_tamano(max(10, min(15, ancho // 52)))
     y = caja.y + m
-    logo = (caja.x + m + 10, y + f_tit.get_linesize() // 2)
-    for dx, dy in ((-7, 5), (7, 5), (0, -7)):
-        pygame.draw.line(screen, COLOR_NEXUS, logo, (logo[0] + dx, logo[1] + dy), 2)
-        pygame.draw.circle(screen, COLOR_NEXUS, (logo[0] + dx, logo[1] + dy), 3)
-    pygame.draw.circle(screen, (255, 255, 255), logo, 3)
-    screen.blit(f_tit.render(panel.get("titulo", "NEXUS"), True, COLOR_TEXTO), (caja.x + m + 26, y))
+    icono = perfiles.logo(f_tit.get_linesize() + 4)
+    if icono is not None:
+        screen.blit(icono, (caja.x + m, y - 2))
+        x_titulo = caja.x + m + icono.get_width() + 8
+    else:
+        logo = (caja.x + m + 10, y + f_tit.get_linesize() // 2)
+        for dx, dy in ((-7, 5), (7, 5), (0, -7)):
+            pygame.draw.line(screen, COLOR_NEXUS, logo, (logo[0] + dx, logo[1] + dy), 2)
+            pygame.draw.circle(screen, COLOR_NEXUS, (logo[0] + dx, logo[1] + dy), 3)
+        pygame.draw.circle(screen, (255, 255, 255), logo, 3)
+        x_titulo = caja.x + m + 26
+    screen.blit(f_tit.render(panel.get("titulo", "NEXUS"), True, COLOR_TEXTO), (x_titulo, y))
     y += f_tit.get_linesize() + 6
 
     # La barra de confianza (verde: en ustedes; roja: en los aliens).
@@ -567,6 +577,7 @@ def render_texto_mando(f, texto, color):
     """Como f.render(texto, True, color), pero "[Cruz]", "[Círculo]",
     "[Cuadrado]" y "[Triángulo]" salen con su símbolo dibujado. Nunca queda
     más ancho que el texto escrito, así que no descuadra nada."""
+    texto = tr(texto)
     partes = _PATRON_PS.split(texto)
     if len(partes) == 1:
         return f.render(texto, True, color)
@@ -606,6 +617,7 @@ def _con_sombra(screen, f, texto, color, pos, alfa=None):
 
 def _recortar(f, texto, ancho):
     """`texto` cortado con "..." para que quepa en `ancho` ("" si ni eso)."""
+    texto = tr(texto)
     if f.size(texto)[0] <= ancho:
         return texto
     while texto and f.size(texto + "...")[0] > ancho:
@@ -759,13 +771,33 @@ def tope_abajo(vista, jugador):
     return vista.bottom
 
 
+def segundos_para_salir(jugador):
+    """Cuántos segundos le faltan al encerrado para forzar la reja solo, o
+    None si en esta dificultad no se sale solo (hay que esperar a que lo
+    liberen). Ver Mision.fugarse."""
+    preso = getattr(jugador, "preso", None)
+    fuga = preso.get("fuga_ms") if preso else None
+    if fuga is None:
+        return None
+    return max(1, math.ceil(fuga / 1000))
+
+
+def texto_encerrado(jugador):
+    """Lo que ve el encerrado: la cuenta regresiva para salir solo (si en esta
+    dificultad se puede) o que tiene que esperar a que lo liberen."""
+    segundos = segundos_para_salir(jugador)
+    if segundos is None:
+        return "Encerrado: espera a que alguien te libere"
+    return f"Encerrado: sales en {segundos} s o cuando alguien te libere"
+
+
 def render_pista_zona(screen, vista, jugador):
     """Aviso de 'presiona X para ...' sobre una zona, un escondite o adentro."""
     if jugador.ocupado or getattr(jugador, "minijuego", None) is not None:
         return
     tecla = jugador.nombre_tecla('interactuar')
     if getattr(jugador, "preso", None) is not None:
-        texto = "Encerrado: espera a que te saquen"
+        texto = texto_encerrado(jugador)
     elif getattr(jugador, "escondido", False):
         texto = f"[{tecla}] Salir del escondite"
     elif getattr(jugador, "pista_mision", None):
@@ -989,6 +1021,13 @@ COLOR_ZONA_VERDE = (96, 200, 120)
 _cache_escondido = {}
 
 
+@idioma.al_cambiar
+def _limpiar_textos():
+    """Al cambiar de idioma: las capas guardadas que llevan texto."""
+    _cache_escondido.clear()
+    _capas_eliminado.clear()
+
+
 def render_escondido(screen, vista, jugador):
     """Adentro del escondite: todo oscuro salvo una rendija a la altura de los ojos."""
     if not getattr(jugador, "escondido", False):
@@ -1175,7 +1214,14 @@ def _icono_objeto(screen, tipo, centro, tam):
     """Dibujitos de los objetos: pieza (engranaje), decodificador (chip) y kit
     (llave inglesa)."""
     from screens.mision_dibujo import COLOR_CONSUMIBLE
+    from juego import sprites_objetos
     cx, cy = centro
+    if tipo in ("kit", "decodificador"):
+        # Las imágenes de Anny (el maletín y el aparato); si faltan, el dibujito de abajo.
+        img = sprites_objetos.sprite(tipo, max(14, int(tam * 0.95)))
+        if img is not None:
+            screen.blit(img, img.get_rect(center=(cx, cy)))
+            return
     if tipo == "pieza":
         color = (255, 170, 50)
         for i in range(6):

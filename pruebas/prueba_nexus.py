@@ -306,4 +306,17 @@ logica.cambiar_pestana(juego4, j4, -2)
 assert logica.pestana_de(red4, j4) == "red"          # da la vuelta
 print(f"celular: pestañas Misiones/Equipo/Red y máximo {MAX_POR_VERIFICAR} por verificar por jugador ({n} jugador(es))")
 
+# Fotos de perfil (juego/perfiles.py, Imagenes/Perfiles/): cada cuenta tiene la
+# suya; los que caminan, la de su sprite; los jugadores, la de su rol.
+from juego import perfiles
+for nodo in red.grafo.nodos():
+    datos = red.grafo.datos[nodo]
+    assert perfiles.de_nodo(red, nodo, 26) is not None, (nodo, perfiles.clave_de(datos))
+    assert perfiles.de_nodo(red, nodo, 26).get_size() == (26, 26)
+for npc in juego.npcs.npcs:
+    assert perfiles.clave_de(red.grafo.datos[npc.nodo]) == npc.apariencia.sprite.replace("_", ""), npc.usuario
+assert perfiles.clave_de(red.grafo.datos[red.nodo_de(juego.jugadores[0])]) == juego.jugadores[0].rol.upper()
+assert perfiles.foto("NO_EXISTE", 26) is None
+print("fotos de perfil: todas las cuentas tienen la suya (la de su sprite o su rol)")
+
 print("\nTODO OK")

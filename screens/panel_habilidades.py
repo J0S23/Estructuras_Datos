@@ -14,6 +14,8 @@ import pygame
 
 from data.habilidades import ARBOLES_POR_ROL
 from juego.fuentes import fuente_de_tamano
+from juego import idioma
+from juego.idioma import tr
 
 
 CARPETA_ICONOS = os.path.join("Imagenes", "UI", "Habilidades")
@@ -187,6 +189,7 @@ def _claves(datos):
 
 # Panel ya dibujado de cada jugador: {id(jugador): (estado, superficie)}.
 _CACHE_PANELES = {}
+idioma.al_cambiar(_CACHE_PANELES.clear)
 
 
 def _puntos(jugador):
@@ -454,7 +457,7 @@ def _pie(screen, caja, f, jugador, modo):
 
 
 def _partir(texto, f, ancho_max):
-    palabras = texto.split()
+    palabras = tr(texto).split()
     if not palabras:
         return [""]
     lineas, actual = [], palabras[0]

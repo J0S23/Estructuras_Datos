@@ -98,8 +98,12 @@ for j in g.jugadores:
 alcanzable = g.mundo.area_alcanzable(j1.spawn)
 ocupado = [z["rect"] for z in g.zonas] + [e["rect"] for e in g.escondites]
 cosas = g.terminales + g.paneles + g.piezas
+from juego import sprites_objetos
 for cosa in cosas:
     r = cosa["rect"]
+    if cosa.get("tipo") == "terminal":
+        # (la mitad de arriba de su casilla son sus patas: se para en la de abajo)
+        r = sprites_objetos.frente("terminal", r)
     assert not g.mundo.colisiona(r), f"{cosa.get('clave', 'pieza')} choca con una pared"
     assert any(pygame.Rect(c[0], c[1], 48, 19).colliderect(r) for c in alcanzable), \
         f"{cosa.get('clave', 'pieza')} no se alcanza"
@@ -179,7 +183,7 @@ cap("roles_e_panel.png")
 rol(j2, "Forjador", "FABRICACION"); j2.piezas = 1
 poner(j2, P(768, 900)); aliens_lejos()
 a2.hitbox.center = P(1000, 640)
-g._tecla_en_partida(pygame.K_MINUS)
+g._tecla_en_partida(pygame.K_RALT)
 assert len(g.senuelos) == 1 and j2.piezas == 0
 g._actualizar_partida(DT)
 assert a2.punto_ruido == g.senuelos[0]["pos"], (a2.punto_ruido, a2.accion)
@@ -306,7 +310,7 @@ if cerca:
 print("Sintonía: pasos rosados de los aliens cercanos que no ve (detrás de una pared o a oscuras)")
 
 rol(j2, "Resonante", "INTERCEPCION")
-g._tecla_en_partida(pygame.K_MINUS)
+g._tecla_en_partida(pygame.K_RALT)
 assert "intercepcion" in j2.efectos
 a1.hitbox.center = P(700, 560)
 cap("roles_i_intercepcion.png")
@@ -316,14 +320,14 @@ rol(j2, "Resonante", "EMISION")
 aliens_lejos()
 a1.hitbox.center = P(1000, 640); a1.angulo = 0
 j2.personaje.direccion = "west"
-g._tecla_en_partida(pygame.K_MINUS)
+g._tecla_en_partida(pygame.K_RALT)
 assert j2.panel and j2.panel["tipo"] == "emision" and not g.senales and j2.recarga_ms == 0
 cap("roles_j_emision_mapa.png")
 # Cancelar con la misma tecla no gasta nada.
-g._tecla_en_partida(pygame.K_MINUS)
+g._tecla_en_partida(pygame.K_RALT)
 assert j2.panel is None and j2.recarga_ms == 0
 # Otra vez, y ahora se escoge el punto con el mouse sobre el mapa.
-g._tecla_en_partida(pygame.K_MINUS)
+g._tecla_en_partida(pygame.K_RALT)
 g._dibujar()
 rect, escala = j2.panel["rect_mapa"], j2.panel["escala_mapa"]
 destino = P(900, 640)
@@ -336,7 +340,7 @@ assert a1.accion == "INVESTIGAR"
 print(f"Emisión modulada: mapa, clic en {g.senales[0]['pos']} y el alien va a revisarla")
 # Con teclado: el cursor se mueve con las teclas de moverse y se confirma.
 j2.recarga_ms = 0; g.senales.clear()
-g._tecla_en_partida(pygame.K_MINUS)
+g._tecla_en_partida(pygame.K_RALT)
 antes = list(j2.panel["cursor_mapa"])
 acciones_rol.mover_cursor_emision(g, j2, 1, 0)
 assert j2.panel["cursor_mapa"][0] > antes[0]

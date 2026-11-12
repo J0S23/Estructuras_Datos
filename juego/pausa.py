@@ -22,6 +22,7 @@ directamente: `tecla()` y `activar()` devuelven una acción ("continuar",
 
 import pygame
 
+from juego import idioma
 from juego.audio_manager import audio_manager
 
 
@@ -68,9 +69,13 @@ def mover_en_logros(arbol, nodo, key):
 
 
 class MenuPausa:
-    def __init__(self, juego):
+    def __init__(self, juego, desde_menu=False):
+        """`desde_menu`: Menú principal > Opciones. Solo la vista de opciones,
+        sin las de prueba (hitboxes, árbol del alien, grafo: piden partida),
+        y volver/Esc devuelven "cerrar"."""
         self.juego = juego
-        self.vista = "menu"
+        self.desde_menu = desde_menu
+        self.vista = "opciones" if desde_menu else "menu"
         self.seleccion = 0
         self.aviso = ""           # texto corto bajo los botones ("Próximamente")
         self.aviso_ms = 0
@@ -86,6 +91,15 @@ class MenuPausa:
             return []
         if self.vista == "opciones":
             efectos = round(audio_manager.sfx_volume * 100)
+            if self.desde_menu:
+                return [
+                    (f"Sonido: < {efectos}% >", "efectos"),
+                    ("Pantalla completa: " + ("Sí" if self.juego.pantalla_completa else "No"),
+                     "pantalla_completa"),
+                    ("Campo de visión y oscuridad: " + ("Sí" if self.juego.oscuridad else "No"), "oscuridad"),
+                    (idioma.etiqueta(), "idioma"),
+                    ("Volver", "volver"),
+                ]
             return [
                 (f"Sonido: < {efectos}% >", "efectos"),
                 ("Campo de visión y oscuridad: " + ("Sí" if self.juego.oscuridad else "No"), "oscuridad"),
@@ -94,6 +108,7 @@ class MenuPausa:
                 ("Ver hitboxes: " + ("Sí" if self.juego.mostrar_hitboxes else "No"), "hitboxes"),
                 (f"Árbol del alien: < {self._texto_arbol()} >", "arbol"),
                 (f"Grafo: < {self._texto_grafo()} >", "grafo"),
+                (idioma.etiqueta(), "idioma"),
                 ("Volver", "volver"),
             ]
         if self.vista == "confirmar":
@@ -176,6 +191,8 @@ class MenuPausa:
             return None
         n = len(self.opciones())
         if key == pygame.K_ESCAPE:
+            if self.desde_menu:
+                return "cerrar"
             if self.vista == "menu":
                 return "continuar"
             self._ir_a("menu")
@@ -223,7 +240,7 @@ class MenuPausa:
             self._cambiar_arbol(signo)
         elif accion == "grafo":
             self._cambiar_grafo(signo)
-        elif accion in ("oscuridad", "pantalla_completa", "hitboxes"):
+        elif accion in ("oscuridad", "pantalla_completa", "hitboxes", "idioma"):
             return self.activar(self.seleccion)
         return None
 
@@ -257,6 +274,8 @@ class MenuPausa:
             self.juego.oscuridad = not self.juego.oscuridad
         elif accion == "pantalla_completa":
             return "pantalla_completa"
+        elif accion == "idioma":
+            return "idioma"
         elif accion == "hitboxes":
             self.juego.mostrar_hitboxes = not self.juego.mostrar_hitboxes
         elif accion == "arbol":
@@ -264,6 +283,8 @@ class MenuPausa:
         elif accion == "grafo":
             self._cambiar_grafo(1)
         elif accion == "volver":
+            if self.desde_menu:
+                return "cerrar"
             self._ir_a("menu")
             self.seleccion = 1
         return None

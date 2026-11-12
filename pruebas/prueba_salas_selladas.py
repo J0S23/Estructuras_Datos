@@ -60,7 +60,7 @@ def nueva_partida():
 
 # ---------- Sin sellar: 6 salas y 2 jugadores ----------
 g = nueva_partida()
-assert len(g.jugadores) == 2 and not g.sellado and g.mundo.paredes_base == g.mundo.paredes_archivo
+assert len(g.jugadores) == 2 and not g.sellado and g.mundo.paredes_base == g.mundo.paredes_archivo + g.mundo.muebles
 completo = objetos_mapa.cargar("MapaE2")
 assert len(g.objetos["piezas"]) == len(completo["piezas"])
 print("MapaE2 (6 salas) con 2 jugadores: no se sella nada")
@@ -79,7 +79,7 @@ print(f"grafo de salas: {len(grafo)} nodos, {grafo.aristas() // 2} conexiones, u
 assert SS.ACTIVO is False
 SS.SALAS_POR_JUGADORES[2] = 4
 g = nueva_partida()
-assert not g.sellado and g.mundo.paredes_base == g.mundo.paredes_archivo
+assert not g.sellado and g.mundo.paredes_base == g.mundo.paredes_archivo + g.mundo.muebles
 print("apagado: con la meta en 4 tampoco se sella nada (siempre el mapa entero)")
 SS.ACTIVO = True        # lo de abajo prueba el mecanismo, por si se vuelve a prender
 
@@ -156,7 +156,7 @@ print("la partida corre y se dibuja (pruebas/capturas/salas_selladas.png)")
 SS.SALAS_POR_JUGADORES.update(META)
 mundo = g.mundo
 g.iniciar_partida()
-assert g.mundo is mundo and not g.sellado and mundo.paredes_base == mundo.paredes_archivo
+assert g.mundo is mundo and not g.sellado and mundo.paredes_base == mundo.paredes_archivo + mundo.muebles
 r = pygame.Rect(0, 0, 34, 20); r.center = bio.center
 assert not mundo.colisiona(r) and navegacion.de_mundo(mundo, 34, 20)._celda_de(bio.center) in navegacion.de_mundo(mundo, 34, 20).libre
 print("la ronda siguiente con la meta normal vuelve a tener todo el mapa")

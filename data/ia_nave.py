@@ -58,6 +58,17 @@ FRASES = {
         "Hay noticias nuevas en NEXUS. Yo que ustedes, las compartiría sin leer.",
         "Mis cuentas favoritas acaban de publicar algo. Créanles, son muy confiables.",
     ],
+    "rumor_viral": [
+        "Nadie lo desmintió. Mis rumores trabajan solos.",
+        "Ahora toda la nave se lo cree. No hizo falta que fuera verdad.",
+    ],
+    "bot_crece": [
+        "Mis cuentas ganan seguidores solas. Nadie pregunta quién está detrás.",
+        "Cada seguidor nuevo es alguien más que va a leer mi próximo rumor.",
+    ],
+    "desmentido_tarde": [
+        "Tarde, {rol}. La mentira ya dio la vuelta a la nave.",
+    ],
     "desmentido": [
         "{rol} fue a revisar en persona. Qué aburrido es verificar, ¿no?",
         "Una foto. Qué anticuado, {rol}. Antes la gente creía lo primero que leía.",

@@ -886,6 +886,9 @@ class Servidor:
             "dir": p.direccion, "mov": bool(p.moviendose),
             "vidas": j.vidas, "vmax": j.vidas_max, "infinitas": j.vidas_infinitas,
             "preso": j.preso is not None, "elim": j.eliminado, "esc": j.escondido,
+            # (lo que le falta para salir solo de la celda: la cuenta regresiva)
+            "fuga": (round(j.preso["fuga_ms"]) if j.preso is not None
+                     and j.preso.get("fuga_ms") is not None else None),
             "sig": j.sigilo, "pulso": round(j.pulso), "puntos": j.puntos,
             "piezas": j.piezas, "objetos": dict(j.objetos),
             "sala": j.sala or "", "msg": j.mensaje if j.mensaje_ms > 0 else "",

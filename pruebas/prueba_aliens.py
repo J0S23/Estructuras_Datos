@@ -213,9 +213,12 @@ g.jugadores = [j1, j2]
 # ---------- 9. Escondites ----------
 from entidades.minijuego_latidos import MinijuegoLatidos
 alcanzable = g.mundo.area_alcanzable(j1.spawn)
+from juego import sprites_objetos
 for e in g.escondites:
-    assert not g.mundo.colisiona(e["rect"]), f"el escondite {e['clave']} choca con una pared"
-    assert any(pygame.Rect(c[0], c[1], 48, 19).colliderect(e["rect"]) for c in alcanzable), \
+    # (la mitad de arriba de su casilla son las patas del casillero, que se chocan)
+    frente = sprites_objetos.frente("escondite", e["rect"])
+    assert not g.mundo.colisiona(frente), f"el escondite {e['clave']} choca con una pared"
+    assert any(pygame.Rect(c[0], c[1], 48, 19).colliderect(frente) for c in alcanzable), \
         f"el escondite {e['clave']} no se alcanza caminando"
     assert not any(z["rect"].colliderect(e["rect"]) for z in g.zonas), \
         f"el escondite {e['clave']} está encima de una zona"
@@ -235,7 +238,7 @@ def esconder(jugador, e):
     jugador.salir_del_escondite()
     jugador.invulnerable_ms = 0
     jugador.minijuego = None
-    poner(jugador, e["rect"].center)
+    poner(jugador, (e["rect"].centerx, e["rect"].bottom - 10))   # delante del casillero
     g._actualizar_partida(DT)
     assert jugador.escondite_cerca is e, "no detecta el escondite"
     g._tecla_en_partida(pygame.K_e)      # tecla de interactuar del jugador 1

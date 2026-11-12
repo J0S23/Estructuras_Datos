@@ -27,6 +27,13 @@ Cómo se juega:
 - Compartir un rumor sin verificar lo riega más y tus seguidores dejan de
   confiar en ti. Reportar un bot lo borra del grafo; reportar a un prisionero
   que solo se creyó el rumor no ayuda.
+- **Un rumor que nadie desmiente se vuelve viral** (VIRAL_S): les llega a
+  todos los grises y la gente de la nave actúa como si fuera verdad (el
+  "viral" de cada rumor: los prisioneros dejan de seguirte, ocupan casilleros,
+  desconectan una terminal NEXUS, o el que cae preso tarda más en salir).
+  Desmentirlo lo deshace. Y **llegar tarde convence menos**: desde
+  TARDE_DESDE de la barra, el desmentido convence cada vez a menos gente
+  ("Llegaste tarde: N personas ya se lo habían creído").
 - Con UMBRAL_PLANOS de verdes se desbloquean los planos de la cápsula (sin
   ellos no se puede reparar, mision.py). Si el rojo le va ganando al verde,
   los aliens se vuelven más rápidos y ven más. (Antes, con mucho rojo los
@@ -51,7 +58,8 @@ from data.nexus import (
     NIVELES_COMPARTIR_CIERTO, UMBRAL_PLANOS, DIFERENCIA_POTENCIA_MAX,
     RADIO_FOTO, PUNTOS_DESMENTIR,
     PUNTOS_REPORTAR_BOT, PUNTOS_PLANOS, PROB_CREER_RUMOR, PROB_CONVENCER,
-    PUNTOS_SUPLANTACION,
+    PUNTOS_SUPLANTACION, VIRAL_S, PROB_CREER_VIRAL, VIRAL_GENERICO, ESCONDITES_VIRAL,
+    TARDE_DESDE, CONVENCE_TARDE, SEGUIDORES_PARA_CONSEJO, BOT_GANA_SEGUIDOR_S, BOT_MAX_SEGUIDORES, AVISOS_SEGUIDORES,
 )
 
 GRIS, VERDE, ROJO = "gris", "verde", "rojo"
@@ -80,6 +88,10 @@ class Publicacion:
         self.desmiente = None       # la Publicacion que desmiente
         self.suplantada = False     # la escribió el Cambiaformas haciéndose pasar por `autor`
         self.reportada = False
+        self.viral_ms = 0           # cuánto lleva sin desmentir (rumores)
+        self.viral = False          # se volvió viral: la nave actúa como si fuera verdad
+        self.creyentes = set()      # prisioneros que se lo creyeron (se pusieron rojos por él)
+        self.efecto = {}            # lo que cambió en la nave al volverse viral (para deshacerlo)
         self.via = {}               # nodo -> de quién le llegó
         self.alcanzados = set()     # nodos a los que les llegó
         self.edad_ms = 0
@@ -127,6 +139,9 @@ class RedNexus:
         self.ultimo_rastreo = None   # (camino, tiempo_ms) del último "¿De dónde salió esto?"
         self.borrados = []           # (nodo, usuario, tiempo_ms) de los bots reportados
         self.pestanas = {}           # jugador -> pestaña del celular que dejó abierta
+        self.virales = 0             # rumores que se volvieron virales (resultados)
+        self.creyeron_tarde = 0      # gente que se lo creyó antes de que llegara el desmentido
+        self.seguidores_ganados = 0  # seguidores que ganaron los bots mientras nadie los reportaba
         self._armar_red()
 
     # -- La red ---------------------------------------------------------------------
@@ -173,6 +188,9 @@ class RedNexus:
         presos = self._presos()
         for otro in self.rng.sample(presos, min(SEGUIDORES_BOT, len(presos))):
             self.grafo.agregar_arista(nodo, otro)
+        datos = self.grafo.datos[nodo]
+        datos["seguidores_al_abrir"] = self.grafo.grado_salida(nodo)
+        datos["crece_ms"] = self.cada_cuanto_crece()
         # Para parecer real, el bot también sigue a unos prisioneros.
         for otro in self.rng.sample(presos, min(2, len(presos))):
             self.grafo.agregar_arista(otro, nodo)
@@ -237,9 +255,20 @@ class RedNexus:
                 if self.reloj_bot_ms <= 0:
                     self.reloj_bot_ms = NUEVO_BOT_CADA_S * 1000
                     self._nuevo_bot()
+            for bot in self.bots():
+                datos = self.grafo.datos[bot]
+                datos["crece_ms"] = datos.get("crece_ms", self.cada_cuanto_crece()) - dt
+                if datos["crece_ms"] <= 0:
+                    datos["crece_ms"] = self.cada_cuanto_crece()
+                    self._ganar_seguidor(bot)
 
         for pub in self.publicaciones:
             pub.edad_ms += dt
+        for pub in self.rumores_activos():
+            if not pub.viral:
+                pub.viral_ms += dt
+                if pub.viral_ms >= self.limite_viral():
+                    self._volverse_viral(pub)
         for prop in list(self.propagaciones):
             prop.reloj_ms += dt
             while prop.reloj_ms >= TICK_PROPAGACION_MS and not prop.terminada:
@@ -287,6 +316,8 @@ class RedNexus:
                 if (prop.color == ROJO and self.color(nodo) == GRIS
                         and self.rng.random() < dificultad.valor(self.juego, "prob_creer", PROB_CREER_RUMOR)):
                     g.datos[nodo]["color"] = ROJO
+                    if prop.pub.tipo == "rumor":
+                        prop.pub.creyentes.add(nodo)
                 elif prop.color == VERDE and self.rng.random() < prop.prob:
                     g.datos[nodo]["color"] = VERDE
             elif tipo == "jugador":
@@ -409,6 +440,120 @@ class RedNexus:
         self.publicaciones.append(pub)
         self.propagaciones.append(Propagacion(pub, autor, None, max_niveles=2))
         return pub
+
+    # -- Cuentas falsas que crecen ------------------------------------------------------
+
+    def seguidores(self, nodo):
+        """A cuántas cuentas les llega lo que publica (sus aristas de salida)."""
+        return self.grafo.grado_salida(nodo) if nodo in self.grafo else 0
+
+    def ganados(self, nodo):
+        """Seguidores que ganó un bot desde que abrió la cuenta."""
+        if nodo not in self.grafo:
+            return 0
+        return max(0, self.seguidores(nodo) - self.grafo.datos[nodo].get("seguidores_al_abrir", 0))
+
+    def cada_cuanto_crece(self):
+        """ms entre un seguidor nuevo y el siguiente de cada bot."""
+        return BOT_GANA_SEGUIDOR_S * 1000 * dificultad.valor(self.juego, "bot_crece_cada", 1.0)
+
+    def _ganar_seguidor(self, bot):
+        """El bot gana un seguidor: de preferencia un amigo de uno que ya lo sigue
+        (le aparece porque un conocido lo sigue), si no, un prisionero al azar.
+        Devuelve el nodo nuevo (o None si ya tiene el máximo o no queda nadie)."""
+        g = self.grafo
+        if self.seguidores(bot) >= BOT_MAX_SEGUIDORES:
+            return None
+        ya = g.vecinos(bot)
+        libres = [p for p in self._presos() if p not in ya]
+        if not libres:
+            return None
+        # p sigue a f (f -> p) y f sigue al bot (bot -> f): amigo de un seguidor.
+        amigos = [p for p in libres if any(p in g.vecinos(f) for f in ya)]
+        nuevo = self.rng.choice(amigos or libres)
+        g.agregar_arista(bot, nuevo)
+        self.seguidores_ganados += 1
+        n = self.seguidores(bot)
+        if n in AVISOS_SEGUIDORES:
+            usuario = self.usuario(bot)
+            for jugador in self.juego.jugadores:
+                jugador.avisar(f"NEXUS · {usuario} no para de ganar seguidores: ya le llega a "
+                               f"{n} personas.", COLOR_MAL)
+            if hasattr(self.juego, "decir"):
+                self.juego.decir("bot_crece")
+        return nuevo
+
+    # -- Rumores que se vuelven virales --------------------------------------------------
+
+    def limite_viral(self):
+        """Cuántos ms aguanta un rumor sin desmentir antes de volverse viral."""
+        return VIRAL_S * 1000 * dificultad.valor(self.juego, "viral_cada", 1.0)
+
+    def progreso_viral(self, pub):
+        """0 a 1: qué tanto le falta a un rumor para volverse viral (1 = ya lo es)."""
+        if pub.tipo != "rumor":
+            return 0.0
+        if pub.viral:
+            return 1.0
+        return max(0.0, min(1.0, pub.viral_ms / max(1, self.limite_viral())))
+
+    def efecto_activo(self, lugar):
+        """¿Hay un rumor de ese lugar viral y sin desmentir? (la nave actúa como si fuera verdad)"""
+        return any(p.viral and p.rumor and p.rumor.get("lugar") == lugar for p in self.rumores_activos())
+
+    def _volverse_viral(self, pub):
+        """Nadie lo desmintió a tiempo: les llega a todos los grises (se lo creen
+        con PROB_CREER_VIRAL) y la gente de la nave actúa como si fuera cierto."""
+        pub.viral = True
+        self.virales += 1
+        for nodo in self._presos():
+            if self.color(nodo) == GRIS and self.rng.random() < PROB_CREER_VIRAL:
+                self.grafo.datos[nodo]["color"] = ROJO
+                pub.creyentes.add(nodo)
+        consecuencia = self._aplicar_efecto(pub)
+        lugar = NOMBRE_LUGAR.get(pub.rumor.get("lugar"), "la nave")
+        for jugador in self.juego.jugadores:
+            jugador.avisar(f"¡El rumor sobre {lugar} se volvió viral! {consecuencia}", COLOR_MAL)
+        self._sonar("fallo", 0.7)
+        if hasattr(self.juego, "decir"):
+            self.juego.decir("rumor_viral", forzar=True)
+
+    def _aplicar_efecto(self, pub):
+        """Lo que hace la gente de la nave cuando el rumor se vuelve viral.
+        Devuelve el texto de lo que pasó (el "viral" del rumor)."""
+        juego = self.juego
+        lugar = pub.rumor.get("lugar")
+        texto = pub.rumor.get("viral", VIRAL_GENERICO)
+        if lugar == "capsula":
+            npcs = getattr(juego, "npcs", None)
+            if npcs is not None:
+                npcs.rendirse()
+        elif lugar == "escondite":
+            npcs = getattr(juego, "npcs", None)
+            ocupados = npcs.esconderse(ESCONDITES_VIRAL, pub.lugar) if npcs is not None else []
+            if not ocupados:
+                texto = VIRAL_GENERICO
+            pub.efecto["escondites"] = ocupados
+        elif lugar == "terminal":
+            zonas = [z for z in getattr(juego, "zonas", ()) if z.get("tipo") == "nexus"
+                     and not z.get("desconectada")]
+            if zonas:
+                zona = min(zonas, key=lambda z: math.dist(z["rect"].center, pub.lugar))
+                zona["desconectada"] = True
+                pub.efecto["zona"] = zona
+            else:
+                texto = VIRAL_GENERICO
+        return texto
+
+    def _quitar_efecto(self, pub):
+        """Ya saben la verdad: la gente vuelve a lo de antes."""
+        npcs = getattr(self.juego, "npcs", None)
+        if pub.efecto.get("escondites") and npcs is not None:
+            npcs.salir_de_escondites(pub.efecto["escondites"])
+        zona = pub.efecto.get("zona")
+        if zona is not None:
+            zona["desconectada"] = False
+        pub.efecto = {}
 
     # -- Fotos -----------------------------------------------------------------------------
 
@@ -556,14 +701,20 @@ class RedNexus:
             return self.reportar_suplantacion(jugador, trampa)
         if self.es_bot(nodo):
             usuario = self.usuario(nodo)
+            seguidores, ganados = self.seguidores(nodo), self.ganados(nodo)
             self.borrados.append((nodo, usuario, self.tiempo_ms))
             self.grafo.eliminar_nodo(nodo)
             st["bots_reportados"] += 1
             jugador.sumar_puntos(PUNTOS_REPORTAR_BOT)
             logro(self.juego, "cazador_de_bots", jugador)
             self._sonar("acierto", 0.6)
+            if ganados <= 1:
+                cuanto = (f"La cortaron a tiempo: solo le llegaba a {seguidores} personas.")
+            else:
+                cuanto = (f"Ya le llegaba a {seguidores} personas: ganó {ganados} seguidores "
+                          "mientras nadie la reportaba.")
             return (f"{usuario} era una cuenta falsa del Cambiaformas. Quedó borrada: "
-                    "lo que regaba ya no pasa por ahí.", PUNTOS_REPORTAR_BOT)
+                    f"lo que regaba ya no pasa por ahí. {cuanto}", PUNTOS_REPORTAR_BOT)
         if nodo not in self.grafo:
             return "Esa cuenta ya no existe.", 0
         st["reportes_injustos"] += 1
@@ -587,20 +738,36 @@ class RedNexus:
         pub.desmiente = rumor
         pub.con_ubicacion = con_ubicacion
         self.publicaciones.append(pub)
+        # Llegar tarde convence menos: lo que avanzó la barra de "se vuelve viral".
+        tarde = self.progreso_viral(rumor)
+        creyeron = sum(1 for n in rumor.creyentes if n in self.grafo and self.color(n) == ROJO)
+        era_viral = rumor.viral
         if not rumor.desmentida:
             rumor.desmentida = True
             # El rumor deja de avanzar.
             for prop in self.propagaciones:
                 if prop.pub is rumor:
                     prop.frontera = []
+            if rumor.viral:
+                self._quitar_efecto(rumor)
         prob = PROB_CONVENCER_UBICACION if con_ubicacion else PROB_CONVENCER
+        prob *= self.convence_a_tiempo(tarde)
         self.propagaciones.append(Propagacion(pub, nodo, VERDE, max_niveles=NIVELES_DESMENTIDO,
                                               prob=prob))
         jugador.sumar_puntos(PUNTOS_DESMENTIR)
         logro(self.juego, "fact_checker", jugador)
-        self._decir("desmentido", jugador.rol)
         self._sonar("senal", 0.6)
-        texto = "Desmentiste el rumor. La verdad ya está corriendo por NEXUS."
+        if tarde > TARDE_DESDE and creyeron > 0:
+            self.creyeron_tarde += creyeron
+            self._decir("desmentido_tarde", jugador.rol)
+            texto = (f"Llegaste tarde: {creyeron} {'persona' if creyeron == 1 else 'personas'} "
+                     "ya se lo habían creído, y a ellos la verdad les cuesta más.")
+            if era_viral:
+                texto += " Ahora que saben la verdad, la gente vuelve a lo de antes."
+        else:
+            self._decir("desmentido", jugador.rol)
+            texto = ("¡A tiempo! Casi nadie alcanzó a creérselo. "
+                     "La verdad ya está corriendo por NEXUS.")
         if con_ubicacion:
             st["fotos_ubicacion"] += 1
             alien = self._alertar_alien(jugador)
@@ -611,6 +778,14 @@ class RedNexus:
             st["fotos_recortadas"] += 1
             logro(self.juego, "perfil_bajo", jugador)
         return texto, PUNTOS_DESMENTIR
+
+    @staticmethod
+    def convence_a_tiempo(tarde):
+        """Qué fracción de lo normal convence un desmentido según qué tan tarde
+        llega (0 = recién publicado el rumor, 1 = ya era viral)."""
+        if tarde <= TARDE_DESDE:
+            return 1.0
+        return 1.0 - (1.0 - CONVENCE_TARDE) * (tarde - TARDE_DESDE) / (1.0 - TARDE_DESDE)
 
     def _alertar_alien(self, jugador):
         """La foto deja ver dónde está: el alien más cercano va para allá."""
@@ -659,8 +834,17 @@ class RedNexus:
                 total[clave] = total.get(clave, 0) + valor
         minutos = sum(self.tiempo_celular_ms.values()) / 60000
         total["minutos_celular"] = minutos
+        total["virales"] = self.virales
+        total["creyeron_tarde"] = self.creyeron_tarde
+        total["seguidores_bots"] = self.seguidores_ganados
         if total.get("compartidos_falsos", 0) > total.get("desmentidos", 0):
             consejo = "Compartieron más rumores de los que desmintieron: antes de compartir, verifiquen."
+        elif self.virales > 0:
+            consejo = ("Dejaron que rumores se volvieran virales y la gente actuó como si fueran "
+                       "ciertos: la desinformación cambia lo que hacemos. Verifiquen rápido.")
+        elif self.seguidores_ganados >= SEGUIDORES_PARA_CONSEJO and total.get("bots_reportados", 0) == 0:
+            consejo = ("Nadie reportó las cuentas falsas y ganaron seguidores: cada rumor nuevo les "
+                       "llegaba a más gente. Reporten la fuente apenas la encuentren.")
         elif total.get("fotos_ubicacion", 0) > total.get("fotos_recortadas", 0):
             consejo = "Publicar dónde están los puso en peligro: cuiden su ubicación en redes."
         elif total.get("reportes_injustos", 0) > total.get("bots_reportados", 0):
