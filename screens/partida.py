@@ -395,7 +395,7 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         dibujo_roles.dibujar_flechas(screen, vista, camara, dueño, extras)
         # La roja primero: en un apagón manda, y las otras se corren si
         # apuntan casi para el mismo lado (screens/flechas.py).
-        flechas.empezar()
+        flechas.empezar(extras.get("mundo"))
         dibujar_flecha_caja(screen, vista, camara, dueño, extras.get("eventos"), tiempo_ms)
         dibujo_celular.dibujar_lugar(screen, vista, camara, dueño, extras.get("nexus"), tiempo_ms)
         mision_dibujo.dibujar_flecha_objetivo(screen, vista, camara, dueño, extras.get("mision"),

@@ -229,7 +229,9 @@ print(f"rojo ganando: potencia {red.potencia_aliens():.0%}, visión {vision_ante
 juego.mision.fase = "capsula"; juego.mision.piezas_entregadas = 3
 forj = next(j for j in juego.jugadores if j.rol == "Forjador")
 poner(forj, juego.mision.capsula.center)
-assert not red.planos
+# (con los desmentidos de arriba ya pudieron salir: se vuelven a esconder)
+red.planos = False
+juego.mision.reparacion = 0
 juego.mision.mantener(forj, 500)
 assert juego.mision.reparacion == 0, "sin planos no repara"
 assert "planos" in juego.mision.objetivo()

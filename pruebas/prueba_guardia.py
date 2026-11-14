@@ -246,7 +246,13 @@ assert g.mision.punto_objetivo(res)[1] == "Recoge la fruta"
 poner(res, fruta["rect"].center)
 interactuar(res)
 assert "fruta" in res.objetos
-assert g.mision.punto_objetivo(res)[1] == "Dale la fruta al Guardia"
+# (Si la Bahía queda detrás de la puerta para dos, la flecha manda primero a
+# abrirla: Mision.punto_objetivo no guía a donde no se llega.)
+if g.mision.punto_objetivo(res)[1].startswith("Abran la puerta para dos"):
+    for doble in g.puertas_dobles:
+        doble["abierta"] = True
+        g._puerta_doble_abierta(doble)
+assert g.mision.punto_objetivo(res)[1] == "Dale la fruta al Guardia", g.mision.punto_objetivo(res)
 # Con la fruta no lo ataca: se le acerca y espera.
 G.descanso_ms = 0; G.distraido_ms = 0
 lejos(bio)
@@ -334,6 +340,11 @@ m, bahia = g.mision, g.guardia_planta
 tec, bio, res, forj = g.jugadores
 for j in g.jugadores:
     lejos(j); j.invulnerable_ms = 10 ** 9
+# (Con las puertas para dos cerradas, a la Bahía no se llega: la flecha manda
+# primero a abrirlas. Aquí se prueba el orden de lo demás.)
+for doble in g.puertas_dobles:
+    doble["abierta"] = True
+    g._puerta_doble_abierta(doble)
 
 
 def flecha(j):
@@ -374,6 +385,9 @@ print("Guardia comiendo:", {j.rol: flecha(j) for j in g.jugadores})
 g = nueva_partida(["Resonante", "Forjador"])
 m, bahia = g.mision, g.guardia_planta
 res, forj = g.jugadores
+for doble in g.puertas_dobles:
+    doble["abierta"] = True
+    g._puerta_doble_abierta(doble)
 m.consumibles = [c for c in m.consumibles if c["tipo"] != "abono"]
 for consola in m.consolas:
     consola["progreso"] = 1.0

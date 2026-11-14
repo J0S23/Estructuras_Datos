@@ -12,7 +12,7 @@ import pygame
 
 from juego.fuentes import fuente, fuente_de_tamano
 from juego import sprites_objetos, decoracion
-from screens.flechas import flecha_alrededor, cerca_del_borde
+from screens.flechas import flecha_alrededor, cerca_del_borde, dibujar_camino
 
 
 COLOR_SOMBRA = (12, 11, 23)
@@ -61,6 +61,7 @@ def dibujar_flecha_objetivo(screen, vista, camara, dueño, mision, dificultad, r
     if objetivo is None:
         return
     (x, y), texto = objetivo
+    dibujar_camino(screen, vista, camara, dueño, (x, y), COLOR_FLECHA, tiempo_ms)
     f = fuente_de_tamano(14)
     if camara.collidepoint(x, y):
         centro = (int(x - camara.x + vista.x), int(y - camara.y + vista.y))

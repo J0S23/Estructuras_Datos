@@ -929,6 +929,7 @@ TEXTOS = {
     "Está en blanco.": "It's blank.",
     "Abre la puerta{}": "Open the{} door",
     "Abre la puerta{} con el código": "Open the{} door with the code",
+    "Abran la puerta para dos: cada uno en un panel": "Open the two-person door: one of you on each panel",
     "El {} dejó caer: {}. ¡Recójanlo!": "The {} dropped: {}. Pick it up!",
     "Forzando la reja... sales en {} s": "Forcing the bars... you're out in {} s",
     "Lee las notas de tachuela {}: una tiene el código": "Read the {} pin notes: one has the code",

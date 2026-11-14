@@ -21,7 +21,7 @@ import pygame
 from juego.fuentes import fuente_de_tamano
 from juego.idioma import tr
 from juego import perfiles
-from screens.flechas import flecha_alrededor, cerca_del_borde
+from screens.flechas import flecha_alrededor, cerca_del_borde, dibujar_camino
 from screens.paneles import partir_lineas
 from data.nexus import UMBRAL_PLANOS, VIRAL_GENERICO
 
@@ -231,6 +231,7 @@ def dibujar_lugar(screen, vista, camara, dueño, red, tiempo_ms):
     if pub is None or pub.desmentida or pub.lugar is None:
         return
     x, y = pub.lugar
+    dibujar_camino(screen, vista, camara, dueño, (x, y), COLOR_LUGAR, tiempo_ms)
     if camara.collidepoint(x, y):
         centro = (int(x - camara.x + vista.x), int(y - camara.y + vista.y))
         radio = 30 + int(6 * math.sin(tiempo_ms / 200))
@@ -257,6 +258,17 @@ ARCHIVO_MARCO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
                              "Imagenes", "UI", "celular_marco.png")
 PANTALLA_MARCO = (0.100, 0.083, 0.105, 0.068)
 ASPECTO_MIN = 0.46
+# El tamaño del teléfono y su letra (la profe: "no se ven"). Antes: hasta
+# 380 px de ancho / 46 % de la vista, y letra pantalla // 22 entre 11 y 16
+# (13 px en la laptop de Diego con 2 jugadores).
+ANCHO_MAX_CELULAR = 470
+FRACCION_CELULAR = 0.56
+LETRA_MIN, LETRA_MAX = 14, 22
+
+
+def letra_celular(ancho_pantalla):
+    """Tamaño de la letra normal del celular para una pantalla de ese ancho."""
+    return max(LETRA_MIN, min(LETRA_MAX, ancho_pantalla // 16))
 _marcos = {}        # (ancho, alto) -> Surface (None = no hay archivo)
 
 
@@ -293,12 +305,14 @@ def _marco(vista, tapado=None, jugador=None):
         arriba = alto_hud(vista, jugador) + 8
     else:
         arriba = vista.y + min(60, vista.height // 8)
-    ancho_previo = int(min(380, max(240, vista.width * 0.46)))
+    # (nov 12: la profe pidió letra más grande en el celular: el teléfono es
+    # más ancho, hasta ANCHO_MAX_CELULAR o FRACCION_CELULAR de la vista.)
+    ancho_previo = int(min(ANCHO_MAX_CELULAR, max(260, vista.width * FRACCION_CELULAR)))
     if tapado is not None and tapado.colliderect(
             pygame.Rect(vista.right - ancho_previo - 14, arriba, ancho_previo, vista.bottom - arriba)):
         arriba = max(arriba, tapado.bottom + 6)
     alto = vista.bottom - arriba - 12
-    ancho = int(min(380, max(240, vista.width * 0.46), alto * 0.62 + 60))
+    ancho = int(min(ANCHO_MAX_CELULAR, max(260, vista.width * FRACCION_CELULAR), alto * 0.62 + 60))
     if not hay_marco():
         telefono = pygame.Rect(vista.right - ancho - 14, arriba, ancho, alto)
         pantalla = telefono.inflate(-16, -34)
@@ -340,10 +354,10 @@ def render_celular(screen, vista, jugador, red, tapado=None):
         pygame.draw.rect(screen, COLOR_PANTALLA, pantalla, border_radius=10)
         pygame.draw.circle(screen, (50, 52, 70), (telefono.centerx, telefono.bottom - 10), 4)
 
-    tam = max(11, min(16, pantalla.width // 22))
+    tam = letra_celular(pantalla.width)
     f = fuente_de_tamano(tam)
     fb = fuente_de_tamano(tam + 3)
-    fc = fuente_de_tamano(max(10, tam - 2))
+    fc = fuente_de_tamano(max(LETRA_MIN - 1, tam - 2))
     clip = screen.get_clip()
     screen.set_clip(pantalla.clip(clip) if clip else pantalla)
 
@@ -418,12 +432,18 @@ def _pestanas(screen, pantalla, y, jugador, red, panel, fc):
             numero = sum(1 for p in logica.misiones(red, jugador) if logica.es_mision_activa(red, p))
         else:
             numero = logica.sin_ver(red, jugador, clave)
+        r = max(7, fc.get_height() // 2 + 1) if numero else 0
+        hueco = rect.width - 12 - (2 * r + 4 if numero else 0)
         img = fc.render(nombre, True, (255, 255, 255) if activa else COLOR_TEXTO)
-        cx = rect.centerx - (8 if numero else 0)
-        screen.blit(img, img.get_rect(center=(cx, rect.centery)))
+        tam = fc.get_height()
+        while img.get_width() > hueco and tam > 9:      # (con el número al lado no cabía)
+            tam -= 1
+            img = fuente_de_tamano(tam).render(nombre, True, (255, 255, 255) if activa else COLOR_TEXTO)
+        total = img.get_width() + (2 * r + 4 if numero else 0)
+        x0 = rect.centerx - total // 2
+        screen.blit(img, img.get_rect(midleft=(x0, rect.centery)))
         if numero:
-            r = max(7, fc.get_height() // 2 + 1)
-            centro = (min(rect.right - r - 3, cx + img.get_width() // 2 + r + 2), rect.centery)
+            centro = (x0 + img.get_width() + 4 + r, rect.centery)
             pygame.draw.circle(screen, (255, 255, 255) if activa else color, centro, r)
             num = fc.render(str(numero), True, color if activa else (255, 255, 255))
             screen.blit(num, num.get_rect(center=centro))
@@ -564,8 +584,12 @@ def _feed(screen, cuerpo, jugador, red, panel, f, fb, fc):
     if not opciones:
         titulo, texto = VACIO[pestana]
         y = cuerpo.y + cuerpo.height // 3
-        icono = perfiles.logo(max(24, min(90, cuerpo.width // 3)))
-        if icono is not None and y - icono.get_height() - 10 > cuerpo.y:
+        # El logo entero (planeta y letrero): el planeta solo venía cortado
+        # por abajo, donde en el dibujo lo tapa el letrero.
+        alto_logo = int(min(150, cuerpo.width * 0.5, cuerpo.height * 0.38))
+        icono = perfiles.logo(alto_logo, completo=True) if alto_logo >= 40 else None
+        if icono is not None:
+            y = max(y, cuerpo.y + 12 + icono.get_height() + 10)
             screen.blit(icono, icono.get_rect(midbottom=(cuerpo.centerx, y - 10)))
         img = f.render(titulo, True, COLOR_TEXTO)
         screen.blit(img, img.get_rect(midtop=(cuerpo.centerx, y)))
@@ -676,13 +700,14 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
         autor = red.via(jugador, pub) if pub.tipo in ("rumor", "trampa") else pub.autor
         usuario = red.usuario(autor)
         _avatar(screen, (cuerpo.x + 20, y + 18), 16, usuario, f, red, autor)
-        screen.blit(f.render(usuario, True, COLOR_TEXTO), (cuerpo.x + 44, y + 4))
         seguidores = red.seguidores(autor)
         linea = _tiempo(pub.edad_ms)
         if autor in red.grafo:
             linea += f"  ·  {seguidores} seguidores" if seguidores != 1 else "  ·  1 seguidor"
-        screen.blit(fc.render(linea, True, COLOR_TENUE), (cuerpo.x + 44, y + 6 + f.get_linesize()))
+        screen.blit(fc.render(_cortar_linea(linea, fc, cuerpo.right - cuerpo.x - 48), True, COLOR_TENUE),
+                    (cuerpo.x + 44, y + 6 + f.get_linesize()))
         estado = panel.get("estado")
+        borde = cuerpo.right
         if estado:
             texto_estado, color = ESTADOS[estado]
             img = fc.render(texto_estado, True, (255, 255, 255))
@@ -690,7 +715,11 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
             caja.topright = (cuerpo.right, y + 4)
             pygame.draw.rect(screen, color, caja, border_radius=caja.height // 2)
             screen.blit(img, img.get_rect(center=caja.center))
-        y += 44
+            borde = caja.left - 6
+        # (con la letra más grande, el @usuario largo se metía debajo del estado)
+        screen.blit(f.render(_cortar_linea(usuario, f, borde - cuerpo.x - 44), True, COLOR_TEXTO),
+                    (cuerpo.x + 44, y + 4))
+        y += max(44, 10 + f.get_linesize() + fc.get_linesize())
         # El texto de la publicación, en su tarjeta.
         renglones = partir_lineas(pub.texto, f, ancho - 8)
         rect = pygame.Rect(cuerpo.x, y, cuerpo.width, len(renglones) * f.get_linesize() + 16)

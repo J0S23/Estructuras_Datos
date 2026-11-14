@@ -38,6 +38,12 @@ import random
 
 import pygame
 
+# Flecha amarilla: la cosa más cercana se escoge por camino (Mision._elegir),
+# midiendo a lo más MAX_A_MEDIR (las más cercanas en línea recta) y otra vez
+# cuando el jugador se aleja REMEDIR_PX de donde midió.
+MAX_A_MEDIR = 5
+REMEDIR_PX = 250
+
 from data.nexus import FUGA_VIRAL
 from data.notas import NOTAS, NOTA_CODIGO, NOTAS_CODIGO_VACIAS
 from misiones.logros import logro
@@ -232,6 +238,8 @@ class Mision:
         self.abrio = None                # quién abrió la puerta de la prisión
         self._objetivos = []             # rects de lo de la misión (para ver qué tapan las puertas)
         self._tapado = False             # ¿alguna puerta cerrada tapa algo de la misión?
+        self._desvios = {}               # flecha amarilla: id(jugador) -> último desvío a una puerta
+        self._eleccion = {}              # flecha amarilla: lo más cercano caminando (_elegir)
         self.reparacion = 0.0
         self.fase = None
         if not self.activa:
@@ -475,6 +483,132 @@ class Mision:
         return TEXTO_FASE.get(self.fase, "")
 
     def punto_objetivo(self, jugador):
+        """A dónde debería ir ahora este jugador (flecha amarilla): lo que
+        dice `_objetivo`, pero solo si se puede llegar caminando con lo que
+        está cerrado ahora. Si no (p. ej. la fruta para el Guardia con la
+        Bahía detrás de una puerta), guía a la puerta que lo tapa: la de
+        código (o sus notas) o los paneles de la puerta para dos. Antes la
+        flecha marcaba el camino hasta el rincón más cercano al objetivo, que
+        no tenía sentido. Si no hay forma de llegar, nada."""
+        obj = self._objetivo(jugador)
+        if obj is None or not hasattr(self.juego.mundo, "paredes_base"):
+            return obj
+        punto = obj[0]
+        # Ir a abrir una puerta (o a sus paneles) siempre se puede pedir.
+        if any(p["rect"].center == tuple(punto) for p in self.puertas_cerradas()):
+            return obj
+        nav = self._nav_jugador()
+        c = jugador.hitbox.center
+        if nav.conectados(c, punto, sellos=False):
+            return obj
+        # (Se recalcula cada 1.5 s, si cambia el objetivo o una puerta, o si
+        # se movió lejos: probar puerta por puerta arma un estado de la
+        # navegación por cada una.)
+        clave = (int(punto[0]) // 48, int(punto[1]) // 48, self._clave_puertas())
+        guardado = self._desvios.get(id(jugador))
+        ahora = getattr(self.juego, "tiempo_jugado_ms", 0)
+        if guardado is not None and guardado[0] == clave and ahora - guardado[1] < 1500 \
+                and math.dist(guardado[3], c) < 300:
+            return guardado[2]
+        desvio = self._desvio(jugador, punto, nav)
+        self._desvios[id(jugador)] = (clave, ahora, desvio, c)
+        return desvio
+
+    def _elegir(self, jugador, cosas, punto=lambda x: x):
+        """De `cosas`, la más cercana CAMINANDO (no en línea recta: una
+        consola al otro lado de la pared puede quedar a media nave de
+        camino). Mide los caminos de a poco (el A* por partes de la
+        navegación, con su tope de tiempo por cuadro) y mientras tanto da la
+        más cercana en línea recta. Se vuelve a medir si el jugador se aleja
+        REMEDIR_PX de donde midió o si cambian las cosas. Las que no se
+        alcanzan no se escogen (si ninguna se alcanza, la más cercana)."""
+        cosas = list(cosas)
+        if len(cosas) <= 1:
+            return cosas[0] if cosas else None
+        c = jugador.hitbox.center
+        pts = [(int(punto(x)[0]), int(punto(x)[1])) for x in cosas]
+        recta = min(range(len(cosas)), key=lambda i: math.dist(pts[i], c))
+        if not hasattr(self.juego.mundo, "paredes_base"):
+            return cosas[recta]
+        nav = self._nav_jugador()
+        clave = (id(jugador), tuple(sorted(set(pts))), self._clave_puertas())
+        e = self._eleccion.get(clave)
+        if e is None or math.dist(e["desde"], c) > REMEDIR_PX:
+            if len(self._eleccion) > 200:
+                self._eleccion.clear()
+            cola = sorted(set(pts), key=lambda p: math.dist(p, c))[:MAX_A_MEDIR]
+            e = self._eleccion[clave] = {"desde": c, "cola": cola, "largos": {},
+                                         "mejor": e["mejor"] if e else None}
+        if e["cola"]:
+            p = e["cola"][0]
+            mejor = min(e["largos"].values(), default=None)
+            if mejor is not None and math.dist(p, e["desde"]) >= mejor:
+                e["cola"] = []          # las que faltan quedan aún más lejos en línea recta
+            else:
+                camino = nav.camino(e["desde"], p, sellos=False, por_partes=True,
+                                    quien=("elegir",) + clave[:2])
+                if camino is not None or not nav.ocupada:
+                    e["cola"].pop(0)
+                    if camino:
+                        e["largos"][p] = sum(math.dist(a, b) for a, b in zip([e["desde"]] + camino, camino))
+            if not e["cola"] and e["largos"]:
+                e["mejor"] = min(e["largos"], key=e["largos"].get)
+        if e["mejor"] in pts:
+            return cosas[pts.index(e["mejor"])]
+        return cosas[recta]
+
+    def _nav_jugador(self):
+        from juego import navegacion
+        return navegacion.de_mundo(self.juego.mundo, 34, 20)
+
+    def _clave_puertas(self):
+        dobles = getattr(self.juego, "puertas_dobles", ())
+        return (tuple(p["abierta"] for p in self.puertas), tuple(p["abierta"] for p in dobles))
+
+    def _desvio(self, jugador, punto, nav):
+        """`punto` no se alcanza: ¿qué puerta cerrada, abierta, lo deja al
+        alcance? Primero las de código (que se puedan abrir desde aquí),
+        después las puertas para dos. None si ninguna sola basta."""
+        c = jugador.hitbox.center
+        todo = nav._bloqueos_extra(False)
+
+        def sin(rect):
+            return [r for r in todo if r != rect]
+
+        def cerca(cosas, f=lambda x: x):
+            return min(cosas, key=lambda x: math.dist(f(x), c), default=None)
+
+        def a_mano(rect):
+            """¿Se llega a algún lado de `rect` (una puerta) desde aquí?"""
+            mx, my = rect.width // 2 + 24, rect.height // 2 + 24
+            return any(nav.conectados(c, (rect.centerx + dx, rect.centery + dy), sellos=False)
+                       for dx, dy in ((mx, 0), (-mx, 0), (0, my), (0, -my)))
+
+        for puerta in sorted(self.puertas_cerradas(), key=lambda p: math.dist(p["rect"].center, c)):
+            if not a_mano(puerta["rect"]) or \
+                    not nav.conectados(c, punto, sellos=False, extra=sin(puerta["rect"])):
+                continue
+            guia = self._guiar_a_puerta(jugador, puerta, cerca, solo_alcanzables=True)
+            if guia is not None:
+                return guia
+        for puerta in getattr(self.juego, "puertas_dobles", ()):
+            if puerta["abierta"] or not nav.conectados(c, punto, sellos=False, extra=sin(puerta["rect"])):
+                continue
+            paneles = [r for r in puerta["paneles"] if nav.conectados(c, r.center, sellos=False)]
+            panel = cerca(paneles, lambda r: r.center)
+            if panel is not None:
+                return panel.center, "Abran la puerta para dos: cada uno en un panel"
+        # Ninguna puerta sola: la de código más cercana que ya se pueda abrir.
+        for puerta in sorted(self.puertas_cerradas(), key=lambda p: math.dist(p["rect"].center, c)):
+            guia = self._guiar_a_puerta(jugador, puerta, cerca, solo_alcanzables=True)
+            if guia is None:
+                continue
+            if (guia[0] == puerta["rect"].center and a_mano(puerta["rect"])) \
+                    or nav.conectados(c, guia[0], sellos=False):
+                return guia
+        return None
+
+    def _objetivo(self, jugador):
         """A dónde debería ir ahora este jugador, para la flecha amarilla de
         las dificultades fáciles (dificultad.py). Devuelve (punto, texto) o None.
 
@@ -491,10 +625,8 @@ class Mision:
           4. Huida: a la cápsula (el Resonante, si hace falta, distrae)."""
         if not self.activa or jugador.preso or getattr(jugador, "eliminado", False):
             return None
-        c = jugador.hitbox.center
-
         def cerca(cosas, punto=lambda x: x):
-            return min(cosas, key=lambda x: math.dist(punto(x), c), default=None)
+            return self._elegir(jugador, cosas, punto)
 
         # Primero, sacar a un compañero de su celda.
         celda = cerca([cd for cd in self.celdas if cd["preso"] is not None], lambda cd: cd["punto"])
@@ -604,14 +736,12 @@ class Mision:
         return None
 
     def _llega(self, jugador, punto):
-        """¿Puede ir caminando hasta `punto` con lo que está cerrado ahora?"""
-        mundo = self.juego.mundo
-        if not hasattr(mundo, "paredes_base"):
+        """¿Puede ir caminando hasta `punto` con lo que está cerrado ahora?
+        (Puertas con código y puertas para dos cerradas; los sellos del
+        Forjador no frenan a los jugadores.)"""
+        if not hasattr(self.juego.mundo, "paredes_base"):
             return True
-        from juego import navegacion
-        from juego.mundo import paredes_extra
-        nav = navegacion.de_mundo(mundo, 34, 20)
-        return nav.conectados(jugador.hitbox.center, punto, extra=paredes_extra(mundo))
+        return self._nav_jugador().conectados(jugador.hitbox.center, punto, sellos=False)
 
     def _guiar_a_puerta(self, jugador, puerta, cerca, solo_alcanzables=False):
         """A dónde ir para abrir `puerta`: la puerta (si ya leyó el código) o
