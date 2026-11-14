@@ -125,10 +125,12 @@ aparece). Con el celular se puede:
 Arriba al centro esta la **barra de confianza** de la tripulacion, una sola para
 todo el equipo: la parte **verde** (confian en ustedes) crece desde la izquierda, la
 **roja** (le creen a los aliens) desde la derecha y en medio queda gris (los que no
-deciden). Con la verde en 80% (la raya blanca) les pasan los **planos de la capsula**
+deciden). Con la verde en la raya blanca (50-65% segun la dificultad) les pasan los **planos de la capsula**
 (sin ellos no se puede reparar). Mientras la roja le gana a la verde, los aliens son
-mas rapidos y ven mas lejos (pero con la roja alta no se pierde: solo se pierde
-por vidas o si quedan todos encerrados). Con el celular abierto no te mueves: si un alien llega, te atrapa. Al final,
+un poco mas rapidos y ven un poco mas lejos (pero con la roja alta no se pierde: solo se pierde
+por vidas o si quedan todos encerrados). Al desmentir un rumor, varios de los que
+se lo creyeron recapacitan, y con el tiempo la gente duda sola: el rojo baja si no
+lo alimentan. Con el celular abierto no te mueves: si un alien llega, te atrapa. Al final,
 los resultados muestran como usaron NEXUS. Cuentas, rumores y numeros se editan en
 `data/nexus.py`.
 
@@ -198,15 +200,16 @@ Despues de escoger cuantos juegan se elige la dificultad (numeros en
 
 | | Vidas | Aliens | Planos | Flecha | Fuga de la celda |
 |---|---|---|---|---|---|
-| **Facil** | no se pierden | 70% de velocidad/vision/oido | 60% | si | 8 s |
-| **Normal** | 5 | 82% | 70% | si | 20 s |
-| **Dificil** | 4 | 92% | 75% | no | no (solo si te liberan) |
-| **Inteligente** | 3 | se ajusta solo (empieza en Normal) | 70% | hasta Normal | segun el nivel |
+| **Facil** | no se pierden | 70% de velocidad/vision/oido | 50% | si | 8 s |
+| **Normal** | 5 | 82% | 60% | si | 20 s |
+| **Dificil** | 4 | 92% | 65% | no | no (solo si te liberan) |
+| **Inteligente** | 3 | se ajusta solo (empieza en Normal) | 60% | hasta Normal | segun el nivel |
 
 Tambien cambian cuanto espera el Cambiaformas para cazar, cuanto descansa, cuanto
 tarda en traicionar y cada cuanto suplanta, y cada cuanto salen rumores y que tan
 facil se los creen. La **flecha** amarilla señala lo que toca hacer (notas,
-puerta, consolas, piezas, rumores, capsula o un compañero encerrado). Con **fuga**,
+puerta, consolas, piezas, rumores, capsula o un compañero encerrado) y marca en el
+piso el camino para llegar, rodeando las paredes (igual la azul y la roja). Con **fuga**,
 el encerrado sale solo despues de ese tiempo y que esten todos presos no es derrota.
 La flecha amarilla va en este orden, segun el rol y lo que lleve cada uno:
 rescatar a un compañero; notas y puerta; **consolas** (las hackea el Tecnomante o
@@ -307,6 +310,7 @@ python pruebas/prueba_vista_grafo.py  # la vista de los grafos (Pausa > Opciones
 python pruebas/prueba_idioma.py      # el juego en ingles (Menu > Opciones > Idioma)
 python pruebas/prueba_rumores_virales.py  # rumores que se vuelven virales y desmentidos tarde
 python pruebas/prueba_bots_crecen.py      # las cuentas falsas que nadie reporta ganan seguidores
+python pruebas/prueba_flechas_camino.py   # las flechas guía siguen el camino, no atraviesan paredes
 python pruebas/prueba_infiltrado.py # mision secundaria del infiltrado de NEXUS
 python pruebas/prueba_logros.py    # arbol de logros y cuando se consigue cada uno
 python pruebas/prueba_sonidos.py   # que todo sonido pedido exista y suene donde va

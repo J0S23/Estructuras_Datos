@@ -117,9 +117,9 @@ NORMALES = [
 ]
 
 # -- Balance ------------------------------------------------------------------------
-TICK_PROPAGACION_MS = 1300      # cada cuánto avanza un nivel una publicación
-PRIMER_RUMOR_S = 30             # después del tutorial
-RUMOR_CADA_S = (38, 55)         # entre un rumor y el siguiente (al azar)
+TICK_PROPAGACION_MS = 1800      # cada cuánto avanza un nivel una publicación (nov 12: antes 1300)
+PRIMER_RUMOR_S = 50             # después del tutorial (antes 30)
+RUMOR_CADA_S = (60, 85)         # entre un rumor y el siguiente (al azar; antes 38-55)
 NORMAL_CADA_S = (14, 24)        # publicaciones de relleno
 NUEVO_BOT_CADA_S = 75           # el Cambiaformas abre otra cuenta si le borraron
 MAX_POR_VERIFICAR = 3           # rumores + pedidos de ayuda por ir a ver, a la vez, POR JUGADOR
@@ -127,21 +127,29 @@ MAX_POR_VERIFICAR = 3           # rumores + pedidos de ayuda por ir a ver, a la 
 # Al que le llega un rumor se lo cree con esta probabilidad, y solo si se lo
 # cree lo reenvía (se pone rojo). Con la verdad pasa igual: al que le llega un
 # desmentido lo convence con PROB_CONVENCER (verde) y entonces lo reenvía.
-PROB_CREER_RUMOR = 0.45
-PROB_CONVENCER = 0.6
-PROB_CONVENCER_UBICACION = 0.8  # la foto sin recortar convence más...
+PROB_CREER_RUMOR = 0.30
+PROB_CONVENCER = 0.85
+PROB_CONVENCER_UBICACION = 0.95  # la foto sin recortar convence más...
                                 # ...pero el alien más cercano va por ti
 
-NIVELES_DESMENTIDO = 6          # hasta cuántos saltos puede llegar un desmentido
+NIVELES_DESMENTIDO = 8          # hasta cuántos saltos puede llegar un desmentido
+# Al desmentir, cada uno de los que se creyeron ESE rumor y siguen en rojo
+# recapacita (vuelve a gris) con esta probabilidad (× lo de llegar tarde),
+# aunque el desmentido no le llegue por la red.
+PROB_RECAPACITAR = 0.6
+# Y con el tiempo la gente duda: cada OLVIDO_CADA_S, cada prisionero en rojo
+# vuelve a gris con PROB_OLVIDAR (así el rojo no se queda arriba para siempre).
+OLVIDO_CADA_S = 20
+PROB_OLVIDAR = 0.08
 NIVELES_COMPARTIR_CIERTO = 1
 
-UMBRAL_PLANOS = 0.80            # % de prisioneros verdes para los planos
+UMBRAL_PLANOS = 0.65            # % de prisioneros verdes para los planos (sin dificultad)
 
 # Mientras el rojo le va ganando al verde, los aliens se potencian. Con el rojo
 # DIFERENCIA_POTENCIA_MAX por encima del verde llegan al máximo.
-DIFERENCIA_POTENCIA_MAX = 0.5
-POTENCIA_VELOCIDAD = 0.30       # +30% de velocidad al máximo
-POTENCIA_VISION = 0.35          # +35% de alcance de visión al máximo
+DIFERENCIA_POTENCIA_MAX = 0.7
+POTENCIA_VELOCIDAD = 0.15       # +15% de velocidad al máximo (antes 30%)
+POTENCIA_VISION = 0.20          # +20% de alcance de visión al máximo (antes 35%)
 
 RADIO_FOTO = 70                 # qué tan cerca del lugar hay que estar
 
@@ -151,8 +159,8 @@ RADIO_FOTO = 70                 # qué tan cerca del lugar hay que estar
 # grises les llega a todos y se lo creen con PROB_CREER_VIRAL, y la gente de la
 # nave actúa como si fuera verdad ("viral" de cada rumor; los que no traen,
 # solo se riegan). Al desmentirlo, la gente vuelve a lo de antes.
-VIRAL_S = 90
-PROB_CREER_VIRAL = 0.5
+VIRAL_S = 150                   # (antes 90)
+PROB_CREER_VIRAL = 0.3          # (antes 0.5)
 VIRAL_GENERICO = "Ya casi toda la nave se lo cree."
 ESCONDITES_VIRAL = 3            # casilleros que ocupan los prisioneros (rumor de casilleros)
 FUGA_VIRAL = 0.5                # rumor de las celdas: la fuga avanza a esta velocidad
@@ -161,8 +169,8 @@ FUGA_VIRAL = 0.5                # rumor de las celdas: la fuga avanza a esta vel
 # TARDE_DESDE, el desmentido convence cada vez menos, hasta CONVENCE_TARDE (la
 # fracción de lo normal) cuando ya se volvió viral. "La mentira da la vuelta al
 # mundo antes de que la verdad se ponga los zapatos."
-TARDE_DESDE = 0.3
-CONVENCE_TARDE = 0.5
+TARDE_DESDE = 0.5
+CONVENCE_TARDE = 0.7
 
 # Las cuentas falsas que nadie reporta crecen: cada bot gana un seguidor cada
 # BOT_GANA_SEGUIDOR_S segundos (× "bot_crece_cada" de la dificultad), hasta
@@ -170,8 +178,8 @@ CONVENCE_TARDE = 0.5
 # ve que un conocido sigue una cuenta). Con más seguidores, cada rumor que
 # publica les llega de una vez a más prisioneros. Reportarlo temprano corta
 # una cuenta chica; tarde, una que ya le llegaba a media nave.
-BOT_GANA_SEGUIDOR_S = 30
-BOT_MAX_SEGUIDORES = 10
+BOT_GANA_SEGUIDOR_S = 45          # (antes 30)
+BOT_MAX_SEGUIDORES = 8             # (antes 10)
 AVISOS_SEGUIDORES = (6, BOT_MAX_SEGUIDORES)   # a cuántos seguidores avisa a todos
 SEGUIDORES_PARA_CONSEJO = 8     # ganados en la partida sin reportar ningún bot: consejo en resultados
 

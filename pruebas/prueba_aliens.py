@@ -247,7 +247,7 @@ def esconder(jugador, e):
 def preparar_alien(a, e, distancia=130):
     """Pone al alien cerca del escondite pero de espaldas, para que solo oiga."""
     a.rastro.clear(); a.punto_ruido = None; a.escondite_objetivo = None
-    a.busqueda_ms = 0; a.descanso_ms = 0
+    a.busqueda_ms = 0; a.descanso_ms = 0; a.sin_revisar_ms = 0
     a.hitbox.center = (e["rect"].centerx + distancia, e["rect"].centery)
     a.angulo = 0.0       # mirando a la derecha, lejos del escondite
     e["revisado_por"] = None; e["enfriamiento_ms"] = 0
@@ -398,6 +398,17 @@ assert a1.escondite_objetivo is escondite, "cambió al escondite del que late m�
 a1._ejecutar("REVISAR_ESCONDITE", DT, 1.0, g.mundo, None, g._alien_revisa)
 assert j1.minijuego is not None, "frente al escondite que revisa, el de adentro tiene minijuego"
 print("dos escondites juntos: el alien escoge uno, arranca su minijuego y no lo cambia por el otro")
+# Al terminar el minijuego del primero, NO arranca enseguida el del vecino
+# (antes quedaban en un bucle de minijuegos sin salida).
+from entidades.alien import SIN_REVISAR_MS
+j1.minijuego = None
+a1.rendirse()
+j2.pulso = 100
+for _ in range(int(SIN_REVISAR_MS * 0.9) // DT):
+    j2.pulso = 100
+    g._actualizar_partida(DT)
+    assert j2.minijuego is None and not j2.preso, "empezó el minijuego del vecino enseguida"
+print(f"al terminar uno, el alien no revisa otro escondite en {SIN_REVISAR_MS // 1000} s")
 # Si el de adentro sale, el escondite deja de estar en rojo.
 for j in (j1, j2):
     if j.preso is not None:

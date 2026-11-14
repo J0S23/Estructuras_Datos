@@ -52,8 +52,8 @@ AJUSTES = {
     "cf_trampas":        [2.0,    1.6,   1.25,  1.00],    # multiplica el tiempo entre suplantaciones
     "cf_estudio":        [2.0,    1.5,   1.25,  1.00],    # multiplica cuánto estudia a su presa
     # NEXUS
-    "rumor_cada":        [1.60,   1.40,  1.20,  1.00],    # multiplica el tiempo entre rumores
-    "prob_creer":        [0.30,   0.33,  0.39,  0.45],    # prob. de que un gris se crea un rumor
+    "rumor_cada":        [1.60,   1.35,  1.15,  1.00],    # multiplica el tiempo entre rumores
+    "prob_creer":        [0.15,   0.20,  0.25,  0.30],    # prob. de que un gris se crea un rumor
     "viral_cada":        [1.50,   1.25,  1.10,  1.00],    # multiplica el tiempo para que un rumor se vuelva viral
     "bot_crece_cada":    [1.60,   1.35,  1.15,  1.00],    # multiplica el tiempo entre seguidores nuevos de un bot
     # La Sombra (sale en los apagones): si alcanza a alguien le apaga la
@@ -74,7 +74,7 @@ AJUSTES = {
 RITMO_MISION_S = 420
 VIDAS = {"facil": 3, "normal": 5, "dificil": 4, "inteligente": 3}
 VIDAS_INFINITAS = {"facil"}          # atrapar no quita vidas
-UMBRAL_PLANOS = {"facil": 0.60, "normal": 0.70, "dificil": 0.75, "inteligente": 0.70}
+UMBRAL_PLANOS = {"facil": 0.50, "normal": 0.60, "dificil": 0.65, "inteligente": 0.60}
 # Fuga: el que está en una celda fuerza la reja y sale solo después de este
 # tiempo (None = solo lo saca un compañero). Mientras alguien pueda fugarse,
 # que todos estén encerrados no es derrota. Inteligente: según su nivel.

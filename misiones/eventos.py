@@ -34,7 +34,7 @@ import pygame
 
 from juego.fuentes import fuente_de_tamano
 from juego import sprites_objetos
-from screens.flechas import flecha_alrededor, cerca_del_borde
+from screens.flechas import flecha_alrededor, cerca_del_borde, dibujar_camino
 
 
 INTERVALO_MIN_S, INTERVALO_MAX_S = 50, 80
@@ -397,6 +397,9 @@ def dibujar_flecha_caja(screen, vista, camara, dueño, eventos, tiempo_ms):
         return
     x, y = eventos.caja["rect"].center
     texto = "Caja de fusibles"
+    # El camino va al piso desde donde se usa (la caja puede estar en la pared).
+    dibujar_camino(screen, vista, camara, dueño, eventos.caja.get("pie") or (x, y),
+                   COLOR_FLECHA_CAJA, tiempo_ms)
     if camara.collidepoint(x, y):
         centro = (int(x - camara.x + vista.x), int(y - camara.y + vista.y))
         radio = 38 + int(5 * math.sin(tiempo_ms / 180))

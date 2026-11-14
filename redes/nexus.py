@@ -56,7 +56,7 @@ from data.nexus import (
     BOTS_AL_EMPEZAR, TICK_PROPAGACION_MS, PRIMER_RUMOR_S, RUMOR_CADA_S, NORMAL_CADA_S,
     NUEVO_BOT_CADA_S, MAX_POR_VERIFICAR, NIVELES_DESMENTIDO, NOMBRE_LUGAR, PROB_CONVENCER_UBICACION,
     NIVELES_COMPARTIR_CIERTO, UMBRAL_PLANOS, DIFERENCIA_POTENCIA_MAX,
-    RADIO_FOTO, PUNTOS_DESMENTIR,
+    RADIO_FOTO, PUNTOS_DESMENTIR, PROB_RECAPACITAR, OLVIDO_CADA_S, PROB_OLVIDAR,
     PUNTOS_REPORTAR_BOT, PUNTOS_PLANOS, PROB_CREER_RUMOR, PROB_CONVENCER,
     PUNTOS_SUPLANTACION, VIRAL_S, PROB_CREER_VIRAL, VIRAL_GENERICO, ESCONDITES_VIRAL,
     TARDE_DESDE, CONVENCE_TARDE, SEGUIDORES_PARA_CONSEJO, BOT_GANA_SEGUIDOR_S, BOT_MAX_SEGUIDORES, AVISOS_SEGUIDORES,
@@ -133,6 +133,7 @@ class RedNexus:
         self.umbral_planos = UMBRAL_PLANOS     # la dificultad lo cambia (App.iniciar_partida)
         self.reloj_normal_ms = self.rng.uniform(*NORMAL_CADA_S) * 1000
         self.reloj_bot_ms = NUEVO_BOT_CADA_S * 1000
+        self.reloj_olvido_ms = OLVIDO_CADA_S * 1000
         self._bots_usados = 0
         # Para la vista del grafo (screens/grafo_vista.py, Pausa > Opciones).
         self.tiempo_ms = 0
@@ -255,6 +256,13 @@ class RedNexus:
                 if self.reloj_bot_ms <= 0:
                     self.reloj_bot_ms = NUEVO_BOT_CADA_S * 1000
                     self._nuevo_bot()
+            # Con el tiempo, algunos de los que se creyeron algo empiezan a dudar.
+            self.reloj_olvido_ms -= dt
+            if self.reloj_olvido_ms <= 0:
+                self.reloj_olvido_ms = OLVIDO_CADA_S * 1000
+                for n in self._presos():
+                    if self.color(n) == ROJO and self.rng.random() < PROB_OLVIDAR:
+                        self.grafo.datos[n]["color"] = GRIS
             for bot in self.bots():
                 datos = self.grafo.datos[bot]
                 datos["crece_ms"] = datos.get("crece_ms", self.cada_cuanto_crece()) - dt
@@ -752,6 +760,12 @@ class RedNexus:
                 self._quitar_efecto(rumor)
         prob = PROB_CONVENCER_UBICACION if con_ubicacion else PROB_CONVENCER
         prob *= self.convence_a_tiempo(tarde)
+        # Los que se lo creyeron pueden recapacitar aunque la verdad no les
+        # llegue por la red (lo vieron en otro lado, alguien se lo contó).
+        for n in rumor.creyentes:
+            if (n in self.grafo and self.color(n) == ROJO
+                    and self.rng.random() < PROB_RECAPACITAR * self.convence_a_tiempo(tarde)):
+                self.grafo.datos[n]["color"] = GRIS
         self.propagaciones.append(Propagacion(pub, nodo, VERDE, max_niveles=NIVELES_DESMENTIDO,
                                               prob=prob))
         jugador.sumar_puntos(PUNTOS_DESMENTIR)

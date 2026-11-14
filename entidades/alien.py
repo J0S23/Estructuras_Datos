@@ -47,7 +47,11 @@ from data.nexus import POTENCIA_VELOCIDAD, POTENCIA_VISION
 
 DISTANCIA_ATRAPAR = 46
 DISTANCIA_REVISAR = 80           # a esta distancia del escondite se pone a revisarlo
-ENFRIAMIENTO_ESCONDITE_MS = 7000 # tras rendirse, cuánto ignora ese escondite
+ENFRIAMIENTO_ESCONDITE_MS = 20000  # tras un minijuego, cuánto ignoran los aliens ese escondite (antes 7 s)
+# Y el alien que acaba de revisar uno no revisa NINGÚN otro en este tiempo: con
+# dos escondidos uno al lado del otro, al terminar el minijuego de uno empezaba
+# enseguida el del otro, y así sin salida.
+SIN_REVISAR_MS = 15000
 DURACION_BUSQUEDA_MS = 3000      # cuánto busca después de perder el rastro
 DURACION_DESCANSO_MS = 2500      # cuánto se queda quieto tras atrapar a alguien
 SEPARACION_RASTRO = 36           # cada cuánto deja un punto en el rastro
@@ -271,6 +275,8 @@ class Alien:
         """Si un alien puede ir a revisar este escondite ahora."""
         if escondite.get("enfriamiento_ms", 0) > 0:
             return False
+        if alien is not None and getattr(alien, "sin_revisar_ms", 0) > 0:
+            return False
         dueño = escondite.get("revisado_por")
         return dueño is None or dueño is alien
 
@@ -368,6 +374,7 @@ class Alien:
             factor *= 1.25
         factor *= (1 + POTENCIA_VELOCIDAD * self.potencia_nexus) * self.ajuste_vel
         self.descanso_ms = max(0, self.descanso_ms - dt)
+        self.sin_revisar_ms = max(0, getattr(self, "sin_revisar_ms", 0) - dt)
         if self.descanso_ms == 0:
             self.aturdido = False
             self.cansado = False
@@ -441,6 +448,7 @@ class Alien:
         self.escondite_objetivo = None
         self.punto_ruido = None
         self.busqueda_ms = DURACION_BUSQUEDA_MS
+        self.sin_revisar_ms = SIN_REVISAR_MS
 
     def entrar_al_escondite(self):
         """El jugador perdió el minijuego: el alien abre el escondite."""
@@ -452,6 +460,7 @@ class Alien:
         self.punto_ruido = None
         self.busqueda_ms = 0
         self.descanso_ms = DURACION_DESCANSO_MS
+        self.sin_revisar_ms = SIN_REVISAR_MS
 
     def _ejecutar(self, accion, dt, factor, mundo, al_atrapar, al_revisar=None):
         if accion in ("PERSEGUIR", "INVESTIGAR", "BUSCAR", "ATRAPAR", "REVISAR_ESCONDITE"):

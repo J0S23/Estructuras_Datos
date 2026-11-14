@@ -224,6 +224,11 @@ for n in m.notas:
     n["leida_por"].add(j1)
 assert "puerta" in m.punto_objetivo(j1)[1].lower()
 m.abrir_puerta()
+# En la Nave las consolas quedan detrás de la puerta para dos: primero esa.
+assert "puerta para dos" in m.punto_objetivo(j1)[1], m.punto_objetivo(j1)
+for doble in g.puertas_dobles:
+    doble["abierta"] = True
+    g._puerta_doble_abierta(doble)
 assert "consola" in m.punto_objetivo(j1)[1].lower()
 for c in m.consolas:
     c["progreso"] = 1.0
