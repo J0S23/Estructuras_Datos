@@ -26,6 +26,7 @@ import pygame
 
 from juego import navegacion
 from juego.fuentes import fuente_de_tamano
+from juego import cache_dibujo
 
 RADIO = 74           # del centro del cuerpo del jugador a la flecha
 ALTO_CUERPO = 26     # el centro del cuerpo queda arriba de la hitbox (los pies)
@@ -224,9 +225,8 @@ def flecha_alrededor(screen, vista, camara, dueño, destino, color, texto=None, 
     pygame.draw.polygon(screen, COLOR_SOMBRA, [punta, izq, der], 2)
     if not texto:
         return
-    img = fuente_de_tamano(14).render(texto, True, color)
-    fondo = pygame.Surface((img.get_width() + 10, img.get_height() + 4), pygame.SRCALPHA)
-    fondo.fill((14, 15, 28, 180))
+    img = cache_dibujo.texto(fuente_de_tamano(14), texto, color)
+    fondo = cache_dibujo.capa((img.get_width() + 10, img.get_height() + 4), (14, 15, 28, 180))
     # Más afuera que la flecha, del mismo lado; si apunta de lado, el texto se
     # corre hacia afuera para no quedar encima del jugador.
     r = fondo.get_rect(center=(px + ux * (32 + fondo.get_width() / 2 * abs(ux)),

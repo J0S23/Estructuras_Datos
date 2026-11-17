@@ -46,8 +46,9 @@ TECLAS_PUESTO_1 = {
     # Se probó dejar los dos sigilos en Shift (izq J1, der J2), pero en el
     # teclado de la laptop de Diego los dos Shift juntos no dejan pasar las
     # flechas de arriba/abajo (ghosting: la matriz del teclado no manda esa
-    # combinación). Shift izquierdo sigue sirviendo, pero no se muestra.
-    "sigilo": (pygame.K_SPACE, pygame.K_LSHIFT),
+    # combinación). Desde nov 17 el sigilo del J1 es SOLO Espacio (Shift
+    # izquierdo ya no hace nada: pedido de Diego).
+    "sigilo": (pygame.K_SPACE,),
     "celular": (pygame.K_TAB,),
     "soltar": (pygame.K_x,),             # soltar algo del inventario al piso
     # Izquierda/derecha solo sirven en menús del jugador (pestañas del celular);

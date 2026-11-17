@@ -88,7 +88,7 @@ cap(g, "sorpresas_a_tutorial.png")
 TECLAS[pygame.K_d] = True
 frames(g, 5)
 assert g.tutorial.texto(j1)[0] == 2, g.tutorial.texto(j1)
-TECLAS[pygame.K_LSHIFT] = True
+TECLAS[pygame.K_SPACE] = True
 frames(g, 60)
 TECLAS.clear()
 assert g.tutorial.texto(j1)[0] == 3, "caminar en sigilo completa el paso 2"
@@ -141,7 +141,7 @@ poner(j1, libre_cerca(g, (int(0.8 * g.mundo.ancho), int(0.75 * g.mundo.alto))))
 j1.pulso = 30
 TECLAS[pygame.K_d] = True
 x0 = j1.hitbox.x; frames(g, 20); normal = j1.hitbox.x - x0; ruido_normal = j1.radio_ruido
-TECLAS[pygame.K_LSHIFT] = True
+TECLAS[pygame.K_SPACE] = True
 x0 = j1.hitbox.x; frames(g, 20); lento = j1.hitbox.x - x0; ruido_sigilo = j1.radio_ruido
 TECLAS.clear()
 print(f"sigilo: avanza {lento}px vs {normal}px | ruido {ruido_sigilo:.0f} vs {ruido_normal:.0f}")

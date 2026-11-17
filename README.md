@@ -66,7 +66,7 @@ trozo de pantalla y usa su tecla de interaccion con lo que tenga cerca.
 | Elegir opcion | W / S | Flecha arriba / abajo | stick / cruceta (o I / K) | stick / cruceta (o T / G) |
 | Arbol de habilidades | Q | Shift derecho | Y (o U) | Y (o R) |
 | Usar habilidad | F | Alt derecho | X (o P) | X (o V) |
-| Caminar en sigilo (mantener) | Espacio (o Shift izquierdo) | Ctrl derecho o 0 del numerico | LB o LT | LB o LT |
+| Caminar en sigilo (mantener) | Espacio | Ctrl derecho o 0 del numerico | LB o LT | LB o LT |
 | Celular (NEXUS): abrir / atras | TAB | . (punto) | RB (o J) | RB (o B) |
 | Soltar algo del inventario | X | , (coma) | B (o L) | B (o N) |
 | Cerrar un panel | - | - | B | B |

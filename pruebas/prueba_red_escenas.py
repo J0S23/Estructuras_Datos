@@ -43,6 +43,15 @@ TAM = (1280, 720)
 CARPETA = os.environ.get("NEXUS_CAPTURAS") or os.path.join(tempfile.gettempdir(), "nexus_red_escenas")
 os.makedirs(CARPETA, exist_ok=True)
 
+# La línea del objetivo en el HUD sale 7 s cada vez que cambia, contados con
+# el reloj de CADA proceso desde que lo dibuja por primera vez: el cliente
+# dibuja desde el principio y el "modo local" de esta prueba (en el proceso
+# del servidor) solo en las capturas, así que a partir de la 3a escena uno la
+# tenía y el otro no, y eso corría el celular (10 % distinto sin ningún bug).
+# Aquí sale siempre en los dos.
+from screens import paneles
+paneles.OBJETIVO_VISIBLE_MS = 10 ** 9
+
 
 def escenas(g, forzar_fase_final):
     from redes import celular

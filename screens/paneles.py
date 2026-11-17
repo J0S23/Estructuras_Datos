@@ -24,6 +24,7 @@ from juego.fuentes import fuente_de_tamano
 from juego import idioma
 from juego.idioma import tr
 from juego import perfiles
+from juego import cache_dibujo
 
 
 COLOR_FONDO = (22, 24, 42, 238)
@@ -605,9 +606,12 @@ def render_texto_mando(f, texto, color):
 def _con_sombra(screen, f, texto, color, pos, alfa=None):
     """Texto con una sombrita de 1 px: sin franja sólida detrás, así se lee
     encima del piso claro de la nave. Devuelve el ancho."""
-    sombra = f.render(texto, True, COLOR_SOMBRA_TEXTO)
-    img = f.render(texto, True, color)
-    if alfa is not None:
+    # (Los dos textos salen de cache_dibujo: el HUD repite los mismos cada
+    # cuadro. Si se desvanece, copias: lo guardado no se toca.)
+    sombra = cache_dibujo.texto(f, texto, COLOR_SOMBRA_TEXTO)
+    img = cache_dibujo.texto(f, texto, color)
+    if alfa is not None and alfa < 255:
+        sombra, img = sombra.copy(), img.copy()
         sombra.set_alpha(alfa)
         img.set_alpha(alfa)
     screen.blit(sombra, (pos[0] + 1, pos[1] + 1))
@@ -820,9 +824,8 @@ def render_pista_zona(screen, vista, jugador):
     # centro, mientras dura, el tutorial (render_tutorial anota su borde).
     caja.bottom = min(vista.bottom - 96, tope_abajo(vista, jugador) - 12)
 
-    fondo = pygame.Surface((caja.width + 24, caja.height + 12), pygame.SRCALPHA)
-    fondo.fill((14, 15, 28, 225))
-    screen.blit(fondo, (caja.x - 12, caja.y - 6))
+    screen.blit(cache_dibujo.capa((caja.width + 24, caja.height + 12), (14, 15, 28, 225)),
+                (caja.x - 12, caja.y - 6))
     pygame.draw.rect(screen, COLOR_BORDE, (caja.x - 12, caja.y - 6,
                                            caja.width + 24, caja.height + 12), 2)
     screen.blit(etiqueta, caja.topleft)
@@ -914,14 +917,12 @@ def render_pulso(screen, vista, jugador):
     color = _color_pulso(jugador.pulso)
     golpe = _intensidad_latido(jugador.fase_latido)
     f, ancho_barra, alto_barra, x, base, fondo = _medidas_pulso(screen, vista, jugador)
-    capa = pygame.Surface(fondo.size, pygame.SRCALPHA)
-    capa.fill((14, 15, 28, 190))
-    screen.blit(capa, fondo.topleft)
+    screen.blit(cache_dibujo.capa(fondo.size, (14, 15, 28, 190)), fondo.topleft)
 
     tamano = 26 + golpe * 8
     _dibujar_corazon(screen, (x + 16, fondo.centery), tamano, color)
 
-    texto = f.render(f"{jugador.latidos_por_minuto} lpm", True, COLOR_TEXTO)
+    texto = cache_dibujo.texto(f, f"{jugador.latidos_por_minuto} lpm", COLOR_TEXTO)
     screen.blit(texto, (x + 40, fondo.y + 6))
 
     barra = pygame.Rect(x + 40, base - alto_barra - 2, ancho_barra, alto_barra)
@@ -938,11 +939,10 @@ def render_pulso(screen, vista, jugador):
                        (fondo.right - 10 - ancho_vidas, fondo.y + 6 + f.get_linesize() // 2))
 
     if jugador.visto:
-        aviso = f.render("¡TE VEN!", True, COLOR_PULSO_PANICO)
+        aviso = cache_dibujo.texto(f, "¡TE VEN!", COLOR_PULSO_PANICO)
         caja = aviso.get_rect(bottomleft=(fondo.x + 6, fondo.y - 6))
-        tapa = pygame.Surface(caja.inflate(12, 6).size, pygame.SRCALPHA)
-        tapa.fill((14, 15, 28, 205))
-        screen.blit(tapa, caja.inflate(12, 6).topleft)
+        screen.blit(cache_dibujo.capa(caja.inflate(12, 6).size, (14, 15, 28, 205)),
+                    caja.inflate(12, 6).topleft)
         screen.blit(aviso, caja.topleft)
 
 
@@ -1108,10 +1108,31 @@ COLOR_VIDA = (236, 64, 82)
 COLOR_VIDA_VACIA = (60, 40, 52)
 
 
+_corazones = {}
+
+
 def dibujar_corazon(screen, centro, tam, lleno, color=COLOR_VIDA):
-    """Un corazón de `tam` px de ancho: dos círculos y un triángulo."""
-    cx, cy = centro
+    """Un corazón de `tam` px de ancho: dos círculos y un triángulo.
+
+    Se dibuja una vez en una imagen (por tamaño y color) y luego se pega: son
+    ~10 figuras por corazón, 3-4 corazones por vista, cada cuadro. Todo lo
+    que pinta es opaco, así que pegarlo da los mismos píxeles."""
     r = max(2, tam // 4)
+    clave = (r, bool(lleno), tuple(color) if lleno else None)
+    img = _corazones.get(clave)
+    if img is None:
+        m = 2
+        arriba = r // 2 + r + m
+        img = pygame.Surface((4 * r + 2 * m + 1, arriba + int(r * 1.9) + m + 1), pygame.SRCALPHA)
+        _pintar_corazon(img, (2 * r + m, arriba), r, lleno, color)
+        _corazones[clave] = (img, 2 * r + m, arriba)
+        img = _corazones[clave]
+    imagen, dx, dy = img
+    screen.blit(imagen, (int(centro[0]) - dx, int(centro[1]) - dy))
+
+
+def _pintar_corazon(screen, centro, r, lleno, color):
+    cx, cy = centro
     relleno = color if lleno else COLOR_VIDA_VACIA
     for dx in (-r, r):
         pygame.draw.circle(screen, relleno, (cx + dx, cy - r // 2), r)

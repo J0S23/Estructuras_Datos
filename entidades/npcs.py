@@ -31,6 +31,7 @@ import pygame
 from juego import idioma
 
 from juego import navegacion
+from juego import cache_dibujo
 from juego.fuentes import fuente_de_tamano
 from Movimiento.Personaje import DireccionSuave, detectar_hojas, cargar_animaciones
 from data.npcs import (ESTILOS, VELOCIDAD_NPC, ESPERA_NPC_MS, RADIO_CHARLA,
@@ -239,7 +240,7 @@ class Apariencia:
         sombra.center = (x, pies)
         pygame.draw.ellipse(screen, (12, 12, 20), sombra)
         rect = imagen.get_rect(midbottom=(x, pies + datos["pie"]))
-        screen.blit(imagen, rect)
+        cache_dibujo.pegar(screen, imagen, rect)      # (solo lo dibujado del cuadro)
         return (x, rect.y + datos["arriba"] - 2)
 
     def _dibujar_muneco(self, screen, centro_pies, offset):
@@ -257,7 +258,7 @@ class Apariencia:
         grande, arriba = pose
         x = int(centro_pies[0] - offset[0])
         pies = int(centro_pies[1] - offset[1] + 6)
-        screen.blit(grande, (x - LIENZO_W * ESCALA // 2, pies - (LIENZO_H - 6) * ESCALA))
+        cache_dibujo.pegar(screen, grande, (x - LIENZO_W * ESCALA // 2, pies - (LIENZO_H - 6) * ESCALA))
         return (x, pies - (LIENZO_H - 6 - arriba) * ESCALA - 2)
 
 
@@ -356,8 +357,15 @@ class NPC:
         if d > DISTANCIA_SEGUIR:
             if not self.ruta or math.dist(self.ruta[-1], guia.hitbox.center) > 80:
                 nav = navegacion.de_mundo(juego.mundo, self.hitbox.width, self.hitbox.height)
-                self.ruta = list(nav.camino(self.centro, guia.hitbox.center, parcial=True, sellos=False,
-                                            puede_esperar=True) or [])
+                # De a pedazos (por_partes), como los aliens: si quien lo
+                # guía queda detrás de una puerta, el camino "parcial"
+                # recorría toda la zona en un solo cuadro (tirones de 20-40 ms
+                # en el PC de Diego). Mientras busca, se pide el mismo destino.
+                pedido = getattr(self, "_buscando_hacia", None) or guia.hitbox.center
+                camino = nav.camino(self.centro, pedido, parcial=True, sellos=False,
+                                    puede_esperar=True, por_partes=True, quien=id(self))
+                self._buscando_hacia = pedido if camino is None and nav.ocupada else None
+                self.ruta = list(camino or [])
                 self.espera_ms = 0
             if self.ruta:
                 caminar(self, dt, juego, [guia.hitbox.center], 3.4)

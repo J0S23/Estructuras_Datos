@@ -219,13 +219,25 @@ class Navegacion:
         (antes, preguntarlo con el A* recorría toda la zona cada vez que la
         respuesta era "no")."""
         estado = self._estado(sellos, extra)
+        # La respuesta se guarda por celda de `a` y de `b` en el estado (que
+        # cambia si se abre o cierra algo): la flecha amarilla lo pregunta
+        # por cada jugador en cada cuadro, casi siempre desde la misma celda.
+        clave = (self._celda_de(a), self._celda_de(b))
+        guardadas = estado.setdefault("conectados", {})
+        respuesta = guardadas.get(clave)
+        if respuesta is not None:
+            return respuesta
         tapadas, libre = estado["tapadas"], self.libre
 
         def ok(c):
             return c in libre and c not in tapadas
 
         ca, cb = self._mas_cercana(a, ok), self._mas_cercana(b, ok)
-        return ca is not None and cb is not None and self._zona(estado, ca) == self._zona(estado, cb)
+        respuesta = ca is not None and cb is not None and self._zona(estado, ca) == self._zona(estado, cb)
+        if len(guardadas) > 4000:
+            guardadas.clear()
+        guardadas[clave] = respuesta
+        return respuesta
 
     def _vecinos(self):
         """Lista de adyacencia del grafo de la nave (se arma una vez): para

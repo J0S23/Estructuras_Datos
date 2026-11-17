@@ -14,6 +14,7 @@ import pygame
 
 from data.ia_nave import FRASES
 from juego.fuentes import fuente_de_tamano
+from juego import cache_dibujo
 
 
 DURACION_MS = 4800
@@ -23,6 +24,9 @@ LETRAS_POR_SEGUNDO = 45
 
 COLOR_IA = (190, 120, 255)
 COLOR_TEXTO = (240, 236, 255)
+
+
+_bordes = {}      # (tamaño, alfa) -> el borde del cartel
 
 
 class Narrador:
@@ -84,9 +88,15 @@ class Narrador:
         f = fuente_de_tamano(max(14, min(19, ancho_pantalla // 72)))
         f_etiqueta = fuente_de_tamano(max(11, min(13, ancho_pantalla // 110)))
 
-        etiqueta = f_etiqueta.render("IA DE LA NAVE", True, COLOR_IA)
-        lineas = partir_lineas(self.texto, f, max(120, ancho_max - 32))
-        ancho = max(f.size(l)[0] for l in lineas)
+        etiqueta = cache_dibujo.texto(f_etiqueta, "IA DE LA NAVE", COLOR_IA).copy()
+        # Partir el texto en líneas y medirlas: una vez por frase (antes en
+        # cada cuadro mientras habla).
+        from juego import idioma
+        clave = (self.texto, id(f), max(120, ancho_max - 32), idioma.IDIOMA)
+        if getattr(self, "_lineas", (None,))[0] != clave:
+            lineas = partir_lineas(self.texto, f, clave[2])
+            self._lineas = (clave, lineas, max(f.size(l)[0] for l in lineas))
+        _, lineas, ancho = self._lineas
         ancho = max(ancho, etiqueta.get_width()) + 32
         alto = etiqueta.get_height() + f.get_linesize() * len(lineas) + 20
         caja = pygame.Rect(0, 0, ancho, alto)
@@ -100,11 +110,16 @@ class Narrador:
 
         # Se desvanece en el último medio segundo.
         alfa = 230 if self.restante_ms > 500 else int(230 * self.restante_ms / 500)
-        fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
-        fondo.fill((20, 10, 34, alfa))
-        screen.blit(fondo, caja.topleft)
-        borde = pygame.Surface(caja.size, pygame.SRCALPHA)
-        pygame.draw.rect(borde, (*COLOR_IA, alfa), borde.get_rect(), 2, border_radius=6)
+        # (El fondo y el borde, guardados por tamaño y alfa: antes eran dos
+        # superficies nuevas en cada cuadro mientras habla.)
+        screen.blit(cache_dibujo.capa(caja.size, (20, 10, 34, alfa)), caja.topleft)
+        clave = (tuple(caja.size), alfa)
+        borde = _bordes.get(clave)
+        if borde is None:
+            if len(_bordes) > 64:
+                _bordes.clear()
+            borde = _bordes[clave] = pygame.Surface(caja.size, pygame.SRCALPHA)
+            pygame.draw.rect(borde, (*COLOR_IA, alfa), borde.get_rect(), 2, border_radius=6)
         screen.blit(borde, caja.topleft)
 
         etiqueta.set_alpha(alfa)
@@ -112,7 +127,8 @@ class Narrador:
         y = caja.y + 10 + etiqueta.get_height()
         for linea in visibles:
             if linea:
-                cuerpo = f.render(linea, True, COLOR_TEXTO)
+                # (guardada: las líneas ya completas se repiten cada cuadro)
+                cuerpo = cache_dibujo.texto(f, linea, COLOR_TEXTO).copy()
                 cuerpo.set_alpha(alfa)
                 screen.blit(cuerpo, (caja.x + 16, y))
             y += f.get_linesize()

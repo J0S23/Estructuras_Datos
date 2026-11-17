@@ -104,9 +104,13 @@ mundo.bloqueos_alien[:] = []
 sello, alien, ruta = casos[0]
 alien.hitbox.center = ruta[0]; alien.indice_ruta = 0; alien._patrulla_revisada = None
 vistos = set()
-for _ in range(int(90 * 1000 / DT)):
+# (Hasta 4 minutos: en MapaFinal hay rutas de punta a punta de la nave que
+# tardan ~150 s en dar la vuelta; con 90 s la prueba fallaba sin bug.)
+for _ in range(int(240 * 1000 / DT)):
     alien.actualizar(DT, mundo, [], None, [], None)
     vistos.add(alien.indice_ruta)
+    if len(vistos) == len(ruta):
+        break
 assert len(vistos) == len(ruta), (len(vistos), len(ruta))
 print(f"sin el sello, {alien.nombre} vuelve a recorrer los {len(ruta)} puntos de su ruta")
 print("\nTODO OK")

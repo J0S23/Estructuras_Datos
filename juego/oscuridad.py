@@ -220,7 +220,8 @@ def dibujar(screen, vista, camara, dueño, jugadores, apagon=False, vision=None,
         mascara = _capa(chico, "mascara")
         mascara.set_colorkey(_TRANSPARENTE)
         mascara.fill(piso)
-        pygame.draw.polygon(mascara, _TRANSPARENTE, [local(p) for p in vision])
+        zx, zy = zona.x, zona.y          # (= local(p), sin una llamada por punto)
+        pygame.draw.polygon(mascara, _TRANSPARENTE, [((x - zx) / e, (y - zy) / e) for x, y in vision])
         luz.blit(mascara, (0, 0))
 
     # Halos de los compañeros (en el apagón cada uno lleva su linterna; se ven

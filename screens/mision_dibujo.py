@@ -11,7 +11,7 @@ import os
 import pygame
 
 from juego.fuentes import fuente, fuente_de_tamano
-from juego import sprites_objetos, decoracion
+from juego import sprites_objetos, decoracion, cache_dibujo
 from screens.flechas import flecha_alrededor, cerca_del_borde, dibujar_camino
 
 
@@ -28,8 +28,8 @@ COLOR_CONSUMIBLE = {"decodificador": (90, 160, 255), "kit": (110, 210, 140),
 
 def _texto(screen, texto, centro_x, y, color):
     f = fuente("small")
-    img = f.render(texto, True, color)
-    sombra = f.render(texto, True, COLOR_SOMBRA)
+    img = cache_dibujo.texto(f, texto, color)
+    sombra = cache_dibujo.texto(f, texto, COLOR_SOMBRA)
     pos = (int(centro_x - img.get_width() // 2), int(y))
     screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
     screen.blit(img, pos)
@@ -67,9 +67,8 @@ def dibujar_flecha_objetivo(screen, vista, camara, dueño, mision, dificultad, r
         centro = (int(x - camara.x + vista.x), int(y - camara.y + vista.y))
         radio = 34 + int(5 * math.sin(tiempo_ms / 180))
         pygame.draw.circle(screen, COLOR_FLECHA, centro, radio, 2)
-        img = f.render(texto, True, COLOR_FLECHA)
-        fondo = pygame.Surface((img.get_width() + 10, img.get_height() + 4), pygame.SRCALPHA)
-        fondo.fill((14, 15, 28, 180))
+        img = cache_dibujo.texto(f, texto, COLOR_FLECHA)
+        fondo = cache_dibujo.capa((img.get_width() + 10, img.get_height() + 4), (14, 15, 28, 180))
         r = fondo.get_rect(midbottom=(centro[0], centro[1] - radio - 4))
         r.clamp_ip(vista.inflate(-8, -8))
         screen.blit(fondo, r)
@@ -106,10 +105,8 @@ def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
 
     if mision.capsula is not None and mision.capsula.inflate(120, 160).colliderect(camara):
         r = _en_pantalla(mision.capsula, offset)
-        capa = pygame.Surface(r.size, pygame.SRCALPHA)
         alfa = int(60 + 60 * brillo) if mision.fase == "huida" else 40
-        capa.fill((*COLOR_CAPSULA, alfa))
-        screen.blit(capa, r.topleft)
+        screen.blit(cache_dibujo.capa(r.size, (*COLOR_CAPSULA, alfa)), r.topleft)
         nave = imagen_nave(etapa_nave(mision))
         if nave is not None:
             # La nave de Anny encima del piso de la cápsula: rota, en partes o
@@ -136,8 +133,7 @@ def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
         r = _en_pantalla(nota["rect"], offset)
         nueva = dueño not in nota["leida_por"]
         if nueva:
-            halo = pygame.Surface((r.width + 24, r.height + 24), pygame.SRCALPHA)
-            pygame.draw.ellipse(halo, (*COLOR_NOTA, int(70 * brillo)), halo.get_rect())
+            halo = cache_dibujo.elipse((r.width + 24, r.height + 24), (*COLOR_NOTA, int(70 * brillo)))
             screen.blit(halo, (r.x - 12, r.y - 12))
         pygame.draw.rect(screen, COLOR_NOTA if nueva else (150, 145, 120), r.inflate(-6, 0))
         for i in range(3):
@@ -160,9 +156,8 @@ def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
             # Su dibujito (el mismo del inventario), con un halo que late.
             from screens.paneles import _icono_objeto
             brillo = 0.6 + 0.4 * math.sin(tiempo_ms / 260)
-            halo = pygame.Surface((r.width + 20, r.height + 20), pygame.SRCALPHA)
-            pygame.draw.ellipse(halo, (*color, int(80 * brillo)), halo.get_rect())
-            screen.blit(halo, (r.x - 10, r.y - 10))
+            screen.blit(cache_dibujo.elipse((r.width + 20, r.height + 20), (*color, int(80 * brillo))),
+                        (r.x - 10, r.y - 10))
             _icono_objeto(screen, cons["tipo"], r.center, r.width + 6)
             continue
         pygame.draw.rect(screen, (30, 30, 40), r, border_radius=5)
@@ -289,9 +284,7 @@ def render_progreso(screen, vista, jugador):
     x = vista.centerx - ancho // 2
     from screens.paneles import tope_abajo
     y = min(vista.bottom - 150, tope_abajo(vista, jugador) - 66)   # encima de la pista
-    fondo = pygame.Surface((ancho + 20, 46), pygame.SRCALPHA)
-    fondo.fill((14, 15, 28, 220))
-    screen.blit(fondo, (x - 10, y - 26))
+    screen.blit(cache_dibujo.capa((ancho + 20, 46), (14, 15, 28, 220)), (x - 10, y - 26))
     _texto(screen, texto, vista.centerx, y - 22, (240, 242, 252))
     pygame.draw.rect(screen, (40, 42, 64), (x, y, ancho, 12))
     pygame.draw.rect(screen, COLOR_LISTO, (x, y, int(ancho * valor), 12))
