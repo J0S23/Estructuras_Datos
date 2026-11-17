@@ -40,6 +40,10 @@ class Espejo:
         self._agujas = {}          # id del jugador -> ((aguja, sentido) del servidor, cuándo llegó)
         self._reloj_ms = None      # para avanzar las animaciones con el tiempo real
         self._dt_ms = 0
+        # Lo último que se copió de cada sección de la instantánea: una
+        # sección que no cambió llega como EL MISMO dict (protocolo.Reconstructor
+        # solo rehace las que cambian) y no se vuelve a copiar (ver `aplicar`).
+        self._aplicadas = {}
         self.listo = False
         self.error = None
 
@@ -123,24 +127,43 @@ class Espejo:
         # pruebas, cada una pone el suyo antes de aplicar).
         E.RESOLVER = self._resolver
         E.nueva_pasada()
-        self._publicaciones(secciones.get("pubs"))
+        # Antes se copiaba TODA la instantánea encima en cada cuadro (~1.7 ms
+        # aquí, varios en el PC de Diego, solo en esto). Pero el cliente dibuja
+        # a 60 y las instantáneas llegan a 30, y de las que llegan la mayoría
+        # de las secciones no cambió (la misión, los casilleros, las
+        # terminales, las publicaciones...): esas llegan como el mismo dict
+        # de antes y se saltan. Las posiciones (interpoladas) y las
+        # animaciones sí van en cada cuadro.
+        aplicadas = self._aplicadas
+
+        def cambio(clave):
+            datos = secciones.get(clave)
+            return datos is not None and datos is not aplicadas.get(clave)
+
+        if cambio("pubs"):
+            self._publicaciones(secciones.get("pubs"))
+            aplicadas["pubs"] = secciones.get("pubs")
         glob = secciones.get("g", {})
-        for clave, v in glob.items():
-            if clave.startswith("G."):
-                try:
-                    setattr(g, clave[2:], E.a_python(v))
-                except (AttributeError, TypeError):
-                    pass
+        if cambio("g"):
+            for clave, v in glob.items():
+                if clave.startswith("G."):
+                    try:
+                        setattr(g, clave[2:], E.a_python(v))
+                    except (AttributeError, TypeError):
+                        pass
+            aplicadas["g"] = glob
         for i, jugador in enumerate(g.jugadores):
             datos = secciones.get(f"j{i}")
             if datos is not None:
-                self._jugador(jugador, datos, interpolado.get(f"j{i}"))
+                self._jugador(jugador, datos, interpolado.get(f"j{i}"),
+                              completo=datos is not aplicadas.get(f"j{i}"))
+                aplicadas[f"j{i}"] = datos
         self._aliens(secciones.get("al", {}), interpolado)
         from cliente_servidor.servidor import OBJETOS, LISTAS
         for clave, nombre in OBJETOS.items():
             datos = secciones.get(clave)
             objeto = getattr(g, nombre, None)
-            if datos is None:
+            if datos is None or datos is aplicadas.get(clave):
                 continue
             if not datos.get("ok"):
                 # En el servidor ya no está. Por delta llega como {"ok": None,
@@ -156,10 +179,11 @@ class Espejo:
                 if nombre == "logros" and "obtenidos" in cuerpo:
                     self._logros(objeto, cuerpo.pop("obtenidos"))
                 E.aplicar(objeto, cuerpo)
+            aplicadas[clave] = datos
         for clave, nombre in LISTAS.items():
             datos = secciones.get(clave)
             lista = getattr(g, nombre, None)
-            if datos is None or not isinstance(lista, list):
+            if datos is None or not isinstance(lista, list) or datos is aplicadas.get(clave):
                 continue
             nuevos = a_lista(datos)
             for k, d in enumerate(nuevos):
@@ -174,6 +198,7 @@ class Espejo:
                     lista.append(E.a_python(d))
             if len(lista) > len(nuevos):
                 del lista[len(nuevos):]
+            aplicadas[clave] = datos
         self._presentacion(glob.get("presentacion"))
         self._tutorial(glob.get("tut_estado"))
         self._identidades()
@@ -346,7 +371,9 @@ class Espejo:
             alien.hitbox.center = (round(datos["x"]), round(datos["y"]))
         p.actual = {"tipo": datos["tipo"], "alien": alien, "jugador": jugador, "ms": datos.get("ms", 0)}
 
-    def _jugador(self, j, datos, pos):
+    def _jugador(self, j, datos, pos, completo=True):
+        """Copia el jugador. Sin `completo` (su sección no cambió desde la
+        última vez) solo la posición, la animación, la linterna y la aguja."""
         p = j.personaje
         x, y = (pos[0], pos[1]) if pos else (datos["x"], datos["y"])
         p.x, p.y = x, y
@@ -368,6 +395,10 @@ class Espejo:
             p._avanzar_animacion()
             pendiente -= 1
         self._avance_j[id(p)] = pendiente
+        if not completo:
+            j.linterna.angulo = pos[2] if pos else datos.get("lin", j.linterna.angulo)
+            self._aguja(j)
+            return
         atributos = {k[2:]: v for k, v in datos.items() if k.startswith("a.")}
         panel = atributos.pop("panel", None)
         objetos = atributos.pop("objetos", None)
@@ -483,6 +514,15 @@ class Espejo:
         """Las vistas de los jugadores `locales` (números de jugador) con el
         dibujo del modo local."""
         g = self.g
+        # El cuadro del dibujo: en el modo local lo sube _actualizar_partida,
+        # que el espejo nunca corre. Sin esto, en red el contador se quedaba
+        # quieto y (1) las vistas que se turnan para recalcular su campo de
+        # visión (screens/partida.py) no se turnaban: la del J2 solo lo
+        # recalculaba cada 24 px que caminaba (la sombra iba a saltos), y (2)
+        # el tope de tiempo por cuadro de los caminos de las flechas no se
+        # reiniciaba nunca (navegacion._gastado).
+        from juego import navegacion
+        navegacion.siguiente_cuadro()
         dueños = [g.jugadores[i] for i in locales if i < len(g.jugadores)]
         extras = g._extras_dibujo()
         pantalla_original = g.screen

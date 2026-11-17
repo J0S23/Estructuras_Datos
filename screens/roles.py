@@ -15,7 +15,7 @@ import math
 import pygame
 
 from juego import salas_selladas
-from juego import sprites_objetos, decoracion
+from juego import sprites_objetos, decoracion, cache_dibujo
 from juego.fuentes import fuente, fuente_de_tamano
 
 
@@ -53,10 +53,8 @@ def _dibujar_sello(screen, offset, camara, panel, tiempo_ms):
         return
     r = sello.move(-offset[0], -offset[1])
     if panel.get("sello_on"):
-        capa = pygame.Surface(r.size, pygame.SRCALPHA)
         alfa = int(110 + 50 * math.sin(tiempo_ms / 160))
-        capa.fill((90, 200, 255, alfa))
-        screen.blit(capa, r.topleft)
+        screen.blit(cache_dibujo.capa(r.size, (90, 200, 255, alfa)), r.topleft)
         vertical = r.height > r.width
         largo = r.height if vertical else r.width
         for i in range(0, largo, 10):
@@ -172,9 +170,7 @@ def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
             cx = pieza["rect"].centerx - offset[0]
             cy = pieza["rect"].centery - offset[1]
             halo = 14 + 3 * math.sin(tiempo_ms / 200)
-            capa = pygame.Surface((60, 60), pygame.SRCALPHA)
-            pygame.draw.circle(capa, (*COLOR_FORJADOR, 70), (30, 30), int(halo + 6))
-            screen.blit(capa, (cx - 30, cy - 30))
+            screen.blit(cache_dibujo.circulo(60, (*COLOR_FORJADOR, 70), int(halo + 6)), (cx - 30, cy - 30))
             for i in range(6):   # un engranaje
                 a = i * math.pi / 3 + tiempo_ms / 900
                 pygame.draw.circle(screen, COLOR_FORJADOR, (int(cx + math.cos(a) * 9),

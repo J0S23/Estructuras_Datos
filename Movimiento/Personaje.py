@@ -448,7 +448,9 @@ class Personaje:
         imagen = self._frame_actual_surface()
         if imagen is None:
             return
-        pantalla.blit(imagen, (self.x - offset[0], self.y - offset[1]))
+        # (solo lo dibujado del cuadro: juego/cache_dibujo.pegar)
+        from juego.cache_dibujo import pegar
+        pegar(pantalla, imagen, (self.x - offset[0], self.y - offset[1]))
 
 
 # Esquemas de control listos para usar (ver CLAUDE.md: jugador 1 WASD,

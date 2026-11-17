@@ -112,7 +112,8 @@ class Sombra(Alien):
                 return False
         juego = self.juego
         campo = vision.campo_de(jugador.hitbox.center, vision.obstaculos(
-            mundo, getattr(juego, "puertas_dobles", ()), getattr(juego, "compuertas", ())))
+            mundo, getattr(juego, "puertas_dobles", ()), getattr(juego, "compuertas", ())),
+            dueño=jugador, puede_esperar=True)       # (el del dibujo, si está cerca)
         return campo.ve_a(self.hitbox)
 
     def percibir(self, jugadores, mundo, escondites=()):

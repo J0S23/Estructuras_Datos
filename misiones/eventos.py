@@ -404,9 +404,9 @@ def dibujar_flecha_caja(screen, vista, camara, dueño, eventos, tiempo_ms):
         centro = (int(x - camara.x + vista.x), int(y - camara.y + vista.y))
         radio = 38 + int(5 * math.sin(tiempo_ms / 180))
         pygame.draw.circle(screen, COLOR_FLECHA_CAJA, centro, radio, 3)
-        img = fuente_de_tamano(14).render(texto, True, COLOR_FLECHA_CAJA)
-        fondo = pygame.Surface((img.get_width() + 10, img.get_height() + 4), pygame.SRCALPHA)
-        fondo.fill((14, 15, 28, 180))
+        from juego import cache_dibujo
+        img = cache_dibujo.texto(fuente_de_tamano(14), texto, COLOR_FLECHA_CAJA)
+        fondo = cache_dibujo.capa((img.get_width() + 10, img.get_height() + 4), (14, 15, 28, 180))
         r = fondo.get_rect(midbottom=(centro[0], centro[1] - radio - 4))
         r.clamp_ip(vista.inflate(-8, -8))
         screen.blit(fondo, r)

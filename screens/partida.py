@@ -28,6 +28,7 @@ from screens import flechas
 from juego import salas_selladas
 from juego import sprites_objetos
 from juego import decoracion
+from juego import cache_dibujo
 from screens.paneles import (segundos_para_salir, render_panel, render_mosaico, render_hud, render_mensaje, render_pista_zona,
                              render_pulso, render_tension, render_minijuego,
                              render_escondido, render_eliminado,
@@ -322,13 +323,16 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
     todos_los_aliens = list(aliens)      # (los que no ve, la Sintonía los oye: pasos rosados)
     npcs = list((extras or {}).get("npcs", ()))
     if (extras or {}).get("vision") and not mostrar_hitboxes:
-        # Con 3-4 jugadores cada vista recalcula su campo un cuadro sí y otro
-        # no (la mitad en cada cuadro, turnándose): vision.campo_de.
+        # Con 2 o más jugadores cada vista recalcula su campo un cuadro sí y
+        # otro no (la mitad en cada cuadro, turnándose): vision.campo_de. Y
+        # con el campo, la oscuridad (que se rehace solo si cambia el campo).
+        # Antes con 2 era en cada cuadro: en el PC de Diego, campo y oscuridad
+        # eran casi la mitad del dibujo (nov 17).
         todos = list(jugadores)
         turno = (todos.index(dueño) if dueño in todos else 0) + navegacion.Navegacion.cuadro
         campo = vision.campo_de(dueño.hitbox.center, vision.obstaculos(
             mundo, extras.get("puertas_dobles", ()), extras.get("compuertas", ())),
-            dueño=dueño, puede_esperar=len(todos) >= 3 and turno % 2 == 1)
+            dueño=dueño, puede_esperar=len(todos) >= 2 and turno % 2 == 1)
         aliens = [a for a in aliens if campo.ve_a(a.hitbox)]
         npcs = [n for n in npcs if campo.ve_a(n.hitbox)]
 
@@ -752,15 +756,32 @@ def erguidos_escondites(escondites, camara, dueño):
     personajes; si tapan a alguien que pasa por detrás, transparentes."""
     lista = []
     for escondite in escondites:
-        img = sprites_objetos.sprite(sprites_objetos.modelo_escondite(escondite.get("clave", "")),
-                                     ALTO_ESCONDITE)
-        caja = sprites_objetos.caja_dibujo("escondite", escondite["rect"], img)
-        if not caja.inflate(40, 80).colliderect(camara):
+        caja, alcance = _caja_escondite(escondite)
+        if not alcance.colliderect(camara):
             continue
         solido = escondite.get("solido") or sprites_objetos.hitbox("escondite", escondite["rect"])
         lista.append(decoracion.Erguido(
             solido, caja, lambda screen, offset, e=escondite: _dibujar_escondite(screen, e, offset, dueño)))
     return lista
+
+
+_cajas_escondites = {}
+
+
+def _caja_escondite(escondite):
+    """(caja del dibujo, caja donde ya podría asomar en la cámara) de un
+    casillero, sacadas una vez: son ~60 en MapaFinal y antes se calculaba su
+    modelo, su imagen y su caja en cada vista y en cada cuadro."""
+    r = escondite["rect"]
+    clave = (r.x, r.y, r.width, r.height, escondite.get("clave", ""))
+    guardado = _cajas_escondites.get(clave)
+    if guardado is None:
+        if len(_cajas_escondites) > 400:        # (escondites de otros mapas)
+            _cajas_escondites.clear()
+        img = sprites_objetos.sprite(sprites_objetos.modelo_escondite(clave[4]), ALTO_ESCONDITE)
+        caja = sprites_objetos.caja_dibujo("escondite", r, img)
+        guardado = _cajas_escondites[clave] = (caja, caja.inflate(40, 80))
+    return guardado
 
 
 def cerca_ocupado(escondite, dueño):
@@ -801,15 +822,15 @@ def _dibujar_escondite(screen, escondite, offset, dueño):
 
     if escondite.get("npc") is not None and cerca_ocupado(escondite, dueño):
         texto = "Ocupado"
-        etiqueta = fuente("small").render(texto, True, (245, 130, 120))
-        sombra = fuente("small").render(texto, True, COLOR_SOMBRA)
+        etiqueta = cache_dibujo.texto(fuente("small"), texto, (245, 130, 120))
+        sombra = cache_dibujo.texto(fuente("small"), texto, COLOR_SOMBRA)
         pos = (caja.centerx - etiqueta.get_width() // 2, caja.y - etiqueta.get_height() - 4)
         screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
         screen.blit(etiqueta, pos)
     elif cerca or mio:
         texto = "Escondido" if mio else escondite["nombre"]
-        etiqueta = fuente("small").render(texto, True, (255, 214, 64))
-        sombra = fuente("small").render(texto, True, COLOR_SOMBRA)
+        etiqueta = cache_dibujo.texto(fuente("small"), texto, (255, 214, 64))
+        sombra = cache_dibujo.texto(fuente("small"), texto, COLOR_SOMBRA)
         pos = (caja.centerx - etiqueta.get_width() // 2, caja.y - etiqueta.get_height() - 4)
         screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
         screen.blit(etiqueta, pos)
@@ -854,15 +875,14 @@ def _dibujar_terminal_nexus(screen, offset, zona, encima):
     color = (150, 150, 160) if apagada else zona.get("color", COLOR_ZONA)
     caja = sprites_objetos.caja_dibujo("nexus", zona["rect"], sprite).move(-offset[0], -offset[1])
     if encima:
-        brillo = pygame.Surface(caja.inflate(24, 24).size, pygame.SRCALPHA)
-        pygame.draw.ellipse(brillo, (*color, 60), brillo.get_rect())
-        screen.blit(brillo, caja.inflate(24, 24).topleft)
+        screen.blit(cache_dibujo.elipse(caja.inflate(24, 24).size, (*color, 60)),
+                    caja.inflate(24, 24).topleft)
     screen.blit(sprite, caja)
     if encima:
         sprites_objetos.resaltar(screen, sprite, caja.topleft, (255, 214, 64))
     nombre = "Desconectada" if apagada else zona["nombre"]
-    etiqueta = fuente("small").render(nombre, True, color)
-    sombra = fuente("small").render(nombre, True, COLOR_SOMBRA)
+    etiqueta = cache_dibujo.texto(fuente("small"), nombre, color)
+    sombra = cache_dibujo.texto(fuente("small"), nombre, COLOR_SOMBRA)
     pos = (caja.centerx - etiqueta.get_width() // 2, caja.top - etiqueta.get_height() - 4)
     screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
     screen.blit(etiqueta, pos)
@@ -876,13 +896,11 @@ def _dibujar_zona(screen, rect, zona, dueño):
         return            # (se dibuja con los personajes: erguidos_nexus)
     grosor = 4 if encima else 2
 
-    marca = pygame.Surface(rect.size, pygame.SRCALPHA)
-    marca.fill((*color, 70 if encima else 38))
-    screen.blit(marca, rect.topleft)
+    screen.blit(cache_dibujo.capa(rect.size, (*color, 70 if encima else 38)), rect.topleft)
     pygame.draw.ellipse(screen, color, rect, grosor)
 
-    etiqueta = fuente("small").render(zona["nombre"], True, color)
-    sombra = fuente("small").render(zona["nombre"], True, COLOR_SOMBRA)
+    etiqueta = cache_dibujo.texto(fuente("small"), zona["nombre"], color)
+    sombra = cache_dibujo.texto(fuente("small"), zona["nombre"], COLOR_SOMBRA)
     pos = (rect.centerx - etiqueta.get_width() // 2, rect.top - etiqueta.get_height() - 4)
     screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
     screen.blit(etiqueta, pos)

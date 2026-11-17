@@ -836,8 +836,14 @@ class Game:
                 jugador.sin_linterna_ms = 0          # con luz, la linterna da igual
             return
         self._apagon_ms += dt
-        if sombra not in self.aliens and self._apagon_ms >= self.RETRASO_SOMBRA_MS:
+        self._sombra_reintento_ms = getattr(self, "_sombra_reintento_ms", 0) - dt
+        if (sombra not in self.aliens and self._apagon_ms >= self.RETRASO_SOMBRA_MS
+                and self._sombra_reintento_ms <= 0):
             punto = self._punto_para_sombra()
+            # Si no hay dónde (todos juntos, todo a la vista), se vuelve a
+            # probar en un rato: antes se buscaba cada cuadro (~15 ms cada vez
+            # en MapaFinal: el bajón de FPS de los apagones).
+            self._sombra_reintento_ms = 600
             if punto is not None:
                 sombra.aparecer(punto)
                 self.aliens.append(sombra)

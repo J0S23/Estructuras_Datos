@@ -204,8 +204,12 @@ class GestorLogros:
             return True                       # (sin campo de visión, se ve todo lo de cerca)
         if id(jugador) not in campos:
             from juego import vision
+            # (dueño + puede_esperar: el campo que ya se dibujó, si está a
+            # menos de unos px; si no, con un alien cerca se recalculaba el
+            # campo en cada cuadro aparte del dibujo)
             campos[id(jugador)] = vision.campo_de(jugador.hitbox.center, vision.obstaculos(
-                juego.mundo, getattr(juego, "puertas_dobles", ()), getattr(juego, "compuertas", ())))
+                juego.mundo, getattr(juego, "puertas_dobles", ()), getattr(juego, "compuertas", ())),
+                dueño=jugador, puede_esperar=True)
         return campos[id(jugador)].ve_a(alien.hitbox)
 
     def _jugadores(self, dt):
@@ -267,7 +271,8 @@ class GestorLogros:
             if (jugador.preso is not None or jugador.escondido or getattr(jugador, "eliminado", False)
                     or _distancia(jugador.hitbox.center, sombra.centro) > DISTANCIA_OJOS):
                 continue
-            if vision.campo_de(jugador.hitbox.center, obstaculos).ve_a(sombra.hitbox):
+            if vision.campo_de(jugador.hitbox.center, obstaculos, dueño=jugador,
+                               puede_esperar=True).ve_a(sombra.hitbox):
                 self.conseguir("ojos_en_la_oscuridad", jugador)
                 return
 

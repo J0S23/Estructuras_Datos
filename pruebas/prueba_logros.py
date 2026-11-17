@@ -150,7 +150,7 @@ print("devolver la luz rápido: 'Hágase la luz' y 'Electricista'")
 # 30 s en sigilo.
 poner(j1, g.mision.puerta.center)
 L.sigilo_ms[id(j1)] = 29_900
-TECLAS[pygame.K_LSHIFT] = True; TECLAS[pygame.K_d] = True
+TECLAS[pygame.K_SPACE] = True; TECLAS[pygame.K_d] = True
 frames(g, 12)
 TECLAS.clear()
 assert L.tiene("pasos_de_gato")

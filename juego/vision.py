@@ -200,6 +200,17 @@ def _alcance(dist, s, radio):
     return min(radio, dist + ENTRA_EN_PARED + ENTRA_EN_PARED_ARRIBA * max(0.0, -s))
 
 
+def _cercanas(rects, ox, oy, radio):
+    """Los de `rects` que tocan el cuadrado de lado 2*radio alrededor de
+    (ox, oy), en orden; None si no son Rect de pygame."""
+    try:
+        import pygame
+        caja = pygame.Rect(int(ox - radio) - 1, int(oy - radio) - 1, int(2 * radio) + 3, int(2 * radio) + 3)
+        return [rects[i] for i in caja.collidelistall(rects)]
+    except (TypeError, ImportError):
+        return None
+
+
 class Campo:
     """Lo que ve un jugador desde `origen`: el polígono y las paredes cercanas.
 
@@ -211,8 +222,13 @@ class Campo:
         self.radio = radio
         self.cajas = []
         angulos = [2 * math.pi * i / RAYOS for i in range(RAYOS)]
-        for r in rects:
-            # Solo las paredes que pueden estar dentro del radio.
+        # Solo las paredes que pueden estar dentro del radio. Con Rect de
+        # pygame se escogen en C (collidelistall) de las ~400 del mapa, en vez
+        # de mirarlas una por una en Python cada vez que se arma un campo; la
+        # prueba de abajo queda igual (el cuadrado se agranda 1 px por lado
+        # para no perder las que lo tocan justo en el borde).
+        cerca = _cercanas(rects, ox, oy, radio)
+        for r in (rects if cerca is None else cerca):
             if (r.right < ox - radio or r.left > ox + radio
                     or r.bottom < oy - radio or r.top > oy + radio):
                 continue

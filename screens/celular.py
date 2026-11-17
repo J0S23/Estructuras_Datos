@@ -21,6 +21,7 @@ import pygame
 from juego.fuentes import fuente_de_tamano
 from juego.idioma import tr
 from juego import perfiles
+from juego import cache_dibujo
 from screens.flechas import flecha_alrededor, cerca_del_borde, dibujar_camino
 from screens.paneles import partir_lineas
 from data.nexus import UMBRAL_PLANOS, VIRAL_GENERICO
@@ -162,9 +163,7 @@ def render_confianza(screen, red, cantidad):
         return
     verde, rojo = red.barras()
     caja = rect_confianza(screen, cantidad, red)
-    fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
-    fondo.fill((14, 15, 28, 225))
-    screen.blit(fondo, caja.topleft)
+    screen.blit(cache_dibujo.capa(caja.size, (14, 15, 28, 225)), caja.topleft)
     pygame.draw.rect(screen, (90, 100, 150), caja, 1, border_radius=8)
 
     from screens.partida import tiene_panel
@@ -173,8 +172,8 @@ def render_confianza(screen, red, cantidad):
         f = _fuente_barra(int(rect_panel_global(*screen.get_size(), cantidad).width * 2))
     else:
         f = _fuente_barra(screen.get_width())
-    izq = f.render(f"Ustedes {int(verde * 100)}%", True, COLOR_VERDE)
-    der = f.render(f"{int(rojo * 100)}% Aliens", True, COLOR_ROJO)
+    izq = cache_dibujo.texto(f, f"Ustedes {int(verde * 100)}%", COLOR_VERDE)
+    der = cache_dibujo.texto(f, f"{int(rojo * 100)}% Aliens", COLOR_ROJO)
     alto_barra = max(10, f.get_height() - 5)
     barra = pygame.Rect(caja.x + izq.get_width() + 18,
                         caja.y + 6 + (f.get_linesize() - alto_barra) // 2,
@@ -292,6 +291,38 @@ def _imagen_marco(tamano):
     return _marcos[tamano]
 
 
+_tiras = {}
+
+
+def _tiras_marco(marco, telefono, pantalla, radio):
+    """El marco del teléfono sin el centro de su pantalla, en 4 tiras
+    [(imagen, (dx, dy))]. La pantalla se pinta encima (opaca), así que pegar
+    el marco entero era mezclar con alfa ~3/4 de la imagen para nada: ~0.6 ms
+    por cuadro aquí con el celular abierto, más en el PC de Diego. Lo que
+    queda fuera de `adentro` (la pantalla menos sus esquinas redondeadas) se
+    pega igual que antes."""
+    rel = pantalla.move(-telefono.x, -telefono.y)
+    clave = (id(marco), tuple(rel), radio)
+    tiras = _tiras.get(clave)
+    if tiras is None:
+        if len(_tiras) > 16:
+            _tiras.clear()
+        adentro = rel.inflate(-2 * radio, -2 * radio).clip(marco.get_rect())
+        if adentro.width <= 0 or adentro.height <= 0:
+            tiras = [(marco, (0, 0))]
+        else:
+            w, h = marco.get_size()
+            tiras = []
+            for r in (pygame.Rect(0, 0, w, adentro.top),
+                      pygame.Rect(0, adentro.bottom, w, h - adentro.bottom),
+                      pygame.Rect(0, adentro.top, adentro.left, adentro.height),
+                      pygame.Rect(adentro.right, adentro.top, w - adentro.right, adentro.height)):
+                if r.width > 0 and r.height > 0:
+                    tiras.append((marco.subsurface(r).copy(), r.topleft))
+        _tiras[clave] = tiras
+    return tiras
+
+
 def hay_marco():
     return _imagen_marco((8, 8)) is not None
 
@@ -345,8 +376,10 @@ def render_celular(screen, vista, jugador, red, tapado=None):
     telefono, pantalla = _marco(vista, tapado, jugador)
     marco = _imagen_marco(telefono.size)
     if marco is not None:
-        screen.blit(marco, telefono)
-        pygame.draw.rect(screen, COLOR_PANTALLA, pantalla, border_radius=max(4, pantalla.width // 40))
+        radio = max(4, pantalla.width // 40)
+        for pieza, (dx, dy) in _tiras_marco(marco, telefono, pantalla, radio):
+            screen.blit(pieza, (telefono.x + dx, telefono.y + dy))
+        pygame.draw.rect(screen, COLOR_PANTALLA, pantalla, border_radius=radio)
     else:
         pygame.draw.rect(screen, COLOR_SOMBRA, telefono.move(5, 5), border_radius=22)
         pygame.draw.rect(screen, COLOR_CARCASA, telefono, border_radius=22)

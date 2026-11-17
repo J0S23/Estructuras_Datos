@@ -39,6 +39,7 @@ import math
 import pygame
 
 from juego.fuentes import fuente_de_tamano
+from juego import cache_dibujo
 from data.tipos_alien import datos_tipo, TIPO_POR_DEFECTO
 from data.nexus import POTENCIA_VELOCIDAD, POTENCIA_VISION
 
@@ -788,7 +789,7 @@ class Alien:
             sombra = pygame.Rect(0, 0, int(datos["contenido"].width * 0.8), 14)
             sombra.center = (rect.centerx, self.hitbox.bottom - offset[1] - 2)
             pygame.draw.ellipse(screen, (10, 12, 20), sombra)
-            screen.blit(imagen, rect)
+            cache_dibujo.pegar(screen, imagen, rect)      # (solo lo dibujado del cuadro)
             return
         self._dibujar_formas(screen, offset)
 

@@ -40,9 +40,10 @@ def render_aviso_logro(screen, gestor):
     color = _color(nodo)
     f_titulo = fuente_de_tamano(22 if ancho >= 1200 else 18)
     f_desc = fuente_de_tamano(15 if ancho >= 1200 else 13)
-    titulo = f_titulo.render(nodo.nombre, True, COLOR_TEXTO)
-    etiqueta = f_desc.render("¡LOGRO!", True, color)
-    desc = f_desc.render(nodo.descripcion, True, COLOR_TENUE)
+    from juego import cache_dibujo
+    titulo = cache_dibujo.texto(f_titulo, nodo.nombre, COLOR_TEXTO)
+    etiqueta = cache_dibujo.texto(f_desc, "¡LOGRO!", color)
+    desc = cache_dibujo.texto(f_desc, nodo.descripcion, COLOR_TENUE)
     tam_icono = 40
     caja = pygame.Rect(0, 0, max(titulo.get_width() + etiqueta.get_width() + 12,
                                  desc.get_width()) + tam_icono + 44,
@@ -52,9 +53,7 @@ def render_aviso_logro(screen, gestor):
     entrada = min(1.0, (3500 - ms) / 250) if ms <= 3500 else 1.0
     caja.y += int((1 - max(0.0, entrada)) * 40)
     alfa = 235 if ms > 400 else int(235 * ms / 400)
-    fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
-    fondo.fill((16, 16, 30, alfa))
-    screen.blit(fondo, caja.topleft)
+    screen.blit(cache_dibujo.capa(caja.size, (16, 16, 30, alfa)), caja.topleft)
     pygame.draw.rect(screen, color, caja, 2, border_radius=6)
     icono = pygame.Rect(caja.x + 12, caja.centery - tam_icono // 2, tam_icono, tam_icono)
     _caja_nodo(screen, icono, nodo, "obtenido")

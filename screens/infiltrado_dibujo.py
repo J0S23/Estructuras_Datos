@@ -53,9 +53,9 @@ def dibujar_pruebas(screen, offset, camara, caso, tiempo_ms):
         if prueba["tomada"] or not prueba["rect"].colliderect(camara):
             continue
         r = prueba["rect"].move(-offset[0], -offset[1])
-        halo = pygame.Surface((r.width + 24, r.height + 24), pygame.SRCALPHA)
-        pygame.draw.ellipse(halo, (*COLOR_PRUEBA, int(40 + 50 * brillo)), halo.get_rect())
-        screen.blit(halo, (r.x - 12, r.y - 12))
+        from juego import cache_dibujo
+        screen.blit(cache_dibujo.elipse((r.width + 24, r.height + 24), (*COLOR_PRUEBA, int(40 + 50 * brillo))),
+                    (r.x - 12, r.y - 12))
         pygame.draw.rect(screen, (30, 18, 34), r, border_radius=5)
         pygame.draw.rect(screen, COLOR_PRUEBA, r, 2, border_radius=5)
         icono_prueba(screen, prueba["tipo"], r.center, r.width - 8)

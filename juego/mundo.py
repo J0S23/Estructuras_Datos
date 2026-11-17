@@ -42,7 +42,18 @@ def paredes_extra(mundo):
         guardado = (base, len(base), {tuple(r) for r in base})
         mundo.__dict__["_base_como_set"] = guardado
     fijas = guardado[2]
-    return [p for p in mundo.paredes if tuple(p) not in fijas]
+    # Y el resultado se guarda mientras `mundo.paredes` tenga los mismos Rect
+    # (se abre o cierra una puerta = cambia la lista). Lo piden la navegación
+    # (cada `conectados`, cada A*), la flecha y los aliens muchas veces por
+    # cuadro: con ~250 paredes eran ~80 µs por llamada, y en un apagón (la
+    # Sombra buscando dónde aparecer) más de 8 ms por cuadro solo en esto.
+    clave = (id(mundo.paredes), id(base), len(base), tuple(map(id, mundo.paredes)))
+    previo = mundo.__dict__.get("_extra_guardado")
+    if previo is not None and previo[0] == clave:
+        return list(previo[1])
+    extra = [p for p in mundo.paredes if tuple(p) not in fijas]
+    mundo.__dict__["_extra_guardado"] = (clave, extra)
+    return list(extra)
 
 
 class Mundo:
