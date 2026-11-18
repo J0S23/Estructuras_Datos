@@ -263,6 +263,10 @@ class Jugador:
         self.vidas_max = VIDAS_INICIALES     # la dificultad lo cambia (dificultad.py)
         self.vidas_infinitas = False         # dificultad Fácil: atrapar no quita vidas
         self.eliminado = False       # sin vidas: fuera de la partida
+        # En red (cliente_servidor/ausencias.py): se le cayó la conexión, y
+        # si no volvió a tiempo, soltó sus cosas y no se ve.
+        self.sin_conexion = False
+        self.desconectado = False
         self.vida_cambio_ms = 0      # para que el corazón que cambia parpadee
         self.curacion_ms = 0         # recarga de la curación de la Biomante
         self.invulnerable_ms = 0
@@ -520,6 +524,17 @@ class Jugador:
         self.linterna.actualizar(self.personaje.direccion)
 
     def dibujar(self, screen, offset):
-        if self.escondido or self.eliminado:
-            return   # metido en el escondite (o eliminado): no se ve
+        if self.escondido or self.eliminado or self.desconectado:
+            return   # metido en el escondite (o eliminado, o se fue de la red): no se ve
         self.personaje.dibujar(screen, offset)
+        if self.sin_conexion:
+            # En red, mientras se espera a que vuelva (ausencias.py).
+            from juego import cache_dibujo
+            from juego.fuentes import fuente_de_tamano
+            f = fuente_de_tamano(14)
+            img = cache_dibujo.texto(f, "Sin conexión...", (255, 180, 90))
+            sombra = cache_dibujo.texto(f, "Sin conexión...", (12, 11, 23))
+            x = self.hitbox.centerx - offset[0] - img.get_width() // 2
+            y = self.hitbox.bottom - offset[1] - 118
+            screen.blit(sombra, (x + 1, y + 1))
+            screen.blit(img, (x, y))

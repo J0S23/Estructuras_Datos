@@ -730,6 +730,10 @@ def _fila_jugador(screen, f, chica, jugador, numero, rect):
     # Estado o sala.
     if getattr(jugador, "eliminado", False):
         texto, col = "Eliminado", (236, 64, 82)
+    elif getattr(jugador, "desconectado", False):
+        texto, col = "Desconectado", (236, 64, 82)
+    elif getattr(jugador, "sin_conexion", False):
+        texto, col = "Sin conexión...", (255, 180, 90)
     elif getattr(jugador, "preso", None) is not None:
         segundos = segundos_para_salir(jugador)
         texto = "Encerrado: ¡sáquenlo!" if segundos is None else f"Encerrado: sale en {segundos} s"

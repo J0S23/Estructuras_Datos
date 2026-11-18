@@ -22,6 +22,11 @@ from cliente_servidor import estado as E
 from cliente_servidor.protocolo import lista as a_lista
 
 
+# Listas de dicts de datos (no de objetos) que pueden empezar vacías en el
+# espejo y llenarse en el servidor: ver Espejo.aplicar.
+LISTAS_DE_DATOS = {"mision": ("consumibles",), "infiltrado": ("pruebas",)}
+
+
 class _Preso(dict):
     """En el servidor `jugador.preso` es la celda (un dict); en el espejo
     basta con algo que diga "sí" y aguante un .get()."""
@@ -179,6 +184,16 @@ class Espejo:
                 if nombre == "logros" and "obtenidos" in cuerpo:
                     self._logros(objeto, cuerpo.pop("obtenidos"))
                 E.aplicar(objeto, cuerpo)
+                for atributo in LISTAS_DE_DATOS.get(nombre, ()):
+                    # Una lista de dicts que en el espejo estaba VACÍA no se
+                    # llenaba nunca (estado._mezclar no sabe si son datos o
+                    # objetos y deja la del espejo): el decodificador que suelta
+                    # el Tecnomante eliminado o desconectado, o lo que alguien
+                    # suelta con la tecla, no aparecía en las otras laptops.
+                    nuevos = cuerpo.get(atributo)
+                    if (isinstance(nuevos, list) and nuevos and getattr(objeto, atributo, None) == []
+                            and all(isinstance(d, dict) for d in nuevos)):
+                        setattr(objeto, atributo, E.a_python(nuevos))
             aplicadas[clave] = datos
         for clave, nombre in LISTAS.items():
             datos = secciones.get(clave)
