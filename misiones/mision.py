@@ -50,6 +50,13 @@ from misiones.logros import logro
 
 
 PIEZAS_NECESARIAS = 3
+# Partida imposible (Mision.razon_imposible): cada cuánto se revisa, cuánto
+# tiene que seguir así antes de avisar (más si es porque alguien perdió la
+# conexión en red: por si vuelve) y cuánto se ve el aviso antes de terminar.
+REVISAR_IMPOSIBLE_MS = 1000
+ESPERA_IMPOSIBLE_MS = 3000
+ESPERA_IMPOSIBLE_AUSENTES_MS = 45000
+AVISO_IMPOSIBLE_MS = 7000
 SABOTAJE_ROL_S, SABOTAJE_OTROS_S = 3.0, 6.0          # segundos manteniendo la tecla
 REPARACION_ROL_S, REPARACION_OTROS_S = 4.0, 8.0
 RADIO_RESCATE = 140
@@ -240,6 +247,11 @@ class Mision:
         self._tapado = False             # ¿alguna puerta cerrada tapa algo de la misión?
         self._desvios = {}               # flecha amarilla: id(jugador) -> último desvío a una puerta
         self._eleccion = {}              # flecha amarilla: lo más cercano caminando (_elegir)
+        # Partida imposible (razon_imposible): por qué, desde cuándo y si ya se avisó.
+        self.razon_imposible_txt = None
+        self._imposible_ms = 0
+        self._revisar_imposible_ms = 0
+        self._imposible_avisado = False
         self.reparacion = 0.0
         self.fase = None
         if not self.activa:
@@ -1179,7 +1191,10 @@ class Mision:
         jugadores = [j for j in self.juego.jugadores if j.puede_moverse]
         # Al que queda en pie se le desconectó el mando: cuenta como si
         # siguiera ahí (se espera a que lo reconecten) en vez de perder.
-        sin_mando = [j for j in self.juego.jugadores if getattr(j, "mando_desconectado", False)
+        # Lo mismo en red con el que perdió la conexión (y todavía puede volver:
+        # cliente_servidor/ausencias.py).
+        sin_mando = [j for j in self.juego.jugadores
+                     if (getattr(j, "mando_desconectado", False) or getattr(j, "sin_conexion", False))
                      and not getattr(j, "eliminado", False)]
         if not jugadores and sin_mando:
             jugadores = sin_mando
@@ -1198,11 +1213,16 @@ class Mision:
                 celda["fuga_ms"] -= dt * (FUGA_VIRAL if lento else 1)
                 if celda["fuga_ms"] <= 0:
                     self.fugarse(celda)
-        # Todos encerrados = derrota, salvo que alguien pueda fugarse solo.
-        if (jugadores and all(j.preso for j in jugadores)
+        # Todos encerrados = derrota, salvo que alguien pueda fugarse solo (o
+        # que en red alguien que perdió la conexión pueda volver a sacarlos).
+        esperando = any(getattr(j, "sin_conexion", False) and not getattr(j, "desconectado", False)
+                        and not getattr(j, "eliminado", False) for j in self.juego.jugadores)
+        if (jugadores and all(j.preso for j in jugadores) and not esperando
                 and not any(j.preso.get("fuga_ms") is not None for j in jugadores)):
             self.resultado = "derrota"
             self.motivo_fin = "atrapados"
+            return
+        if self._actualizar_imposible(dt):
             return
         if self.fase == "sabotaje" and self.consolas and all(c["progreso"] >= 1 for c in self.consolas):
             self.fase = "capsula"
@@ -1214,6 +1234,100 @@ class Mision:
                 self.motivo_fin = "escaparon"
                 for j in jugadores:
                     j.sumar_puntos(PUNTOS_ESCAPE // max(1, len(jugadores)))
+
+    # -- ¿Todavía se puede escapar? -------------------------------------------------------
+
+    def _activos(self):
+        """Los que siguen en la partida: ni eliminados ni desconectados de la red
+        (los presos sí: otro los puede sacar; y el que perdió el mando o la
+        conexión hace poco, también: puede volver)."""
+        return [j for j in self.juego.jugadores
+                if not getattr(j, "eliminado", False) and not getattr(j, "desconectado", False)
+                and (j.puede_moverse or j.preso is not None
+                     or getattr(j, "mando_desconectado", False) or getattr(j, "sin_conexion", False))]
+
+    def razon_imposible(self):
+        """Por qué ya no se puede ganar, o None. Dos casos:
+
+        - No quedan piezas para la cápsula (las que faltan entregar son más que
+          las del piso más las que llevan los jugadores: se gastaron en sellos
+          y señuelos).
+        - Queda UN jugador y lo que falta (la cápsula, las consolas por apagar,
+          las piezas) está detrás de una puerta para dos cerrada: hacen falta
+          dos para abrirla. Las puertas con código cuentan como abiertas (uno
+          solo las abre)."""
+        if not self.activa or self.capsula is None or self.fase == "huida":
+            return None
+        juego = self.juego
+        activos = self._activos()
+        if not activos:
+            return None
+        faltan = PIEZAS_NECESARIAS - self.piezas_entregadas
+        piezas_piso = [p for p in getattr(juego, "piezas", ()) if not p.get("recogida")]
+        llevan = sum(getattr(j, "piezas", 0) for j in juego.jugadores if not getattr(j, "eliminado", False))
+        if faltan > 0 and len(piezas_piso) + llevan < faltan:
+            return (f"Ya no quedan piezas para reparar la cápsula: faltan {faltan} "
+                    f"y solo hay {len(piezas_piso) + llevan}.")
+        cerradas = [p for p in getattr(juego, "puertas_dobles", ()) if not p["abierta"]]
+        if len(activos) >= 2 or not cerradas or not hasattr(juego.mundo, "paredes_base"):
+            return None
+        nav = self._nav_jugador()
+        extra = [p["rect"] for p in cerradas]
+        desde = [j.hitbox.center for j in activos]
+
+        def llega(punto):
+            return any(nav.conectados(d, punto, sellos=False, extra=extra) for d in desde)
+
+        motivo = "una puerta para dos sigue cerrada y queda un solo jugador para abrirla"
+        if not llega(self.capsula.center):
+            return f"Ya no se puede llegar a la cápsula: {motivo}."
+        if self.fase in ("prision", "sabotaje"):
+            if any(c["progreso"] < 1 and not llega(c["rect"].center) for c in self.consolas):
+                return f"Ya no se puede llegar a todas las consolas: {motivo}."
+        if faltan > 0:
+            alcanzables = sum(1 for p in piezas_piso if llega(p["rect"].center))
+            if alcanzables + sum(getattr(j, "piezas", 0) for j in activos) < faltan:
+                return f"Ya no se puede llegar a suficientes piezas: {motivo}."
+        return None
+
+    def _actualizar_imposible(self, dt):
+        """Si la partida se volvió imposible (razon_imposible) y sigue así un
+        rato, avisa a todos por qué y, unos segundos después, termina en
+        derrota (motivo "imposible"). True si terminó."""
+        if getattr(self.juego, "en_tutorial", False):
+            return False
+        self._revisar_imposible_ms -= dt
+        if self._revisar_imposible_ms <= 0:
+            self._revisar_imposible_ms = REVISAR_IMPOSIBLE_MS
+            razon = self.razon_imposible()
+            if razon is None:
+                if self._imposible_avisado:
+                    self._avisar_todos("¡Todavía se puede! Sigan.", COLOR_BIEN)
+                self.razon_imposible_txt, self._imposible_ms, self._imposible_avisado = None, 0, False
+            elif razon != self.razon_imposible_txt:
+                self.razon_imposible_txt, self._imposible_ms, self._imposible_avisado = razon, 0, False
+        if self.razon_imposible_txt is None:
+            return False
+        self._imposible_ms += dt
+        ausentes = any(getattr(j, "desconectado", False) or getattr(j, "sin_conexion", False)
+                       or getattr(j, "mando_desconectado", False)
+                       for j in self.juego.jugadores if not getattr(j, "eliminado", False))
+        espera = ESPERA_IMPOSIBLE_AUSENTES_MS if ausentes else ESPERA_IMPOSIBLE_MS
+        if self._imposible_ms >= espera and not self._imposible_avisado:
+            self._imposible_avisado = True
+            self._imposible_ms = espera
+            self._avisar_todos(f"{self.razon_imposible_txt} La partida termina.", COLOR_MAL)
+            if hasattr(self.juego, "decir"):
+                self.juego.decir("imposible", forzar=True)
+        elif not self._imposible_avisado and ausentes and self._imposible_ms <= dt:
+            # (en red: primero se espera a ver si vuelve el que se fue)
+            self._avisar_todos(f"{self.razon_imposible_txt} Si nadie vuelve, la partida termina.",
+                               COLOR_AVISO)
+        if self._imposible_avisado and self._imposible_ms >= espera + AVISO_IMPOSIBLE_MS:
+            self.resultado = "derrota"
+            self.motivo_fin = "imposible"
+            return True
+        return False
 
     def terminar_sin_escapar(self):
         """Se acabó la partida sin que escaparan (Terminar partida en la pausa)."""

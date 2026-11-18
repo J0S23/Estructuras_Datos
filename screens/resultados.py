@@ -45,6 +45,7 @@ MOTIVOS = {
     "atrapados": "Los aliens los encerraron a todos.",
     "eliminados": "Se quedaron sin vidas.",
     "terminaron": "Terminaron la partida antes de escapar.",
+    "imposible": "Ya no se podía escapar.",
 }
 # Los pasos de la misión, en orden (misiones/mision.py).
 PASOS = [("prision", "Salir de la prisión"), ("sabotaje", "Apagar consolas"),
@@ -82,6 +83,8 @@ def _motivo(mision):
     if mision is None or not mision.activa:
         return ""
     motivo = getattr(mision, "motivo_fin", None)
+    if motivo == "imposible" and getattr(mision, "razon_imposible_txt", None):
+        return mision.razon_imposible_txt          # (por qué: mision.razon_imposible)
     if motivo in MOTIVOS:
         return MOTIVOS[motivo]
     return MOTIVOS["escaparon"] if mision.resultado == "victoria" else ""

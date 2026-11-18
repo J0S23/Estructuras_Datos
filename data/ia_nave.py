@@ -146,6 +146,20 @@ FRASES = {
         "Sujeto {rol}: tercera captura. Ya no es un prisionero. Es una muestra.",
         "{rol} queda fuera del experimento. Permanentemente.",
     ],
+    # En red (cliente_servidor/ausencias.py): alguien perdió la conexión y
+    # no volvió, y cuando vuelve.
+    "desconectado": [
+        "Perdí la señal de {rol}. Qué conveniente para mí.",
+        "{rol} desapareció de mis sensores. Lo que llevaba quedó en el piso.",
+    ],
+    "imposible": [
+        "Ya no tienen cómo salir. Me quedo con todos.",
+        "Fin del experimento. Nadie sale de mi nave.",
+    ],
+    "reconectado": [
+        "{rol} vuelve a aparecer en mis sensores. Lástima.",
+        "Señal de {rol} recuperada. Sigo observando.",
+    ],
     "curacion": [
         "La Biomante cura a sus compañeros. Interesante. Molesto, pero interesante.",
     ],

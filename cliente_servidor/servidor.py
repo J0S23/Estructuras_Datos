@@ -644,6 +644,35 @@ class Servidor:
                 with buzon.candado:
                     buzon.mantener = set()
 
+    def _revisar_conexiones(self):
+        """Quién perdió la conexión, quién no volvió a tiempo (suelta sus
+        cosas) y quién volvió: cliente_servidor/ausencias.py."""
+        from cliente_servidor import ausencias
+        g = self.juego
+        if g.current_screen != "partida" or g.mision is None or g.mision.resultado is not None:
+            return
+        caidos = self.__dict__.setdefault("_sin_conexion", {})    # puesto -> desde cuándo
+        ahora = time.perf_counter()
+        for puesto in self.puestos:
+            i = puesto.numero
+            if not puesto.ocupado or i >= len(g.jugadores):
+                continue
+            jugador = g.jugadores[i]
+            desde = caidos.get(i)
+            if not puesto.buzon.conectado:
+                if desde is None:
+                    caidos[i] = ahora
+                    ausencias.perdio(g, jugador)
+                    self.avisar(f"J{i + 1} ({jugador.rol}) sin conexión")
+                elif ahora - desde > ausencias.GRACIA_S and not jugador.desconectado:
+                    ausencias.se_fue(g, jugador)
+                    self.avisar(f"J{i + 1} ({jugador.rol}) no volvió en {ausencias.GRACIA_S:.0f} s: "
+                                "soltó sus cosas")
+            elif desde is not None:
+                del caidos[i]
+                ausencias.volvio(g, jugador)
+                self.avisar(f"J{i + 1} ({jugador.rol}) volvió")
+
     def _anunciar(self):
         """Grita por UDP a toda la red local "aquí hay una partida de NEXUS",
         cada segundo mientras falte alguien (lanzador.Buscador la escucha y
@@ -736,6 +765,7 @@ class Servidor:
             self._vigilar_silencios()
             acks = self._aplicar_entradas()
             g = self.juego
+            self._revisar_conexiones()
             if g.mision.resultado is None and g.current_screen == "partida":
                 g._actualizar_partida(DT_MS)
             elif not fin_avisado:
