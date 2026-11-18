@@ -63,6 +63,50 @@ RECONECTAR_S = 20.0
 LATIDO_S = 0.5
 
 
+# Predicción de los jugadores locales (cliente_servidor/prediccion.py).
+PREDICCION = True
+
+
+class Medidas:
+    """Lo que muestra F3 en red: FPS, cuánto tarda copiar y dibujar, y por
+    conexión cuántas instantáneas llegan por segundo y a qué ritmo va el
+    servidor (sus cuadros, que deberían ser 60 por segundo)."""
+
+    def __init__(self):
+        self.cuadros = []           # tiempos de los últimos cuadros dibujados
+        self.aplicar_ms = 0.0
+        self.dibujar_ms = 0.0
+        self.por_conexion = {}      # id -> [(t, cuadro del servidor)] del último segundo y medio
+
+    def cuadro(self, conexiones):
+        ahora = time.perf_counter()
+        self.cuadros.append(ahora)
+        del self.cuadros[:-60]
+        for c in conexiones:
+            lista = self.por_conexion.setdefault(id(c), [])
+            if c.cuadro is not None and (not lista or lista[-1][1] != c.cuadro):
+                lista.append((ahora, c.cuadro))
+            while lista and ahora - lista[0][0] > 1.5:
+                lista.pop(0)
+
+    def tiempos(self, aplicar, dibujar):
+        self.aplicar_ms += (aplicar - self.aplicar_ms) * 0.1
+        self.dibujar_ms += (dibujar - self.dibujar_ms) * 0.1
+
+    def fps(self):
+        if len(self.cuadros) < 2:
+            return 0.0
+        return (len(self.cuadros) - 1) / max(1e-6, self.cuadros[-1] - self.cuadros[0])
+
+    def ritmo(self, conexion):
+        """(instantáneas por segundo, cuadros del servidor por segundo)."""
+        lista = self.por_conexion.get(id(conexion)) or []
+        if len(lista) < 2:
+            return 0.0, 0.0
+        dt = max(1e-6, lista[-1][0] - lista[0][0])
+        return (len(lista) - 1) / dt, (lista[-1][1] - lista[0][1]) / dt
+
+
 class Cancelado(Exception):
     """El jugador pulsó Esc mientras se conectaba."""
 
@@ -569,6 +613,16 @@ class Sesion:
         self.con_sala = False       # se eligió rol en la sala (servidor --elegir-roles)
         self.carga = None           # la pantalla de carga: {"inicio", "consejo", "roles"}
         self.errores_vistos = {}    # firma del error -> cuántas veces
+        # Predicción de los jugadores de ESTA laptop (prediccion.py): se
+        # mueven en pantalla con la tecla, sin esperar al servidor. F4 la
+        # apaga y la prende (para comparar); F3 muestra cómo va la red.
+        self.prediccion = PREDICCION
+        self.predicciones = {}      # número de jugador -> Prediccion
+        self._mantener = []         # lo que tiene presionado cada jugador local, este cuadro
+        self._t_prediccion = None
+        self._ultima_prediccion = None
+        self.f3 = False
+        self.medidas = Medidas()
 
     def conectar(self, pantalla=None):
         for i in range(len(self.esquemas)):
@@ -846,6 +900,10 @@ class Sesion:
                 # laptop de la partida: "el segundo jugador se desconectó".)
                 if self.entrada is not None and self.entrada.pulsados:
                     self.entrada.pulsados[0].append("volver")
+            elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_F3:
+                self.f3 = not self.f3
+            elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_F4:
+                self.prediccion = not self.prediccion
             elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
                 # En red no hay pausa: Esc saca a esta laptop de la partida.
                 # Para que no pase sin querer, hay que pulsarlo dos veces...
@@ -858,7 +916,9 @@ class Sesion:
                 self._esc = ahora
             else:
                 self.entrada.evento(ev)
-        for conexion, (mantener, pulsar) in zip(self.conexiones, self.entrada.sacar()):
+        entradas = self.entrada.sacar()
+        self._mantener = [set(m) for m, _ in entradas]
+        for conexion, (mantener, pulsar) in zip(self.conexiones, entradas):
             conexion.mandar(mantener, pulsar, self._extra(conexion, pulsar))
         vivas = [c for c in self.conexiones if c.viva]
         if not vivas:
@@ -883,7 +943,10 @@ class Sesion:
                   extra=getattr(self, "info_espera", ()) or ["Esc para cancelar"])
             return True
         glob = secciones.get("g", {})
+        self.medidas.cuadro(self.conexiones)
         self._dibujar(pantalla, conexion, secciones)
+        if self.f3:
+            self._dibujar_f3(pantalla)
         cortadas = [c for c in self.conexiones if c.situacion == "reconectando"]
         if cortadas:
             desde = min(c.reconectando_desde or time.time() for c in cortadas)
@@ -945,10 +1008,14 @@ class Sesion:
             try:
                 with conexion.candado:
                     interpolado = conexion.interpolador.ahora()
+                t0 = time.perf_counter()
                 self.espejo.aplicar(secciones, interpolado)
                 self.espejo.controles(getattr(self, "controles", {}))
+                self._predecir(secciones)
                 self.espejo.sonar(conexion.sacar_sonidos())
+                t1 = time.perf_counter()
                 self.espejo.dibujar(pantalla, locales)
+                self.medidas.tiempos((t1 - t0) * 1000, (time.perf_counter() - t1) * 1000)
                 return
             except Exception as error:
                 # Que algo que el espejo no sabe dibujar no tumbe la partida:
@@ -975,6 +1042,62 @@ class Sesion:
         for rect, c in zip(rects, self.conexiones):
             self.simple.vista(pantalla, rect, estado, c.jugador, c)
         self.simple.encima(pantalla, estado)
+
+    def _predecir(self, secciones):
+        """Los jugadores de esta laptop, donde los pone su tecla (prediccion.py)
+        y no donde dice la última instantánea (que llega tarde por la red)."""
+        from cliente_servidor.prediccion import Prediccion
+        ahora = time.perf_counter()
+        dt = 0.0 if self._t_prediccion is None else min(0.1, ahora - self._t_prediccion)
+        self._t_prediccion = ahora
+        nueva = secciones is not self._ultima_prediccion
+        self._ultima_prediccion = secciones
+        g = self.espejo.g
+        quieto = (not self.prediccion or self._presentacion_abierta()
+                  or bool(secciones.get("g", {}).get("resultado")))
+        for k, c in enumerate(self.conexiones):
+            i = c.jugador
+            if not 0 <= i < len(g.jugadores):
+                continue
+            pred = self.predicciones.setdefault(i, Prediccion())
+            if quieto or c.situacion != "jugando":
+                pred.soltar()
+                continue
+            datos = secciones.get(f"j{i}")
+            if nueva and isinstance(datos, dict) and "x" in datos:
+                pred.instantanea(datos["x"], datos["y"], c.respuesta_ms, ahora)
+            mantener = self._mantener[k] if k < len(self._mantener) else set()
+            pred.avanzar(g, g.jugadores[i], mantener, dt, ahora)
+
+    def _dibujar_f3(self, pantalla):
+        """F3: cómo va la red (para saber si el lag es del wifi o del PC)."""
+        from juego.fuentes import fuente_de_tamano
+        m = self.medidas
+        lineas = [f"{m.fps():.0f} FPS  ·  copiar {m.aplicar_ms:.1f} ms  ·  dibujar {m.dibujar_ms:.1f} ms"]
+        for c in self.conexiones:
+            ping = "?" if c.respuesta_ms is None else f"{c.respuesta_ms:.0f} ms"
+            inst, hz = m.ritmo(c)
+            edad = (time.perf_counter() - c.ultimo_rx) * 1000
+            linea = (f"J{c.jugador + 1}: respuesta {ping}  ·  {inst:.0f} instantáneas/s  ·  "
+                     f"servidor {hz:.0f} cuadros/s  ·  última hace {edad:.0f} ms")
+            pred = self.predicciones.get(c.jugador)
+            if pred is not None and pred.activa:
+                linea += f"  ·  corrección {pred.ultimo_error:.0f} px ({pred.saltos} saltos)"
+            lineas.append(linea)
+        lineas.append(f"[F4] predicción: {'sí' if self.prediccion else 'no'}  ·  "
+                      "respuesta = tecla -> servidor -> de vuelta (wifi + servidor)")
+        f = fuente_de_tamano(15)
+        imgs = [f.render(t, True, (235, 238, 250)) for t in lineas]
+        caja = pygame.Rect(0, 0, max(i.get_width() for i in imgs) + 16,
+                           sum(i.get_height() for i in imgs) + 10)
+        caja.topright = (pantalla.get_width() - 6, 6)
+        fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
+        fondo.fill((10, 12, 22, 215))
+        pantalla.blit(fondo, caja.topleft)
+        y = caja.y + 5
+        for img in imgs:
+            pantalla.blit(img, (caja.x + 8, y))
+            y += img.get_height()
 
     def _cartel(self, pantalla, texto):
         from juego.fuentes import fuente
