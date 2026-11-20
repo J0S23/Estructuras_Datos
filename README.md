@@ -319,6 +319,7 @@ python pruebas/prueba_rumores_virales.py  # rumores que se vuelven virales y des
 python pruebas/prueba_bots_crecen.py      # las cuentas falsas que nadie reporta ganan seguidores
 python pruebas/prueba_minijuegos.py       # minijuegos de las tareas y noticias verdaderas en NEXUS
 python pruebas/prueba_red_minijuegos.py   # lo mismo en red: llega al cliente, se dibuja y se juega igual
+python pruebas/prueba_red_transiciones.py # en red tambien el glitch al entrar y el destello / iris al terminar
 python pruebas/prueba_flechas_camino.py   # las flechas guía siguen el camino, no atraviesan paredes
 python pruebas/prueba_infiltrado.py # mision secundaria del infiltrado de NEXUS
 python pruebas/prueba_logros.py    # arbol de logros y cuando se consigue cada uno

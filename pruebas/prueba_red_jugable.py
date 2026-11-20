@@ -150,6 +150,10 @@ try:
         return all((s.conexiones[0].ultimo_estado() or {}).get("g", {}).get("resultado") == "victoria"
                    for s in (teclado, mandos))
     assert correr([teclado, mandos], pantallas, 12, hasta=ganaron), "la partida se gana"
+    # (el destello de la victoria, como en el modo local: mientras la partida
+    # se va, Enter todavía no cuenta)
+    assert correr([teclado, mandos], pantallas, 4,
+                  hasta=lambda: teclado.transicion is None and mandos.transicion is None)
     correr([teclado, mandos], pantallas, 0.3)
     assert teclado.error_dibujo is None and mandos.error_dibujo is None
     pygame.image.save(pantallas[0], os.path.join(CARPETA, "red_resultados_laptop1.png"))
