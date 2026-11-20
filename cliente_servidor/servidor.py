@@ -150,6 +150,7 @@ class Buzon:
         self.conectado = False
         self.quiere_completa = True   # la próxima instantánea a este va entera
         self.aguja = None         # dónde vio la aguja del minijuego al presionar
+        self.mini = None          # ... y lo del minijuego de una tarea (Minijuego.visto)
         self.vista = None         # (ancho, alto) de su vista en su laptop
         self.ultimo_rx = 0.0      # perf_counter del último mensaje (cualquiera)
         self.ultima_intencion = 0.0   # ... y de la última intención
@@ -264,9 +265,6 @@ class Servidor:
         if self.mapa:
             objetos_mapa.mapa_activo = lambda: self.mapa
         g = App.Game()
-        # Las tareas con minijuego (juego/tareas.py) todavía no están en red:
-        # aquí se siguen haciendo manteniendo la tecla.
-        g.minijuegos = False
         if self.clave_dificultad:
             g.dificultad = Dificultad(self.clave_dificultad)
         nombres = [r["nombre"] for r in App.ROLES]
@@ -283,8 +281,6 @@ class Servidor:
         random.seed(self.semilla)
         with todos_se_mueven():
             g._preparar_partida()
-        if getattr(g, "nexus", None) is not None:
-            g.nexus.con_noticias = False     # las noticias verdaderas, tampoco todavía
         g.current_screen = "partida"
         # El tutorial del principio (juego/tutorial.py) también en red: cada
         # quien pasa sus pasos con su tecla de habilidad y la nave arranca
@@ -587,6 +583,8 @@ class Servidor:
                             buzon.vista = (vista[0], vista[1])
                         if "interactuar" in pulsar and isinstance(mensaje.get("aguja"), (int, float)):
                             buzon.aguja = max(0.0, min(1.0, float(mensaje["aguja"])))
+                        if "interactuar" in pulsar and isinstance(mensaje.get("mini"), (int, float, list)):
+                            buzon.mini = mensaje["mini"]
                         buzon.pulsar.extend(pulsar[:16])
                         del buzon.pulsar[:-32]      # que nadie llene la cola
                         if isinstance(mensaje.get("n"), int) and not isinstance(mensaje["n"], bool):
@@ -818,6 +816,7 @@ class Servidor:
 
     def _aplicar_entradas(self):
         """Lo que mandaron los clientes -> las teclas de cada puesto."""
+        from juego import tareas
         g = self.juego
         teclas = Teclas()
         pulsados, acks = [], []
@@ -831,16 +830,22 @@ class Servidor:
                     teclas[tecla] = True
             with buzon.candado:
                 aguja, buzon.aguja = buzon.aguja, None
-            pulsados.append((jugador, pulsar, aguja))
+                mini, buzon.mini = buzon.mini, None
+            pulsados.append((jugador, pulsar, aguja, mini))
         self.teclas = teclas
         # Lo pulsado va antes de actualizar, como en el modo local (primero
         # los eventos y después _actualizar_partida).
-        for jugador, pulsar, aguja in pulsados:
+        for jugador, pulsar, aguja, mini in pulsados:
             for accion in pulsar:
                 if accion == "interactuar" and aguja is not None and getattr(jugador, "minijuego", None) is not None:
                     # El acierto se juzga con la aguja que vio el jugador (ver
                     # cliente.Sesion._extra), no con la de este cuadro.
                     jugador.minijuego.aguja = aguja
+                if accion == "interactuar" and mini is not None and tareas.de(jugador) is not None:
+                    # Igual con el minijuego de una tarea: el saco o el pin
+                    # donde los vio (Minijuego.usar_visto).
+                    tareas.de(jugador).usar_visto(mini)
+                    mini = None
                 self._pulsar(jugador, accion)
         return acks
 

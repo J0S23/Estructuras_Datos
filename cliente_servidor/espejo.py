@@ -42,6 +42,7 @@ class Espejo:
         self.aliens = {}           # nombre -> objeto Alien del espejo
         self.pubs = {}             # id -> Publicacion del espejo (ver _publicaciones)
         self._pasos_npc = {}       # id del NPC -> (posición, cuándo cambió, último paso)
+        self._tareas = {}          # id del jugador -> (su minijuego, ms desde la última instantánea)
         self._agujas = {}          # id del jugador -> ((aguja, sentido) del servidor, cuándo llegó)
         self._reloj_ms = None      # para avanzar las animaciones con el tiempo real
         self._dt_ms = 0
@@ -413,6 +414,7 @@ class Espejo:
         if not completo:
             j.linterna.angulo = pos[2] if pos else datos.get("lin", j.linterna.angulo)
             self._aguja(j)
+            self._tarea(j, nuevo=False)
             return
         atributos = {k[2:]: v for k, v in datos.items() if k.startswith("a.")}
         panel = atributos.pop("panel", None)
@@ -446,6 +448,7 @@ class Espejo:
                             if isinstance(estacion, list) and len(estacion) == 2 else None)
         j.linterna.angulo = pos[2] if pos else datos.get("lin", j.linterna.angulo)
         self._aguja(j)
+        self._tarea(j, nuevo=True)
         arbol = getattr(j, "arbol", None)
         if arbol is not None:
             E.aplicar(arbol, {k[2:]: v for k, v in datos.items() if k.startswith("h.")})
@@ -488,6 +491,27 @@ class Espejo:
             mj.aguja, mj.sentido = -aguja, 1
         else:
             mj.aguja = aguja
+
+    def _tarea(self, j, nuevo):
+        """El minijuego de una tarea (juego/tareas.py; lo juega el servidor):
+        llega 30 veces por segundo y se dibuja a 60, así que entre instantánea
+        e instantánea el cliente lo sigue moviendo él (`Minijuego.animar`: el
+        reloj de las animaciones, el saco que se mece, el pin que sube). Con
+        cada instantánea vuelve a lo del servidor. Lo que ve el jugador al
+        presionar se manda con la tecla (cliente.Sesion._extra)."""
+        from juego import tareas
+        mini = tareas.de(j)
+        if mini is None or not hasattr(mini, "animar"):
+            self._tareas.pop(id(j), None)
+            return
+        visto = self._tareas.get(id(j))
+        if nuevo or visto is None or visto[0] is not mini:
+            self._tareas[id(j)] = (mini, 0.0)
+            return
+        acumulado = visto[1] + self._dt_ms
+        self._tareas[id(j)] = (mini, acumulado)
+        if acumulado <= 150:          # (sin instantáneas un rato: se queda quieto)
+            mini.animar(self._dt_ms)
 
     def _aliens(self, datos, interpolado):
         vistos = []

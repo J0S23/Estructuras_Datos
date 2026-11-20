@@ -107,7 +107,7 @@ RUMORES = [
 # Las publica un prisionero de verdad (no un bot) y lo que cuentan ES cierto:
 # en Misiones se ven igual que los rumores (no se sabe cuál es cuál hasta ir a
 # ver). Verificarla es ir al lugar y ARREGLARLO con un minijuego (`arreglo`,
-# misiones/minijuegos.py; en red, se arregla solo al llegar). Con la foto se
+# misiones/minijuegos.py; sin minijuegos, se arregla solo al llegar). Con la foto se
 # publica `confirmacion`. "efecto" = lo que pasa en la nave mientras nadie lo
 # arregla ("candado": ese casillero no se puede usar). "viral" es lo que se
 # avisa si se riega por toda la nave antes de que alguien la verifique.

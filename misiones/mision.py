@@ -89,6 +89,8 @@ TEXTO_FASE = {
     "sabotaje": "Apaguen las consolas de navegación ({hechas}/{total}).",
     "capsula": "Lleven {faltan} pieza(s) a la cápsula y repárenla.",
     "reparar": "Reparen la cápsula: mantengan la tecla.",
+    # Con minijuegos (juego/tareas.py) ya no se mantiene: son los cables.
+    "reparar_mini": "Reparen la cápsula: conecten los cables.",
     "planos": "Faltan los planos: ganen la confianza en NEXUS.",
     "huida": "¡Alerta! Todos a la cápsula.",
 }
@@ -491,7 +493,9 @@ class Mision:
             faltan = PIEZAS_NECESARIAS - self.piezas_entregadas
             if faltan > 0:
                 return TEXTO_FASE["capsula"].format(faltan=faltan)
-            return TEXTO_FASE["reparar"] if self.hay_planos() else TEXTO_FASE["planos"]
+            if not self.hay_planos():
+                return TEXTO_FASE["planos"]
+            return TEXTO_FASE["reparar_mini" if getattr(self.juego, "minijuegos", False) else "reparar"]
         return TEXTO_FASE.get(self.fase, "")
 
     def punto_objetivo(self, jugador):

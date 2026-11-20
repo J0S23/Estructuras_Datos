@@ -96,6 +96,56 @@ class Minijuego:
     def _fallar(self):
         self.error_ms = 280
 
+    # -- En red (cliente_servidor) ----------------------------------------------------
+    # El servidor juega el minijuego de verdad y le manda al cliente su estado
+    # con `a_red` (estado.py lo mete en la instantánea como {"O": [clase,
+    # datos]}); el espejo lo arma con `de_red` y lo dibuja con las mismas
+    # funciones. Entre instantánea e instantánea el cliente lo sigue moviendo
+    # él (`animar`: el reloj, el saco que se mece, el pin que sube), y al
+    # presionar le dice al servidor lo que VIO (`visto` / `usar_visto`), como
+    # la aguja del minijuego del casillero: si no, con el retraso de la red
+    # el saco ya no estaba donde el jugador lo soltó.
+
+    NO_VIAJA = ("rng", "al_acertar")
+
+    def a_red(self):
+        datos = {}
+        for clave, valor in vars(self).items():
+            if clave in self.NO_VIAJA:
+                continue
+            try:
+                datos[clave] = _a_json(valor)
+            except TypeError:
+                pass
+        return datos
+
+    def de_red(self, datos):
+        for clave, valor in datos.items():
+            setattr(self, clave, _de_json(valor))
+        for clave in self.NO_VIAJA:
+            if not hasattr(self, clave):
+                setattr(self, clave, None)
+
+    def animar(self, dt):
+        """Solo en el cliente: lo que se mueve solo, sin decidir nada (eso lo
+        hace el servidor y llega con la siguiente instantánea)."""
+        self.t += dt
+        self.error_ms = max(0, self.error_ms - dt)
+        if self.ganado:
+            self.fin_ms += dt
+        else:
+            self._animar(dt)
+
+    def _animar(self, dt):
+        pass
+
+    def visto(self):
+        """Lo que el jugador ve al presionar (se manda con la tecla), o None."""
+        return None
+
+    def usar_visto(self, visto):
+        pass
+
     # -- Dibujo -----------------------------------------------------------------------
 
     def ayuda(self, jugador):
@@ -150,6 +200,38 @@ class Minijuego:
 # =====================================================================================
 # Dibujo: piezas que comparten los minijuegos (guardadas ya armadas)
 # =====================================================================================
+
+def _a_json(v):
+    """Un dato del minijuego en forma de JSON (las tuplas, sets y dicts con
+    claves que no son texto van marcados, para volver a armarlos igual)."""
+    if v is None or isinstance(v, (bool, int, str)):
+        return v
+    if isinstance(v, float):
+        return round(v, 3)
+    if isinstance(v, tuple):
+        return {"t": [_a_json(x) for x in v]}
+    if isinstance(v, list):
+        return [_a_json(x) for x in v]
+    if isinstance(v, (set, frozenset)):
+        return {"s": [_a_json(x) for x in v]}
+    if isinstance(v, dict):
+        return {"d": [[_a_json(k), _a_json(x)] for k, x in v.items()]}
+    raise TypeError(type(v).__name__)
+
+
+def _de_json(v):
+    if isinstance(v, list):
+        return [_de_json(x) for x in v]
+    if isinstance(v, dict) and len(v) == 1:
+        tipo, x = next(iter(v.items()))
+        if tipo == "t":
+            return tuple(_de_json(e) for e in x)
+        if tipo == "s":
+            return {_de_json(e) for e in x}
+        if tipo == "d":
+            return {_de_json(k): _de_json(e) for k, e in x}
+    return v
+
 
 _guardados = {}
 
@@ -932,6 +1014,19 @@ class Abono(Minijuego):
             return "soltar"
         return None
 
+    def _animar(self, dt):
+        self.fase += dt / 1000 * (2.1 + 0.55 * self.aciertos) * self.velocidad
+        if self.caida is not None:
+            # (cae hasta casi llegar: si acertó o no lo dice el servidor)
+            self.caida = (self.caida[0], min(self.CAIDA_MS - 1, self.caida[1] + dt))
+
+    def visto(self):
+        return round(self.fase, 4) if self.caida is None else None
+
+    def usar_visto(self, visto):
+        if isinstance(visto, (int, float)) and not isinstance(visto, bool) and math.isfinite(visto):
+            self.fase = float(visto)
+
     def contador(self):
         return f"{self.aciertos}/{self.necesarios}"
 
@@ -1085,6 +1180,17 @@ class Ganzua(Minijuego):
         if self.puestos < self.n:
             i = self.puestos
             self.fases[i] += dt / 1000 * self.velocidades[i] * 2
+
+    _animar = _actualizar
+
+    def visto(self):
+        return [self.puestos, round(self.fases[self.puestos], 4)] if self.puestos < self.n else None
+
+    def usar_visto(self, visto):
+        if (isinstance(visto, list) and len(visto) == 2 and visto[0] == self.puestos
+                and self.puestos < self.n and isinstance(visto[1], (int, float))
+                and not isinstance(visto[1], bool) and math.isfinite(visto[1])):
+            self.fases[self.puestos] = float(visto[1])
 
     def _tecla(self, accion):
         if accion != "ok" or self.puestos >= self.n:

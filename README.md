@@ -267,7 +267,7 @@ consumible (decodificador, kit o abono), cada uno en un lugar de consumibles dis
 Lo que lleva cada uno se ve en el inventario, abajo a la derecha. Las consolas, la reparacion de la capsula,
 la caja de fusibles y la planta tienen cada una su **minijuego** (sintonizar la senal,
 conectar los cables, subir las palancas, echar el abono), que se abre con la tecla de
-interactuar (en red, por ahora, se mantiene la tecla). La habilidad escogida se usa con **F**
+interactuar (tambien en red). La habilidad escogida se usa con **F**
 (jugador 1) o **Alt derecho** (jugador 2) y se paga con puntos del equipo.
 
 Cada jugador tiene un **campo de vision**, como en Among Us: no ve a traves de
@@ -318,6 +318,7 @@ python pruebas/prueba_idioma.py      # el juego en ingles (Menu > Opciones > Idi
 python pruebas/prueba_rumores_virales.py  # rumores que se vuelven virales y desmentidos tarde
 python pruebas/prueba_bots_crecen.py      # las cuentas falsas que nadie reporta ganan seguidores
 python pruebas/prueba_minijuegos.py       # minijuegos de las tareas y noticias verdaderas en NEXUS
+python pruebas/prueba_red_minijuegos.py   # lo mismo en red: llega al cliente, se dibuja y se juega igual
 python pruebas/prueba_flechas_camino.py   # las flechas guía siguen el camino, no atraviesan paredes
 python pruebas/prueba_infiltrado.py # mision secundaria del infiltrado de NEXUS
 python pruebas/prueba_logros.py    # arbol de logros y cuando se consigue cada uno

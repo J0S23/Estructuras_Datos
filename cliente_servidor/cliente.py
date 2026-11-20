@@ -984,6 +984,14 @@ class Sesion:
         mj = getattr(jugadores[conexion.jugador], "minijuego", None)
         if mj is not None and hasattr(mj, "aguja"):
             extra["aguja"] = round(float(mj.aguja), 3)
+        # Lo mismo con el minijuego de una tarea (juego/tareas.py): dónde iba
+        # el saco del abono o el pin de la ganzúa cuando presionó.
+        from juego import tareas
+        mini = tareas.de(jugadores[conexion.jugador])
+        if mini is not None and hasattr(mini, "visto"):
+            visto = mini.visto()
+            if visto is not None:
+                extra["mini"] = visto
         return extra or None
 
     def _vista_de(self, conexion):
