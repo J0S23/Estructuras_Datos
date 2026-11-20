@@ -284,7 +284,8 @@ g._dibujar()
 assert "Mando 1 (Xbox)" in textos and "Mando 2 (PlayStation)" in textos, textos
 assert "[A] tomar" in textos and " tomar" in textos, textos      # [✕] dibujado
 assert seleccion._boton_esquema(2) == "A" and seleccion._boton_esquema(3) == "Cruz"
-assert "[ESC] o B/Círculo: volver a la dificultad" in textos, textos
+# El pie dibuja [ESC] como tecla (screens/estilo.pie) y el resto aparte.
+assert "ESC" in textos and " o B/Círculo: volver a la dificultad" in textos, textos
 pulsar(g, boton_c(22, "A"))                                        # jugador 1 -> PS
 textos.clear(); g._dibujar()
 assert "Mando 2 (PlayStation)" in textos and "Jugador 1" in textos

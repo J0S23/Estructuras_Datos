@@ -8,6 +8,8 @@ Se dibuja en dos columnas para que quepa completa sin recortarse: a la
 izquierda la historia y cómo se juega, a la derecha las estructuras.
 """
 
+import pygame
+
 from juego.fuentes import fuente_de_tamano
 
 
@@ -46,8 +48,8 @@ ARBOLES = [
 ]
 
 COLOR_FONDO = (30, 30, 55)
-COLOR_TEXTO = (255, 255, 255)
-COLOR_TENUE = (210, 210, 210)
+COLOR_TEXTO = (240, 242, 252)
+COLOR_TENUE = (180, 188, 220)
 COLOR_TITULO = (240, 220, 140)
 
 
@@ -55,8 +57,30 @@ def _ancho_maximo(f, lineas):
     return max((f.size(t)[0] for t in lineas if t), default=0)
 
 
+_capas = {}
+
+
 def render_ayuda(screen, font=None, small_font=None):
-    screen.fill(COLOR_FONDO)
+    """El fondo se mueve; los paneles y el texto (quietos) se dibujan una vez
+    por tamaño de ventana e idioma y se guardan."""
+    from screens import estilo
+    from juego import idioma
+    estilo.fondo(screen)
+    ancho, alto = screen.get_size()
+    arriba = max(56, min(96, alto // 10))
+    estilo.titulo(screen, "AYUDA", (ancho // 2, arriba // 2 + 4), max(22, min(40, arriba // 2)))
+    clave = (ancho, alto, idioma.IDIOMA)
+    capa = _capas.get(clave)
+    if capa is None:
+        _capas.clear()
+        capa = pygame.Surface((ancho, alto), pygame.SRCALPHA)
+        _dibujar_paneles(capa)
+        _capas[clave] = capa
+    screen.blit(capa, (0, 0))
+    estilo.pie(screen, "[ENTER] Volver", alto - 32)
+
+
+def _dibujar_paneles(screen):
     ancho, alto = screen.get_size()
 
     # -- Texto de cada columna ------------------------------------------------
@@ -115,10 +139,15 @@ def render_ayuda(screen, font=None, small_font=None):
     # -- Elegir el tamaño de letra que hace que todo quepa --------------------
     # Se busca de grande a chico el primer tamaño en el que las dos columnas
     # caben a lo ancho y la más larga cabe a lo alto. Así la pantalla se ve
-    # bien tanto maximizada como en la ventana chica de F11.
-    margen = 40
-    disponible_ancho = (ancho - margen * 3) / 2
-    disponible_alto = alto - 80
+    # bien tanto maximizada como en la ventana chica de F11. Cada columna va
+    # en un panel de vidrio (screens/estilo.py), con su relleno por dentro.
+    from screens import estilo
+    margen = max(20, min(40, ancho // 40))
+    relleno = 22
+    arriba = max(56, min(96, alto // 10))        # el título
+    abajo = 64                                    # las teclas
+    disponible_ancho = (ancho - margen * 3) / 2 - relleno * 2 - 14
+    disponible_alto = alto - arriba - abajo - relleno * 2
     textos_izq = [t for _, t in izquierda]
     textos_der = [t for _, t in derecha]
 
@@ -136,18 +165,41 @@ def render_ayuda(screen, font=None, small_font=None):
         f = fuente_de_tamano(10)
 
     paso = f.get_linesize() + 2
-    # Se centra verticalmente: si la letra tuvo que encogerse mucho, el texto
-    # queda en el medio en vez de amontonado arriba con media pantalla vacía.
+    # Los paneles miden lo que mide su texto y quedan en el medio: si la letra
+    # tuvo que encogerse mucho, no queda media pantalla vacía.
     alto_bloque = max(len(izquierda), len(derecha)) * paso
-    y_inicial = max(36, (alto - 50 - alto_bloque) // 2)
+    alto_panel = alto_bloque + relleno * 2
+    y_panel = max(arriba, (arriba + alto - abajo - alto_panel) // 2)
+    ancho_panel = (ancho - margen * 3) // 2
 
-    columnas = [(margen, izquierda), (margen * 2 + disponible_ancho, derecha)]
-    for x, bloque in columnas:
-        y = y_inicial
+    colores_seccion = [estilo.COLOR_ORO, estilo.COLOR_NEON, (110, 220, 140), estilo.COLOR_ROSA,
+                       (255, 150, 90), (170, 140, 255), (120, 200, 255)]
+    columnas = [(margen, izquierda, estilo.COLOR_NEON), (margen * 2 + ancho_panel, derecha, estilo.COLOR_ROSA)]
+    for x, bloque, color_panel in columnas:
+        estilo.panel(screen, pygame.Rect(x, y_panel, ancho_panel, alto_panel), color_panel)
+        y = y_panel + relleno
+        x_texto = x + relleno + 14
+        seccion = 0
         for color, linea in bloque:
-            if linea:
-                screen.blit(f.render(linea, True, color), (int(x), int(y)))
+            if not linea:
+                y += paso
+                continue
+            if color == COLOR_TITULO:
+                # Título de sección: un rombito y una raya de su color.
+                tono = colores_seccion[seccion % len(colores_seccion)]
+                seccion += 1
+                cy = y + f.get_height() // 2
+                k = max(3, f.get_height() // 5)
+                pygame.draw.polygon(screen, tono, [(x_texto - 12, cy - k), (x_texto - 12 + k, cy),
+                                                   (x_texto - 12, cy + k), (x_texto - 12 - k, cy)])
+                rect = estilo.texto(screen, linea, f, (x_texto, y), tono)
+                fin = x + ancho_panel - relleno
+                if rect.right + 14 < fin:
+                    pygame.draw.line(screen, estilo._mezclar(tono, (20, 20, 40), 0.65),
+                                     (rect.right + 12, cy), (fin, cy), 1)
+            elif bloque is derecha and color == COLOR_TEXTO:
+                # El nombre de cada estructura.
+                estilo.texto(screen, linea, f, (x_texto, y), (150, 225, 255))
+            else:
+                estilo.texto(screen, linea, f, (x_texto, y), color, sombra=False)
             y += paso
-
-    aviso = f.render("[ENTER] Volver", True, (194, 216, 248))
-    screen.blit(aviso, aviso.get_rect(center=(ancho // 2, alto - 26)))

@@ -528,18 +528,18 @@ class MenuRed:
     # -- Dibujo ------------------------------------------------------------------------
 
     def dibujar(self, pantalla, aviso=""):
-        from juego.fuentes import fuente, fuente_de_tamano
+        from juego.fuentes import fuente
         ancho, alto = pantalla.get_size()
         _fondo(pantalla)
         escala = min(ancho / 1280, alto / 720)
-        titulo = fuente_de_tamano(max(30, int(54 * escala))).render("Jugar en red", True, TEXTO)
-        pantalla.blit(titulo, titulo.get_rect(midtop=(ancho // 2, int(alto * 0.05))))
+        from screens import estilo
+        tam = max(30, int(54 * escala))
+        rect_titulo = estilo.titulo(pantalla, "Jugar en red", (ancho // 2, int(alto * 0.05) + tam // 2), tam,
+                                    adorno=False)
         sub = {"inicio": "Juega con otra laptop en el mismo wifi",
                "crear": "Esta laptop será la anfitriona: las demás se unen con el código",
                "unirse": "Elige una partida de la lista o escribe su código"}[self.pantalla]
-        imagen = fuente("small").render(sub, True, TENUE)
-        pantalla.blit(imagen, imagen.get_rect(midtop=(ancho // 2, titulo.get_rect(
-            midtop=(ancho // 2, int(alto * 0.05))).bottom + 6)))
+        estilo.texto(pantalla, sub, fuente("small"), (ancho // 2, rect_titulo.bottom + 6), TENUE, "midtop")
         self.rects = []
         if self.pantalla == "inicio":
             self._dibujar_inicio(pantalla, escala)
@@ -550,20 +550,18 @@ class MenuRed:
         pistas = "Flechas o mouse para elegir  ·  Enter: aceptar  ·  Esc: atrás"
         if self.pantalla == "unirse":
             pistas = "Escribe el código  ·  Flechas o mouse  ·  Enter: unirse  ·  Esc: atrás"
-        imagen = fuente("small").render(pistas, True, TENUE)
-        pantalla.blit(imagen, imagen.get_rect(midbottom=(ancho // 2, alto - 14)))
+        estilo.pie(pantalla, pistas, alto - 30, fuente("small"), TENUE)
         if aviso:
             imagen = fuente("small").render(aviso, True, AMARILLO)
-            caja = imagen.get_rect(midbottom=(ancho // 2, alto - 52)).inflate(28, 14)
+            caja = imagen.get_rect(midbottom=(ancho // 2, alto - 62)).inflate(28, 14)
             pygame.draw.rect(pantalla, (40, 32, 16), caja, border_radius=8)
             pygame.draw.rect(pantalla, AMARILLO, caja, 2, border_radius=8)
             pantalla.blit(imagen, imagen.get_rect(center=caja.center))
 
     def _caja(self, pantalla, rect, indice, borde=None):
+        from screens import estilo
         marcado = indice == self.foco
-        pygame.draw.rect(pantalla, PANEL_MARCADO if marcado else PANEL, rect, border_radius=14)
-        pygame.draw.rect(pantalla, borde or (CIAN if marcado else BORDE), rect, 3 if marcado else 2,
-                         border_radius=14)
+        estilo.tarjeta(pantalla, rect, marcado, borde or CIAN, radio=14, franja=False)
         self.rects.append((rect, indice))
         return marcado
 
@@ -578,8 +576,8 @@ class MenuRed:
         for i, (titulo, *lineas, icono) in enumerate(textos):
             rect = pygame.Rect(0, 0, w, h)
             rect.topleft = (ancho // 2 - w - sep // 2 + i * (w + sep), y)
-            marcado = self._caja(pantalla, rect, i, borde=None)
             color = CIAN if i == 0 else ROSA
+            marcado = self._caja(pantalla, rect, i, borde=color)
             _icono(pantalla, icono, (rect.centerx, rect.y + int(h * 0.27)), int(h * 0.18), color)
             img = fuente_de_tamano(max(20, int(32 * escala))).render(titulo, True, color if marcado else TEXTO)
             pantalla.blit(img, img.get_rect(midtop=(rect.centerx, rect.y + int(h * 0.5))))
@@ -659,8 +657,8 @@ class MenuRed:
         y += img.get_height() + 8
         if not partidas:
             caja = pygame.Rect(x, y, w, 70)
-            pygame.draw.rect(pantalla, PANEL, caja, border_radius=14)
-            pygame.draw.rect(pantalla, BORDE, caja, 2, border_radius=14)
+            from screens import estilo
+            estilo.tarjeta(pantalla, caja, False, BORDE, radio=14, franja=False)
             puntos = "." * (1 + (pygame.time.get_ticks() // 400) % 3)
             texto = ("Buscando" + puntos) if self.buscador is not None and self.buscador.error is None \
                 else "No se puede buscar en esta red: usa el código"
@@ -715,7 +713,14 @@ class MenuRed:
 
 
 def _fondo(pantalla):
-    """Fondo oscuro con un degradado y unas estrellas quietas."""
+    """El espacio con estrellas que pasan (el de todas las pantallas del menú,
+    screens/estilo.py). Si no se puede, un degradado con estrellas quietas."""
+    try:
+        from screens import estilo
+        estilo.fondo(pantalla)
+        return
+    except Exception:
+        pass
     ancho, alto = pantalla.get_size()
     clave = (ancho, alto)
     if _FONDOS.get("clave") != clave:

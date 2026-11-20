@@ -50,6 +50,39 @@ ANGULO_DIRECCION = {
 _capas = {}
 _ultimo = {}          # (vista.topleft, id del dueño) -> (clave, mapa de luz ya agrandado)
 _halos = {}
+# (vista.topleft, id del dueño) -> (mapa de luz chico, esquina de su zona en el
+# mundo): para preguntar cuánta luz hay en un punto (`brillo_en`; lo usan las
+# luces de colores y el polvo de la linterna, juego/luces.py y efectos.py).
+_luz_vista = {}
+
+
+def brillo_en(vista, dueño, punto):
+    """Cuánta luz hay en `punto` (del mundo) en la vista de `dueño`, de 0 a 1,
+    según el último mapa de luz que se dibujó ahí. None si no hay (sin campo
+    de visión ni oscuridad: se ve todo)."""
+    datos = _luz_vista.get((vista.topleft, id(dueño)))
+    if datos is None:
+        return None
+    luz, (zx, zy) = datos
+    x, y = int((punto[0] - zx) / ESCALA_LUZ), int((punto[1] - zy) / ESCALA_LUZ)
+    if not (0 <= x < luz.get_width() and 0 <= y < luz.get_height()):
+        return 0.0
+    return luz.get_at((x, y))[0] / 255
+
+
+def mapa_de_luz(vista, dueño):
+    """(mapa de luz chico, x, y de su esquina en el mundo, escala) de la vista,
+    para leer muchos puntos sin una llamada por punto; o None."""
+    datos = _luz_vista.get((vista.topleft, id(dueño)))
+    if datos is None:
+        return None
+    luz, (zx, zy) = datos
+    return luz, zx, zy, ESCALA_LUZ
+
+
+def olvidar_luz(vista, dueño):
+    """Esta vista se dibujó sin oscuridad: se ve todo (brillo_en -> None)."""
+    _luz_vista.pop((vista.topleft, id(dueño)), None)
 
 
 def _capa(tamano, uso="luz"):
@@ -116,7 +149,23 @@ class Linterna:
 MARGEN_LUZ = 32              # px de más por lado del mapa de luz guardado (con luz)
 
 
-def dibujar(screen, vista, camara, dueño, jugadores, apagon=False, vision=None, origen=None):
+_tintes = {}
+
+
+def _tinte(tamano, color):
+    """Una capa llena de `color` para multiplicar (guardada: fill con mezcla es lento)."""
+    clave = (tamano, color)
+    capa = _tintes.get(clave)
+    if capa is None:
+        if len(_tintes) > 12:
+            _tintes.clear()
+        capa = pygame.Surface(tamano)
+        capa.fill(color)
+        _tintes[clave] = capa
+    return capa
+
+
+def dibujar(screen, vista, camara, dueño, jugadores, apagon=False, vision=None, origen=None, tinte=None):
     """Oscurece el viewport `vista` dejando ver lo que ve `dueño`.
 
     Se arma un "mapa de luz" en grises (blanco = se ve todo, casi negro = no se
@@ -128,6 +177,11 @@ def dibujar(screen, vista, camara, dueño, jugadores, apagon=False, vision=None,
     (con el borde del radio difuminado) y afuera queda en penumbra. En un
     apagón la luz es la de la linterna y los halos, pero igual recortada por
     el polígono: no alumbra tras las paredes.
+
+    `tinte` (un color, o None): se multiplica con el mapa de luz chico antes
+    de agrandarlo. Así la alarma tiñe de rojo lo que se ve sin pegar otra capa
+    del tamaño de la vista en cada cuadro (juego/luces.py): cuesta solo cuando
+    el mapa se rehace.
     """
     # Con luz, el mapa de luz depende solo del campo de visión (que cambia
     # cada PASO_ORIGEN px que se mueve el dueño, o menos seguido con 3-4
@@ -143,7 +197,7 @@ def dibujar(screen, vista, camara, dueño, jugadores, apagon=False, vision=None,
     if not apagon:
         centro_luz = origen if origen is not None else dueño.hitbox.center
         clave = (vista.size, tuple(centro_luz), dueño.escondido,
-                 id(vision), len(vision) if vision else 0, vision[0] if vision else None)
+                 id(vision), len(vision) if vision else 0, vision[0] if vision else None, tinte)
         guardado = _ultimo.get((vista.topleft, id(dueño)))
         if guardado is not None and guardado[0] == clave:
             dx, dy = camara.x - guardado[2][0], camara.y - guardado[2][1]
@@ -234,6 +288,12 @@ def dibujar(screen, vista, camara, dueño, jugadores, apagon=False, vision=None,
             x, y = local(jugador.hitbox.center)
             luz.blit(halo, (int(x) - halo.get_width() // 2, int(y) - halo.get_height() // 2),
                      special_flags=pygame.BLEND_RGB_MAX)
+
+    if len(_luz_vista) > 16:
+        _luz_vista.clear()
+    _luz_vista[(vista.topleft, id(dueño))] = (luz.copy(), zona.topleft)
+    if tinte is not None:
+        luz.blit(_tinte(chico, tinte), (0, 0), special_flags=pygame.BLEND_RGB_MULT)
 
     tamano = zona.size
     if clave is not None:

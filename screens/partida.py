@@ -29,6 +29,8 @@ from juego import salas_selladas
 from juego import sprites_objetos
 from juego import decoracion
 from juego import cache_dibujo
+from juego import efectos
+from juego import luces
 from screens.paneles import (segundos_para_salir, render_panel, render_mosaico, render_hud, render_mensaje, render_pista_zona,
                              render_pulso, render_tension, render_minijuego,
                              render_escondido, render_eliminado,
@@ -147,6 +149,9 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=None,
     extras.setdefault("escondites", escondites)
     extras.setdefault("jugadores", jugadores)
     extras.setdefault("mundo", mundo)
+    # Partículas, huellas, puertas que se mueven: una vez por cuadro, con lo
+    # que cambió del estado (juego/efectos.py).
+    efectos.tick(extras, jugadores)
     # (Antes se pintaba toda la pantalla de fondo en cada cuadro: las vistas
     # ya la tapan entera con el mapa; si el mapa es más chico que una vista,
     # _dibujar_vista pinta el fondo de esa vista.)
@@ -246,11 +251,15 @@ def _dibujar_leyenda(screen, mundo, jugadores):
 
 
 
+_tintes_vista = {}       # (vista, dueño) -> (tinte que ya tiene su mapa de luz, si ya esperó un cuadro)
+
+
 def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitboxes,
                    aliens=(), escondites=(), extras=None):
     camara = mundo.camara(dueño.hitbox.center, vista.width, vista.height)
     # Si lo acaban de atrapar, su mitad de la pantalla tiembla un instante.
     camara = camara.move(*temblor(dueño, pygame.time.get_ticks()))
+    camara = camara.move(*efectos.temblor(dueño))      # (una compuerta que cae cerca)
 
     # Recorta el dibujo al viewport para que nada se salga a la mitad vecina.
     clip_previo = screen.get_clip()
@@ -268,6 +277,12 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
     screen.blit(mundo.imagen, destino, area=camara)
     # Las salas selladas (menos jugadores, mapa más chico): oscuras y con
     # franjas de peligro en la entrada.
+    # Estrellas tras los ventanales y pantallas del mapa que titilan (luces.py;
+    # antes de las salas selladas, que las tapan).
+    tiempo_ms = pygame.time.get_ticks()
+    fondo_offset = (camara.x - destino[0], camara.y - destino[1])
+    luces.dibujar_fondo(screen, fondo_offset, camara, mundo, tiempo_ms)
+    luces.dibujar_brillos(screen, fondo_offset, camara, mundo, extras or {}, tiempo_ms)
     salas_selladas.dibujar(screen, (camara.x - destino[0], camara.y - destino[1]), camara, mundo)
 
     if mostrar_hitboxes:
@@ -297,8 +312,7 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
     muebles = (extras or {}).get("muebles") or ()
     for mueble in decoracion.de_fondo(muebles, camara):
         mueble.dibujar(screen, offset)
-
-    tiempo_ms = pygame.time.get_ticks()
+    efectos.dibujar_piso(screen, offset, camara)       # huellas
     if extras:
         mision_dibujo.dibujar_piso(screen, offset, camara, dueño, extras.get("mision"), tiempo_ms)
         if extras.get("guardia_planta") is not None:
@@ -375,11 +389,35 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
     # donde llega la linterna.
     for alien in aliens:
         alien.dibujar_senal(screen, offset)
+    # La alarma tiñe el mapa de luz (luces.py). Cambiar el tinte obliga a
+    # rehacerlo: como el campo de visión, las vistas se turnan (una en un
+    # cuadro, la otra en el siguiente) para no rehacer todas a la vez.
+    tinte = luces.tinte_alarma(eventos)
+    clave_vista = (vista.topleft, id(dueño))
+    actual, esperó = _tintes_vista.get(clave_vista, (None, False))
+    if tinte != actual:
+        orden = list(jugadores).index(dueño) if dueño in jugadores else 0
+        if orden % 2 == 1 and not esperó:
+            _tintes_vista[clave_vista] = (actual, True)      # le toca el cuadro siguiente
+            tinte = actual
+        else:
+            if len(_tintes_vista) > 16:          # (vistas de partidas viejas)
+                _tintes_vista.clear()
+            _tintes_vista[clave_vista] = (tinte, False)
     if a_oscuras or campo is not None:
         oscuridad.dibujar(screen, vista, camara, dueño, jugadores, a_oscuras,
-                          campo.puntos if campo else None, campo.origen if campo else None)
+                          campo.puntos if campo else None, campo.origen if campo else None, tinte)
+    else:
+        oscuridad.olvidar_luz(vista, dueño)
     if a_oscuras:
         dibujar_brillo_caja(screen, offset, dueño, eventos, tiempo_ms)
+    # Luces de color (sobre la oscuridad: brillan), chispas y destellos, el
+    # polvo en la luz de la linterna y las luces de la alarma.
+    luces.dibujar(screen, vista, camara, offset, dueño, extras or {}, zonas, mundo, tiempo_ms)
+    efectos.dibujar_particulas(screen, offset, camara)
+    if a_oscuras:
+        efectos.dibujar_polvo(screen, vista, offset, camara, dueño, oscuridad.mapa_de_luz(vista, dueño))
+    luces.dibujar_alarma(screen, vista, eventos, tiempo_ms, tenido=a_oscuras or campo is not None)
     # Los ojos de la Sombra brillan encima de la oscuridad: a oscuras es lo
     # único que se le ve (sombra.py).
     for alien in aliens:
@@ -882,6 +920,8 @@ def _dibujar_terminal_nexus(screen, offset, zona, encima):
         screen.blit(cache_dibujo.elipse(caja.inflate(24, 24).size, (*color, 60)),
                     caja.inflate(24, 24).topleft)
     screen.blit(sprite, caja)
+    if not apagada:
+        luces.pantalla(screen, sprite, caja.topleft, pygame.time.get_ticks(), zona["rect"].x // 3)
     if encima:
         sprites_objetos.resaltar(screen, sprite, caja.topleft, (255, 214, 64))
     nombre = "Desconectada" if apagada else zona["nombre"]

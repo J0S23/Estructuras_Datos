@@ -10,6 +10,8 @@ al terminar vuelve a empezar solo. `reiniciar_scroll()` da el valor inicial, y
 juego/app.py lo llama cada vez que se entra a la pantalla.
 """
 
+import pygame
+
 from juego.fuentes import fuente_de_tamano
 
 
@@ -20,9 +22,10 @@ COLOR_TENUE = (168, 176, 214)
 
 VELOCIDAD = 0.6  # píxeles por frame
 
-# (texto, estilo). "espacio" deja un hueco.
+# (texto, estilo). "espacio" deja un hueco; "logo" es el logo de NEXUS
+# (Imagenes/UI/nexus_logo.png; si no está, el texto como título).
 LINEAS = [
-    ("NEXUS", "titulo"),
+    ("NEXUS", "logo"),
     ("En el vacío, nada está realmente solo", "tenue"),
     ("", "espacio"),
     ("Estructura de Datos II", "tenue"),
@@ -30,10 +33,10 @@ LINEAS = [
     ("", "espacio"),
     ("", "espacio"),
     ("Equipo", "titulo"),
-    ("Joseph Arias", "texto"),
-    ("Diego Payares", "texto"),
-    ("Anny Delgado", "texto"),
-    ("Juan David Campo", "texto"),
+    ("Joseph Arias", "nombre"),
+    ("Diego Payares", "nombre"),
+    ("Anny Delgado", "nombre"),
+    ("Juan David Campo", "nombre"),
     ("", "espacio"),
     ("", "espacio"),
     ("Hecho con Python y Pygame", "tenue"),
@@ -49,38 +52,89 @@ def reiniciar_scroll():
     return 0.0
 
 
+def _alto_linea(texto, estilo, paso, alto_logo):
+    if estilo == "logo":
+        return alto_logo + paso
+    if estilo == "titulo":
+        return int(paso * 1.6)
+    return paso
+
+
+_fundidos = {}
+
+
+def _fundido(ancho, alto_banda, arriba):
+    """Una banda que oscurece hacia el borde, para que el rollo se desvanezca."""
+    clave = (ancho, alto_banda, arriba)
+    img = _fundidos.get(clave)
+    if img is None:
+        img = pygame.Surface((ancho, alto_banda), pygame.SRCALPHA)
+        for y in range(alto_banda):
+            k = 1 - y / alto_banda if arriba else y / alto_banda
+            pygame.draw.line(img, (8, 8, 20, int(235 * k ** 1.5)), (0, y), (ancho, y))
+        _fundidos.clear()
+        _fundidos[clave] = img
+    return img
+
+
 def render_creditos(screen, font=None, scroll=0.0, pausado=False):
     """Dibuja el rollo y devuelve el desplazamiento siguiente.
 
     El desplazamiento se mide en píxeles recorridos desde el inicio. Cuando el
     rollo entero ya pasó por arriba, vuelve a cero y empieza de nuevo.
     """
-    screen.fill(COLOR_FONDO)
+    from screens import estilo as est
+    from juego import perfiles
+    est.fondo(screen)
     ancho, alto = screen.get_size()
 
-    f_titulo = fuente_de_tamano(max(18, min(34, ancho // 42)))
+    tam_titulo = max(18, min(34, ancho // 42))
     f_texto = fuente_de_tamano(max(14, min(24, ancho // 60)))
     paso = f_texto.get_linesize() + 10
+    alto_logo = max(90, min(240, alto // 4))
 
-    alto_rollo = len(LINEAS) * paso
+    alto_rollo = sum(_alto_linea(t, e, paso, alto_logo) for t, e in LINEAS)
     # El rollo recorre su propio alto más una pantalla, para entrar desde abajo
     # y salir del todo por arriba antes de reiniciarse.
     recorrido = alto_rollo + alto
 
     y = alto - scroll
+    nombre = 0
     for texto, estilo in LINEAS:
-        if texto:
-            f = f_titulo if estilo == "titulo" else f_texto
-            color = COLOR_TITULO if estilo == "titulo" else (
-                COLOR_TENUE if estilo == "tenue" else COLOR_TEXTO)
-            etiqueta = f.render(texto, True, color)
-            # Solo se dibuja lo que se ve, para no pedirle trabajo de más.
-            if -etiqueta.get_height() < y < alto:
-                screen.blit(etiqueta, etiqueta.get_rect(center=(ancho // 2, int(y))))
-        y += paso
+        h = _alto_linea(texto, estilo, paso, alto_logo)
+        # Solo se dibuja lo que se ve, para no pedirle trabajo de más.
+        if texto and -h < y < alto + h:
+            if estilo == "logo":
+                imagen = perfiles.logo(alto_logo, completo=True)
+                if imagen is not None:
+                    centro = (ancho // 2, int(y + alto_logo // 2))
+                    luz = est._brillo_elipse((int(imagen.get_width() * 1.6), int(alto_logo * 1.2)), (60, 40, 110))
+                    screen.blit(luz, luz.get_rect(center=centro), special_flags=pygame.BLEND_RGB_ADD)
+                    screen.blit(imagen, imagen.get_rect(center=centro))
+                else:
+                    est.titulo(screen, texto, (ancho // 2, int(y + alto_logo // 2)), tam_titulo + 12)
+            elif estilo == "titulo":
+                est.titulo(screen, texto, (ancho // 2, int(y + paso * 0.6)), tam_titulo, est.COLOR_ORO,
+                           (255, 170, 60))
+            elif estilo == "nombre":
+                color = est.COLOR_JUGADOR[nombre % 4]
+                rect = est.texto(screen, texto, f_texto, (ancho // 2, int(y + paso // 2)), est.COLOR_TEXTO, "center")
+                for lado in (-1, 1):
+                    cx = rect.centerx + lado * (rect.w // 2 + 22)
+                    cy = rect.centery
+                    pygame.draw.polygon(screen, color, [(cx, cy - 5), (cx + 5, cy), (cx, cy + 5), (cx - 5, cy)])
+            else:
+                color = est.COLOR_TENUE if estilo == "tenue" else est.COLOR_TEXTO
+                est.texto(screen, texto, f_texto, (ancho // 2, int(y + paso // 2)), color, "center")
+        if estilo == "nombre":
+            nombre += 1
+        y += h
 
-    pie = f_texto.render("[ENTER] volver", True, (194, 216, 248))
-    screen.blit(pie, pie.get_rect(center=(ancho // 2, alto - 24)))
+    # Arriba y abajo el rollo se desvanece.
+    banda = max(60, alto // 7)
+    screen.blit(_fundido(ancho, banda, True), (0, 0))
+    screen.blit(_fundido(ancho, banda, False), (0, alto - banda))
+    est.pie(screen, "[ENTER] volver", alto - 32)
 
     if pausado:
         return scroll

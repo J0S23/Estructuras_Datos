@@ -45,6 +45,9 @@ import threading
 import time
 
 os.environ["SDL_VIDEODRIVER"] = "dummy"
+# Compara el cliente con el modo local píxel a píxel: sin los efectos
+# visuales (juego/efectos.py), que se mueven con el reloj de cada proceso.
+os.environ["NEXUS_SIN_EFECTOS"] = "1"
 os.environ["SDL_AUDIODRIVER"] = "dummy"
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)

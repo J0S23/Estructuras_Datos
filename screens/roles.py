@@ -15,7 +15,7 @@ import math
 import pygame
 
 from juego import salas_selladas
-from juego import sprites_objetos, decoracion, cache_dibujo
+from juego import sprites_objetos, decoracion, cache_dibujo, efectos, luces
 from juego.fuentes import fuente, fuente_de_tamano
 
 
@@ -109,6 +109,8 @@ def _dibujar_terminal(screen, offset, t, dueño, extras, tiempo_ms):
         # La terminal de Anny: apagada (gris) mientras recarga o sin luz.
         pos = sprites_objetos.caja_dibujo("terminal", t["rect"], img).move(-offset[0], -offset[1])
         screen.blit(img, pos)
+        if not apagada:
+            luces.pantalla(screen, img, pos.topleft, tiempo_ms, t["rect"].x // 5 + t["rect"].y // 13)
         if cerca is t:
             sprites_objetos.resaltar(screen, img, pos.topleft, (255, 214, 64))
         return
@@ -138,7 +140,8 @@ def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
             # El panel de Anny: apagado y echando chispas hasta que lo reparan.
             pos = sprites_objetos.caja_dibujo("panel", p["rect"], img).move(-offset[0], -offset[1])
             screen.blit(img, pos)
-            if not p["reparado"]:
+            if not p["reparado"] and not efectos.ACTIVOS:
+                # (con los efectos prendidos, las chispas son partículas: efectos.py)
                 for i in range(3):
                     fase = (tiempo_ms / 90 + i * 37) % 20
                     if fase < 6:

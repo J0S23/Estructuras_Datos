@@ -184,10 +184,21 @@ for tam in ((1280, 720), (1920, 1080)):
     g.screen = pygame.display.set_mode(tam)
     cap(f"logros_c_arbol_{tam[0]}.png")
 g.screen = pygame.display.set_mode((1366, 768))
-# El mouse también selecciona.
+# El mouse también selecciona (lo que se ve: el árbol no cabe entero y la
+# vista sigue a lo seleccionado, así que primero se va a esa rama).
+g.pausa.nodo = L.arbol.buscar("rescate")
+cap("logros_c_arbol_1366.png")
 nodo = L.arbol.buscar("medico")
+assert nodo in g.pausa.rects_logros, "la vista siguió a lo seleccionado"
 g.pausa.mover_mouse(g.pausa.rects_logros[nodo].center)
 assert g.pausa.nodo is nodo
+# La rueda del mouse desplaza la vista (screens/logros.rueda).
+antes = {n: r.y for n, r in g.pausa.rects_logros.items()}
+pygame.event.post(pygame.event.Event(pygame.MOUSEWHEEL, x=0, y=-3))
+g._manejar_eventos()
+cap("logros_c_arbol_rueda.png")
+assert any(g.pausa.rects_logros.get(n) is not None and g.pausa.rects_logros[n].y < y
+           for n, y in antes.items()), "la rueda bajó el árbol"
 g._manejar_tecla(pygame.K_ESCAPE)
 assert g.pausa.vista == "menu"
 g._manejar_tecla(pygame.K_ESCAPE)
