@@ -589,6 +589,12 @@ def _sin_congelar(pantalla, lineas, trabajo, dibujo=None):
     return caja["resultado"]
 
 
+class _SinPantalla:
+    """El "juego" que pide TransitionManager.update (para cambiarle la
+    pantalla): en la sesión la pantalla la decide la instantánea."""
+    current_screen = None
+
+
 class Sesion:
     """Una partida en red vista desde esta ventana. `paso()` hace un cuadro
     (eventos, entrada, dibujo); `jugar()` repite hasta que se acaba. Las
@@ -623,6 +629,14 @@ class Sesion:
         self._ultima_prediccion = None
         self.f3 = False
         self.medidas = Medidas()
+        # Las transiciones del modo local (juego/transition_manager.py): el
+        # glitch al entrar a la partida y el iris / destello al terminar.
+        # Antes en red se pasaba de la carga a la partida de golpe.
+        self.transicion = None      # TransitionManager mientras hay una
+        self._t_transicion = None
+        self._previa = None         # lo último de la espera / carga (para taparlo con el glitch)
+        self._entro = False         # ya empezó a dibujar la partida
+        self._fin_visto = False     # ya vio el resultado (para el iris / destello)
 
     def conectar(self, pantalla=None):
         for i in range(len(self.esquemas)):
@@ -929,22 +943,32 @@ class Sesion:
         conexion = next((c for c in vivas if c.ultimo_estado() is not None), vivas[0])
         secciones = conexion.ultimo_estado()
         if secciones is None or (not self.espejo.listo and self.espejo.error is None):
-            if self.con_sala and all(c.espera is None or not c.espera.get("faltan") for c in vivas):
-                self._dibujar_carga(pantalla)       # (ya están todos: falta la primera)
-                return True
-            # Quien creó la partida ve aquí la IP que tiene que escribir la
-            # otra laptop (antes solo salía en el menú de Jugar en red).
-            if self.dibujar_espera is not None:
-                self.dibujar_espera(pantalla, self, "Esperando jugadores...")
-                if time.time() - getattr(self, "_esc", 0) < 2.5:
-                    self._cartel(pantalla, "Pulsa Esc otra vez para cancelar")
-                return True
-            aviso(pantalla, ["Esperando jugadores...", self._texto_espera()],
-                  extra=getattr(self, "info_espera", ()) or ["Esc para cancelar"])
+            self._dibujar_espera(pantalla, vivas)
+            self._guardar_previa(pantalla)
             return True
         glob = secciones.get("g", {})
+        if not self._entro:
+            # La primera instantánea: como en el modo local, la pantalla de
+            # espera (o de carga) se va con el glitch y entra la partida.
+            # (si la primera llegó antes del primer cuadro de espera, lo que
+            # haya en la pantalla: la carga o el menú que la dibujó)
+            self._entro = True
+            if self._previa is None:
+                self._guardar_previa(pantalla)
+            self._empezar_transicion("glitch")
+        if glob.get("resultado") and not self._fin_visto:
+            # Terminó: el iris (perdieron) o el destello (escaparon) sobre la
+            # partida, y entran los resultados (App.terminar_ronda).
+            self._fin_visto = True
+            self._empezar_transicion("destello" if glob["resultado"] == "victoria" else "iris")
+        saliendo = self.transicion is not None and not self.transicion.is_idle() \
+            and self.transicion._phase == "fade_out"
         self.medidas.cuadro(self.conexiones)
-        self._dibujar(pantalla, conexion, secciones)
+        if saliendo and not glob.get("resultado") and self._previa is not None \
+                and self._previa.get_size() == pantalla.get_size():
+            pantalla.blit(self._previa, (0, 0))      # (todavía la espera, tapándose)
+        else:
+            self._dibujar(pantalla, conexion, secciones)
         if self.f3:
             self._dibujar_f3(pantalla)
         cortadas = [c for c in self.conexiones if c.situacion == "reconectando"]
@@ -952,11 +976,63 @@ class Sesion:
             desde = min(c.reconectando_desde or time.time() for c in cortadas)
             quedan = max(0, int(RECONECTAR_S - (time.time() - desde)))
             self._cartel(pantalla, f"Se cortó la conexión: reconectando... ({quedan} s)  ·  Esc Esc sale")
-        if glob.get("resultado"):
+        if glob.get("resultado") and not saliendo:
             self._resultado(pantalla, glob["resultado"], eventos)
         elif time.time() - getattr(self, "_esc", 0) < 2.5:
             self._cartel(pantalla, "Pulsa Esc otra vez para salir de la partida en red")
+        self._dibujar_transicion(pantalla)
         return not self.motivo
+
+    def _dibujar_espera(self, pantalla, vivas):
+        """Lo que se ve antes de la primera instantánea: la carga (con sala,
+        ya están todos) o la espera de jugadores."""
+        if self.con_sala and all(c.espera is None or not c.espera.get("faltan") for c in vivas):
+            self._dibujar_carga(pantalla)       # (ya están todos: falta la primera)
+            return
+        # Quien creó la partida ve aquí la IP que tiene que escribir la
+        # otra laptop (antes solo salía en el menú de Jugar en red).
+        if self.dibujar_espera is not None:
+            self.dibujar_espera(pantalla, self, "Esperando jugadores...")
+            if time.time() - getattr(self, "_esc", 0) < 2.5:
+                self._cartel(pantalla, "Pulsa Esc otra vez para cancelar")
+            return
+        aviso(pantalla, ["Esperando jugadores...", self._texto_espera()],
+              extra=getattr(self, "info_espera", ()) or ["Esc para cancelar"])
+
+    # -- Transiciones (las del modo local) ---------------------------------------------
+
+    def _guardar_previa(self, pantalla):
+        from juego import efectos
+        if not efectos.ACTIVOS:
+            return
+        if self._previa is None or self._previa.get_size() != pantalla.get_size():
+            self._previa = pygame.Surface(pantalla.get_size())
+        self._previa.blit(pantalla, (0, 0))
+
+    def _empezar_transicion(self, estilo):
+        """Solo con "Efectos visuales: Sí" (sin efectos, como antes: las
+        pruebas de red comparan píxeles con los efectos apagados)."""
+        from juego import efectos
+        from juego.transition_manager import TransitionManager
+        if not efectos.ACTIVOS:
+            return
+        self.transicion = TransitionManager()
+        self.transicion.request(_SinPantalla(), None, estilo=estilo)
+        self._t_transicion = time.perf_counter()
+
+    def _dibujar_transicion(self, pantalla):
+        t = self.transicion
+        if t is None:
+            return
+        ahora = time.perf_counter()
+        dt = 0 if self._t_transicion is None else min(100, (ahora - self._t_transicion) * 1000)
+        self._t_transicion = ahora
+        t.update(_SinPantalla(), dt)
+        if t.is_idle():
+            self.transicion = None
+            self._previa = None
+            return
+        t.draw(pantalla)
 
     def _en_partida(self):
         return (self.espejo is not None and (self.espejo.listo or self.espejo.error is not None)
