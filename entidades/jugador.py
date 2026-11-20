@@ -523,9 +523,21 @@ class Jugador:
         self.personaje.actualizar(teclas, colisiona=colisiona)
         self.linterna.actualizar(self.personaje.direccion)
 
+    @property
+    def color(self):
+        """El color de su rol (data/roles.py): su contorno, su fila del equipo."""
+        return tuple(ROLES_POR_NOMBRE.get(self.rol, {}).get("color", (200, 205, 225)))
+
     def dibujar(self, screen, offset):
         if self.escondido or self.eliminado or self.desconectado:
             return   # metido en el escondite (o eliminado, o se fue de la red): no se ve
+        from juego import efectos
+        # Sombra en el piso y contorno del color de su rol (juego/efectos.py):
+        # con 3-4 en pantalla se sabe quién es quién de un vistazo.
+        efectos.sombra(screen, (self.hitbox.centerx - offset[0], self.hitbox.bottom - offset[1] - 3), 50)
+        if efectos.ACTIVOS:
+            efectos.contorno(screen, self.personaje._frame_actual_surface(),
+                             (self.personaje.x - offset[0], self.personaje.y - offset[1]), self.color)
         self.personaje.dibujar(screen, offset)
         if self.sin_conexion:
             # En red, mientras se espera a que vuelva (ausencias.py).

@@ -23,6 +23,7 @@ directamente: `tecla()` y `activar()` devuelven una acción ("continuar",
 import pygame
 
 from juego import idioma
+from juego import efectos as efectos_visuales
 from juego.audio_manager import audio_manager
 
 
@@ -97,6 +98,7 @@ class MenuPausa:
                     ("Pantalla completa: " + ("Sí" if self.juego.pantalla_completa else "No"),
                      "pantalla_completa"),
                     ("Campo de visión y oscuridad: " + ("Sí" if self.juego.oscuridad else "No"), "oscuridad"),
+                    ("Efectos visuales: " + ("Sí" if efectos_visuales.ACTIVOS else "No"), "visuales"),
                     (idioma.etiqueta(), "idioma"),
                     ("Volver", "volver"),
                 ]
@@ -108,6 +110,7 @@ class MenuPausa:
                 ("Ver hitboxes: " + ("Sí" if self.juego.mostrar_hitboxes else "No"), "hitboxes"),
                 (f"Árbol del alien: < {self._texto_arbol()} >", "arbol"),
                 (f"Grafo: < {self._texto_grafo()} >", "grafo"),
+                ("Efectos visuales: " + ("Sí" if efectos_visuales.ACTIVOS else "No"), "visuales"),
                 (idioma.etiqueta(), "idioma"),
                 ("Volver", "volver"),
             ]
@@ -240,7 +243,7 @@ class MenuPausa:
             self._cambiar_arbol(signo)
         elif accion == "grafo":
             self._cambiar_grafo(signo)
-        elif accion in ("oscuridad", "pantalla_completa", "hitboxes", "idioma"):
+        elif accion in ("oscuridad", "visuales", "pantalla_completa", "hitboxes", "idioma"):
             return self.activar(self.seleccion)
         return None
 
@@ -272,6 +275,10 @@ class MenuPausa:
             audio_manager.apply_sfx_volume(0 if actual >= 100 else _limitar(actual + PASO_VOLUMEN))
         elif accion == "oscuridad":
             self.juego.oscuridad = not self.juego.oscuridad
+        elif accion == "visuales":
+            # Luces, partículas, sombras, menú animado... (juego/efectos.py);
+            # apagados, el juego se ve como antes (para un PC que no da abasto).
+            efectos_visuales.cambiar(not efectos_visuales.ACTIVOS)
         elif accion == "pantalla_completa":
             return "pantalla_completa"
         elif accion == "idioma":

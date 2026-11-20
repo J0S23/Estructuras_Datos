@@ -61,6 +61,7 @@ def precargar(alto_pantalla, roles=None):
     """Carga los cuadros antes de mostrar la pantalla (si no, el primer
     cuadro de la carga se traba cargándolos)."""
     roles = list(roles or ["Tecnomante"])
+    _brillo_lampara()
     for rol in roles:
         _corriendo(("Imagenes", "Personajes", rol), _alto_figura(alto_pantalla, len(roles)))
         _corriendo(("Imagenes", "Personajes", rol), int(_alto_figura(alto_pantalla, len(roles)) * 0.9))
@@ -76,6 +77,54 @@ COLOR_ROL = {"Tecnomante": (150, 120, 255), "Forjador": (255, 170, 50),
              "Biomante": (90, 220, 120), "Resonante": (255, 90, 170)}
 
 
+_brillos = {}
+
+
+def _brillo_lampara():
+    """El cono de luz que cae de cada lámpara de la pared."""
+    img = _brillos.get("lampara")
+    if img is None:
+        w, h = 150, 120
+        img = pygame.Surface((w, h))
+        img.fill((0, 0, 0))
+        for y in range(h):
+            k = (1 - y / h) ** 2
+            medio = int(w * (0.18 + 0.32 * y / h))
+            for x in range(w // 2 - medio, w // 2 + medio):
+                lado = 1 - abs(x - w // 2) / max(1, medio)
+                c = tuple(int(v * 0.28 * k * lado) for v in COLOR_LUZ)
+                img.set_at((x, y), c)
+        _brillos["lampara"] = img
+    return img
+
+
+def _barra(screen, rect, progreso, t_ms):
+    """La barra de carga: vidrio oscuro, relleno de neón en degradado y un
+    brillo que la recorre."""
+    from screens import estilo
+    pygame.draw.rect(screen, (14, 14, 30), rect.inflate(6, 6), border_radius=rect.h)
+    pygame.draw.rect(screen, (24, 26, 48), rect, border_radius=rect.h // 2)
+    lleno = max(0, int(rect.w * min(1.0, progreso)))
+    if lleno > 0:
+        clave = ("barra", rect.size)
+        img = _brillos.get(clave)
+        if img is None:
+            img = pygame.Surface(rect.size, pygame.SRCALPHA)
+            for x in range(rect.w):
+                c = estilo._mezclar(estilo.COLOR_NEON, estilo.COLOR_ROSA, x / max(1, rect.w - 1))
+                pygame.draw.line(img, c, (x, 0), (x, rect.h))
+                pygame.draw.line(img, estilo._mezclar(c, (255, 255, 255), 0.4), (x, 1), (x, max(1, rect.h // 3)))
+            mascara = pygame.Surface(rect.size, pygame.SRCALPHA)
+            pygame.draw.rect(mascara, (255, 255, 255, 255), mascara.get_rect(), border_radius=rect.h // 2)
+            img.blit(mascara, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+            _brillos[clave] = img
+        screen.blit(img, rect.topleft, pygame.Rect(0, 0, lleno, rect.h))
+        # La punta brilla.
+        punta = estilo._brillo_elipse((rect.h * 5, rect.h * 3), (90, 60, 120))
+        screen.blit(punta, punta.get_rect(center=(rect.x + lleno, rect.centery)), special_flags=pygame.BLEND_RGB_ADD)
+    pygame.draw.rect(screen, (90, 100, 150), rect.inflate(6, 6), 1, border_radius=rect.h)
+
+
 def _dibujar_pasillo(screen, piso_y, t_ms):
     ancho, alto = screen.get_size()
     techo = int(piso_y - alto * 0.34)
@@ -89,6 +138,8 @@ def _dibujar_pasillo(screen, piso_y, t_ms):
         pygame.draw.line(screen, COLOR_PARED_LINEA, (x, techo), (x, piso_y), 3)
         luz = pygame.Rect(0, 0, 34, 8)
         luz.center = (x + paso // 2, techo + 26)
+        brillo = _brillo_lampara()
+        screen.blit(brillo, brillo.get_rect(midtop=(luz.centerx, luz.y - 6)), special_flags=pygame.BLEND_RGB_ADD)
         pygame.draw.rect(screen, COLOR_LUZ, luz, border_radius=3)
     pygame.draw.line(screen, COLOR_PARED_LINEA, (0, techo), (ancho, techo), 4)
     # El piso: baldosas que corren hacia la izquierda.
@@ -117,8 +168,9 @@ def _figura(screen, cuadros, centro_x, piso_y, t_ms, fps, color_respaldo, alto):
 def render_carga(screen, t_ms, progreso, consejo="", roles=None, titulo="Cargando la nave"):
     """`t_ms`: cuánto lleva la pantalla; `progreso`: 0 a 1 para la barra;
     `roles`: los personajes que eligieron (en orden de jugador)."""
+    from screens import estilo
     ancho, alto = screen.get_size()
-    screen.fill(COLOR_FONDO)
+    estilo.fondo(screen)
     piso_y = int(alto * 0.62)
     _dibujar_pasillo(screen, piso_y, t_ms)
 
@@ -169,24 +221,24 @@ def render_carga(screen, t_ms, progreso, consejo="", roles=None, titulo="Cargand
         screen.blit(alerta, alerta.get_rect(midbottom=(int(x), piso_y + carril - tam - 10)))
 
     # Título, barra y consejo.
-    f_titulo = fuente_de_tamano(max(22, min(44, ancho // 30)))
+    from screens import estilo
+    tam = max(22, min(44, ancho // 30))
+    rect = estilo.titulo(screen, titulo, (ancho // 2 - fuente_de_tamano(tam).size("...")[0] // 2,
+                                          int(alto * 0.12) + tam // 2), tam, estilo.COLOR_ORO, (255, 170, 60))
     puntos = "." * (1 + int(t_ms / 400) % 3)
-    img = f_titulo.render(f"{titulo}{puntos}", True, COLOR_TITULO)
-    screen.blit(img, (int(ancho / 2 - f_titulo.size(f"{titulo}...")[0] / 2), int(alto * 0.12)))
+    estilo.texto(screen, puntos, fuente_de_tamano(tam), (rect.right + 2, rect.bottom), estilo.COLOR_ORO,
+                 "bottomleft")
 
     barra = pygame.Rect(0, 0, int(ancho * 0.42), 12)
     barra.center = (ancho // 2, int(alto * 0.80))
-    pygame.draw.rect(screen, (34, 36, 58), barra, border_radius=6)
-    lleno = barra.copy()
-    lleno.width = max(0, int(barra.width * min(1.0, progreso)))
-    if lleno.width > 0:
-        pygame.draw.rect(screen, COLOR_BARRA, lleno, border_radius=6)
-    pygame.draw.rect(screen, (70, 76, 110), barra, 2, border_radius=6)
+    _barra(screen, barra, progreso, t_ms)
 
     if consejo:
         f = fuente_de_tamano(max(14, min(24, ancho // 60)))
-        y = barra.bottom + 22
+        f_chica = fuente_de_tamano(max(12, min(17, ancho // 85)))
+        y = barra.bottom + 26
+        estilo.texto(screen, "CONSEJO", f_chica, (ancho // 2, y), estilo.COLOR_NEON, "midtop")
+        y += f_chica.get_linesize() + 4
         for linea in partir_lineas(consejo, f, int(ancho * 0.7)):
-            img = f.render(linea, True, COLOR_TEXTO)
-            screen.blit(img, img.get_rect(midtop=(ancho // 2, y)))
+            estilo.texto(screen, linea, f, (ancho // 2, y), COLOR_TEXTO, "midtop")
             y += f.get_linesize()

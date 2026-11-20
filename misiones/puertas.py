@@ -23,6 +23,7 @@ import pygame
 
 from juego.fuentes import fuente
 from juego import sprites_objetos
+from juego import efectos
 
 
 TIEMPO_ABRIR_S = 1.4          # los dos manteniendo a la vez
@@ -143,10 +144,14 @@ def dibujar(screen, offset, camara, puertas, compuertas, tiempo_ms):
         # lejos de la puerta, y antes solo se veían cuando la puerta entraba
         # en la cámara.
         if rect.inflate(60, 60).colliderect(camara):
-            if puerta["abierta"]:
+            # Se abre deslizándose (juego/efectos.py lleva cuánto va).
+            abierta = efectos.apertura("puerta_doble", rect, puerta["abierta"])
+            if abierta >= 1:
                 pygame.draw.rect(screen, (60, 70, 90), r, 2)
-            else:
+            elif abierta <= 0:
                 _dibujar_reforzada(screen, r, puerta["progreso"])
+            else:
+                _dibujar_abriendose(screen, r, abierta)
         for i, panel in enumerate(puerta["paneles"]):
             if not panel.inflate(60, 60).colliderect(camara) and not (
                     not puerta["abierta"] and camara.clipline(panel.center, rect.center)):
@@ -175,9 +180,17 @@ def dibujar(screen, offset, camara, puertas, compuertas, tiempo_ms):
                 _punteada(screen, p.center, r.center, (255, 214, 64, 90))
     for compuerta in compuertas:
         rect = compuerta["rect"]
-        if not compuerta["cerrada"] or not rect.colliderect(camara):
+        if not rect.colliderect(camara):
             continue
-        _dibujar_reja(screen, rect.move(-offset[0], -offset[1]), tiempo_ms)
+        # Baja desde arriba (y sube) en vez de aparecer: 1 = arriba del todo.
+        arriba = efectos.apertura("compuerta", rect, not compuerta["cerrada"])
+        if arriba >= 1:
+            continue
+        r = rect.move(-offset[0], -offset[1])
+        if arriba <= 0:
+            _dibujar_reja(screen, r, tiempo_ms)
+        else:
+            _dibujar_reja_bajando(screen, r, 1 - arriba, tiempo_ms)
 
 
 def _dibujar_reforzada(screen, r, progreso):
@@ -195,6 +208,49 @@ def _dibujar_reforzada(screen, r, progreso):
         pygame.draw.rect(screen, COLOR_BIEN, barra)
     etiqueta = fuente("small").render("x2", True, (255, 214, 64))
     screen.blit(etiqueta, etiqueta.get_rect(center=r.center))
+
+
+def _dibujar_abriendose(screen, r, abierta):
+    """La puerta para dos a medio abrir: sus dos hojas se meten en las paredes
+    (por el lado largo) y por la rendija se ve la luz de adentro."""
+    hoja = pygame.Surface(r.size, pygame.SRCALPHA)
+    _dibujar_reforzada(hoja, hoja.get_rect(), 0)
+    horizontal = r.width >= r.height
+    largo = r.width if horizontal else r.height
+    mitad = largo // 2
+    queda = int(mitad * (1 - abierta))
+    if horizontal:
+        rendija = pygame.Rect(r.x + queda, r.y, r.width - 2 * queda, r.height)
+    else:
+        rendija = pygame.Rect(r.x, r.y + queda, r.width, r.height - 2 * queda)
+    if rendija.width > 0 and rendija.height > 0:
+        screen.fill((40, 120, 70), rendija, special_flags=pygame.BLEND_RGB_ADD)
+    if queda <= 0:
+        return
+    if horizontal:
+        screen.blit(hoja, (r.x, r.y), pygame.Rect(mitad - queda, 0, queda, r.height))
+        screen.blit(hoja, (r.right - queda, r.y), pygame.Rect(mitad, 0, queda, r.height))
+        pygame.draw.line(screen, COLOR_BIEN, (r.x + queda - 1, r.y), (r.x + queda - 1, r.bottom - 1), 2)
+        pygame.draw.line(screen, COLOR_BIEN, (r.right - queda, r.y), (r.right - queda, r.bottom - 1), 2)
+    else:
+        screen.blit(hoja, (r.x, r.y), pygame.Rect(0, mitad - queda, r.width, queda))
+        screen.blit(hoja, (r.x, r.bottom - queda), pygame.Rect(0, mitad, r.width, queda))
+        pygame.draw.line(screen, COLOR_BIEN, (r.x, r.y + queda - 1), (r.right - 1, r.y + queda - 1), 2)
+        pygame.draw.line(screen, COLOR_BIEN, (r.x, r.bottom - queda), (r.right - 1, r.bottom - queda), 2)
+
+
+def _dibujar_reja_bajando(screen, r, bajado, tiempo_ms):
+    """La compuerta a medio camino: se ve su parte de abajo saliendo del techo,
+    con la barra de metal pesada en el borde."""
+    alto = int(r.height * bajado)
+    if alto <= 0:
+        return
+    reja = pygame.Surface(r.size)
+    _dibujar_reja(reja, reja.get_rect(), tiempo_ms)
+    screen.blit(reja, (r.x, r.y), pygame.Rect(0, r.height - alto, r.width, alto))
+    barra = pygame.Rect(r.x - 2, r.y + alto - 6, r.width + 4, 6)
+    pygame.draw.rect(screen, (70, 72, 86), barra)
+    pygame.draw.rect(screen, (255, 200, 60), barra, 1)
 
 
 def _dibujar_reja(screen, r, tiempo_ms):

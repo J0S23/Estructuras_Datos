@@ -85,7 +85,15 @@ assert g.oscuridad is False
 g._manejar_tecla(pygame.K_RETURN); assert g.oscuridad is True
 # Las vistas de prueba: hitboxes y árbol del alien (ya no hay atajos H/B/N/L).
 acciones = [a for _, a in g.pausa.opciones()]
-assert acciones == ["efectos", "oscuridad", "pantalla_completa", "hitboxes", "arbol", "grafo", "idioma", "volver"]
+assert acciones == ["efectos", "oscuridad", "pantalla_completa", "hitboxes", "arbol", "grafo", "visuales",
+                    "idioma", "volver"]
+# Efectos visuales (juego/efectos.py): se apagan y se prenden.
+from juego import efectos
+antes_efectos = efectos.ACTIVOS
+g.pausa.seleccion = acciones.index("visuales"); g._manejar_tecla(pygame.K_RETURN)
+assert efectos.ACTIVOS is not antes_efectos and "No" in g.pausa.opciones()[g.pausa.seleccion][0]
+g._dibujar()          # (sin efectos se dibuja como antes)
+g._manejar_tecla(pygame.K_RETURN); assert efectos.ACTIVOS is antes_efectos
 g.pausa.seleccion = 3; g._manejar_tecla(pygame.K_RETURN)
 assert g.mostrar_hitboxes is True
 g._manejar_tecla(pygame.K_RETURN); assert g.mostrar_hitboxes is False

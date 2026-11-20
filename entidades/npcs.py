@@ -32,6 +32,7 @@ from juego import idioma
 
 from juego import navegacion
 from juego import cache_dibujo
+from juego import efectos
 from juego.fuentes import fuente_de_tamano
 from Movimiento.Personaje import DireccionSuave, detectar_hojas, cargar_animaciones
 from data.npcs import (ESTILOS, VELOCIDAD_NPC, ESPERA_NPC_MS, RADIO_CHARLA,
@@ -158,9 +159,7 @@ class Apariencia:
         hacia = 1 if "east" in mira else (-1 if "west" in mira else 0)
         de_espaldas = mira.startswith("north")
 
-        sombra = pygame.Rect(0, 0, 30, 9)
-        sombra.center = (x, pies)
-        pygame.draw.ellipse(screen, (12, 12, 20), sombra)
+        efectos.sombra(screen, (x, pies), 40)
         # Piernas y zapatos.
         for lado, desfase in ((-1, paso), (1, -paso)):
             pierna = pygame.Rect(0, 0, 8, 18)
@@ -236,9 +235,7 @@ class Apariencia:
         imagen = frames[cuadro]
         x = int(centro_pies[0] - offset[0])
         pies = int(centro_pies[1] - offset[1] + 6)      # mismo suelo que el muñeco
-        sombra = pygame.Rect(0, 0, 34, 10)
-        sombra.center = (x, pies)
-        pygame.draw.ellipse(screen, (12, 12, 20), sombra)
+        efectos.sombra(screen, (x, pies), 44)
         rect = imagen.get_rect(midbottom=(x, pies + datos["pie"]))
         cache_dibujo.pegar(screen, imagen, rect)      # (solo lo dibujado del cuadro)
         return (x, rect.y + datos["arriba"] - 2)

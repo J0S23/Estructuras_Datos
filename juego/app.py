@@ -101,6 +101,8 @@ from screens.creditos import render_creditos, reiniciar_scroll
 from screens.pausa import render_pausa
 from screens.admin import render_admin
 from screens.logros import render_aviso_logro, render_arbol_logros
+from screens import logros as dibujo_logros
+from juego import efectos, luces
 from screens import celular as dibujo_celular
 
 
@@ -211,6 +213,7 @@ class Game:
         self.clock = pygame.time.Clock()
 
         idioma.cargar_preferencia()          # Guardado/opciones.json (español si no hay)
+        efectos.cargar_preferencia()         # y si los efectos visuales van prendidos
         self.fuentes = construir_fuentes()
         self.font = self.fuentes["subtitle"]
         self.small_font = self.fuentes["small"]
@@ -626,6 +629,10 @@ class Game:
         # ronda le agregó (la puerta de la prisión): si no, quedaba una puerta
         # invisible que no se abría con el código.
         self.mundo.reiniciar_paredes()
+        # Luces del mapa (lámparas, reactor, ventanales: juego/luces.py) y nada
+        # de partículas ni huellas de la ronda anterior (juego/efectos.py).
+        efectos.limpiar()
+        luces.preparar(self.mundo)
         # Dónde va cada cosa del mapa: lo que se puso con el editor de mapa, y
         # lo que no, de data/ (ver objetos_mapa.py).
         self.objetos = objetos_mapa.cargar(nombre_mapa)
@@ -731,6 +738,11 @@ class Game:
             else:
                 self.decir("inicio", forzar=True)
         self._avisar_zonas_inalcanzables()
+        # Los degradados de todas las luces que pueden salir (la compuerta roja,
+        # la caja de fusibles en un apagón...): hechos ahora, en la pantalla de
+        # carga, y no la primera vez que aparecen (un tirón en medio del juego).
+        luces.precalentar(self._extras_dibujo(), getattr(self, "zonas", ()), self.mundo)
+        efectos.precalentar_contornos(self.jugadores)
         _ordenar_memoria()
 
     def _crear_aliens(self):
@@ -1836,6 +1848,20 @@ class Game:
             elif (evento.type == pygame.MOUSEMOTION and self.current_screen == "menu"
                   and self.opciones_menu is not None):
                 self.opciones_menu.mover_mouse(evento.pos)
+            elif evento.type == getattr(pygame, "MOUSEWHEEL", -1):
+                if self._viendo_logros():
+                    dibujo_logros.rueda(evento.y)       # desplaza el árbol de logros
+            elif evento.type == pygame.MOUSEMOTION and self._viendo_logros() and self.pausa is None:
+                # Menú > Logros y "Ver logros" de los resultados: el mouse encima selecciona
+                # (en la pausa lo hace MenuPausa.mover_mouse, abajo).
+                rects = (self.catalogo_rects if self.current_screen == "logros"
+                         else self.resultados_rects_logros)
+                for nodo, rect in rects.items():
+                    if rect.collidepoint(evento.pos):
+                        if self.current_screen == "logros":
+                            self.catalogo_nodo = nodo
+                        else:
+                            self.resultados_nodo = nodo
             elif evento.type == pygame.MOUSEMOTION and self.current_screen == "partida":
                 if self.admin is not None:
                     i = self.admin.opcion_en(evento.pos)
@@ -1849,6 +1875,15 @@ class Game:
                 # JOY* y CONTROLLER* (mandos.py decide cuál cuenta de cada mando).
                 for puesto, accion in self.mandos.evento(evento):
                     self._tecla_mando(puesto, accion)
+
+    def _viendo_logros(self):
+        """¿Está abierto el árbol de logros (pausa, menú o resultados)?"""
+        if self.current_screen == "logros":
+            return self.catalogo_logros is not None and not self.transitions.active
+        if self.current_screen == "resultados":
+            return self.resultados_vista == "logros"
+        return (self.current_screen == "partida" and self.pausa is not None
+                and self.pausa.vista == "logros")
 
     def _tecla_mando(self, puesto, accion):
         """Un botón del mando: en partida y en la selección de rol es la tecla

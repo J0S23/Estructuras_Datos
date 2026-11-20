@@ -16,6 +16,13 @@ De arriba hacia abajo:
   menú". La lógica de la pantalla está en App._tecla_resultados.
 
 Se usa igual en el modo local y en red (cliente_servidor/espejo.py).
+
+Con los efectos prendidos (juego/efectos.py) la pantalla se arma de a poco
+(`_desde`, ms desde que apareció): el titular entra (con un glitch si
+perdieron), las cifras y los puntos cuentan hacia arriba, las tarjetas entran
+una tras otra, la línea de la misión avanza paso a paso, la barra de NEXUS se
+llena y, si hay sitio en la tripulación, las insignias de los logros de la
+partida aparecen una por una. Si escaparon, caen papelitos de colores.
 """
 
 import math
@@ -26,6 +33,7 @@ from juego.fuentes import fuente_de_tamano
 from juego.idioma import tr
 from juego.mandos import botones_conectados
 from juego.ui_components import Button
+from juego import efectos
 
 COLOR_FONDO = (18, 19, 36)
 COLOR_PANEL = (28, 30, 54)
@@ -90,6 +98,75 @@ def _motivo(mision):
     return MOTIVOS["escaparon"] if mision.resultado == "victoria" else ""
 
 
+# -- Animación de entrada -------------------------------------------------------------
+
+_entrada = {"clave": None, "t0": 0}
+
+
+def _desde(clave):
+    """ms desde que apareció esta pantalla de resultados (muy grande sin efectos)."""
+    if not efectos.ACTIVOS:
+        return 10 ** 9
+    ahora = pygame.time.get_ticks()
+    if _entrada["clave"] != clave:
+        _entrada["clave"], _entrada["t0"] = clave, ahora
+    return ahora - _entrada["t0"]
+
+
+def _suave(t, inicio, duracion):
+    """0 antes de `inicio`, 1 después de inicio + duracion, frenando al final."""
+    if t <= inicio:
+        return 0.0
+    x = min(1.0, (t - inicio) / max(1, duracion))
+    return 1 - (1 - x) ** 3
+
+
+def _contando(valor, k):
+    """El texto de una cifra mientras cuenta: "160" -> "96", "3/3" -> "2/3"."""
+    if k >= 1:
+        return valor
+    if "/" in valor:
+        a, b = valor.split("/", 1)
+        if a.isdigit():
+            return f"{int(round(int(a) * k))}/{b}"
+        return valor
+    return str(int(round(int(valor) * k))) if valor.isdigit() else valor
+
+
+COLORES_PAPELITOS = ((255, 214, 64), (96, 210, 120), (90, 200, 255), (233, 120, 200), (255, 140, 70),
+                     (190, 150, 255))
+
+
+def _papelitos(screen, t):
+    """Papelitos que salen disparados desde abajo y caen (escaparon). Sin
+    estado: la posición de cada uno sale de su semilla y del tiempo."""
+    if t > 7000:
+        return
+    ancho, alto = screen.get_size()
+    import random
+    azar = random.Random(42)
+    s = t / 1000
+    for i in range(140):
+        lado = -1 if i % 2 else 1
+        x0 = ancho * (0.5 + lado * azar.uniform(0.3, 0.5))
+        vx = -lado * azar.uniform(80, 420)
+        vy = -azar.uniform(500, 950)
+        retraso = azar.uniform(0, 0.5)
+        color = azar.choice(COLORES_PAPELITOS)
+        giro = azar.uniform(4, 11)
+        tam = azar.randint(5, 9)
+        u = s - retraso
+        if u <= 0:
+            continue
+        # Sube con roce y cae despacito, meciéndose.
+        x = x0 + vx * (1 - math.exp(-u * 1.6)) / 1.6 + math.sin(u * 2.5 + i) * 14
+        y = alto + 10 + vy * (1 - math.exp(-u * 1.8)) / 1.8 + 90 * u * u * 0.5
+        if y > alto + 20 or x < -20 or x > ancho + 20:
+            continue
+        ancho_p = max(1, int(abs(math.cos(u * giro + i)) * tam))
+        pygame.draw.rect(screen, color, (int(x), int(y), ancho_p, max(2, tam // 2)))
+
+
 def _tiempo(ms):
     s = int((ms or 0) // 1000)
     return f"{s // 60}:{s % 60:02d}"
@@ -123,7 +200,7 @@ def _texto(screen, texto, f, x, y, ancho, color):
     return img.get_height()
 
 
-def _fondo(screen, color_titular):
+def _fondo(screen, color_titular, t=0):
     ancho, alto = screen.get_size()
     screen.fill(COLOR_FONDO)
     # Un degradado del color del final (verde o rojo) que baja desde arriba.
@@ -133,14 +210,24 @@ def _fondo(screen, color_titular):
         a = int(46 * (1 - fila / alto_brillo) ** 2)
         pygame.draw.rect(brillo, (*color_titular, a), (0, fila, ancho, 2))
     screen.blit(brillo, (0, 0))
-    # Unas estrellas quietas (siempre las mismas).
+    # Unas estrellas (siempre las mismas; con efectos, pasan lento y titilan).
+    mover = efectos.ACTIVOS
     for i in range(70):
         x = (i * 7919) % ancho
         y = (i * 104729) % alto
-        pygame.draw.circle(screen, (44, 48, 80), (x, y), 1)
+        color = (44, 48, 80)
+        if mover:
+            x = (x - int(t * (0.004 + (i % 3) * 0.004))) % ancho
+            k = 0.5 + 0.5 * math.sin(t / 700 + i)
+            color = (int(44 + 50 * k), int(48 + 50 * k), int(80 + 60 * k))
+        pygame.draw.circle(screen, color, (x, y), 1)
 
 
-def _cifra(screen, rect, valor, etiqueta, color, f_valor, f_etiqueta):
+def _cifra(screen, rect, valor, etiqueta, color, f_valor, f_etiqueta, aparece=1.0, cuenta=1.0):
+    if aparece <= 0:
+        return
+    rect = rect.move(0, int((1 - aparece) * 24))
+    valor = _contando(valor, cuenta)
     pygame.draw.rect(screen, COLOR_PANEL, rect, border_radius=12)
     pygame.draw.rect(screen, COLOR_PANEL_BORDE, rect, 2, border_radius=12)
     pygame.draw.rect(screen, color, (rect.x + 10, rect.y, rect.width - 20, 4), border_radius=2)
@@ -172,7 +259,7 @@ def _estrella(screen, centro, radio, color):
     pygame.draw.polygon(screen, color, puntos)
 
 
-def _tarjeta_jugador(screen, rect, numero, jugador, fuentes, mejor):
+def _tarjeta_jugador(screen, rect, numero, jugador, fuentes, mejor, cuenta=1.0):
     from data.roles import ROLES_POR_NOMBRE
     from screens.seleccion import _retrato
     f_nombre, f, f_chica, f_puntos = fuentes
@@ -199,7 +286,7 @@ def _tarjeta_jugador(screen, rect, numero, jugador, fuentes, mejor):
         screen.blit(imagen, imagen.get_rect(center=(x + columna // 2, rect.centery)))
     x += columna + 14
     # Los puntos a la derecha.
-    puntos = f_puntos.render(str(jugador.puntos), True, COLOR_TITULO)
+    puntos = f_puntos.render(str(int(round(jugador.puntos * cuenta))), True, COLOR_TITULO)
     etiqueta = f_chica.render("puntos", True, COLOR_TENUE)
     derecha = rect.right - 16
     screen.blit(puntos, puntos.get_rect(topright=(derecha, rect.y + 10)))
@@ -230,17 +317,29 @@ def _tarjeta_jugador(screen, rect, numero, jugador, fuentes, mejor):
         y += _texto(screen, texto, f, x, y, ancho_texto, c) + 2
 
 
-def _pasos(screen, rect, alcanzado, resultado, f_chica, radio=11):
+def _pasos(screen, rect, alcanzado, resultado, f_chica, radio=11, avance=None):
     """Los pasos de la misión unidos por una línea: hechos en verde, donde
-    se quedaron en amarillo (rojo si perdieron ahí), lo que faltó apagado."""
+    se quedaron en amarillo (rojo si perdieron ahí), lo que faltó apagado.
+    `avance` (de 0 a `alcanzado`, animación): hasta dónde llegó la línea verde."""
     n = len(PASOS)
     margen = rect.width / (n * 2)
     y = rect.y + radio + 3
     xs = [int(rect.x + margen + i * (rect.width - 2 * margen) / (n - 1)) for i in range(n)]
+    if avance is None:
+        avance = alcanzado
     for i in range(n - 1):
-        c = COLOR_BIEN if i < alcanzado else COLOR_APAGADO
-        pygame.draw.line(screen, c, (xs[i], y), (xs[i + 1], y), 4)
+        pygame.draw.line(screen, COLOR_APAGADO, (xs[i], y), (xs[i + 1], y), 4)
+        if i < alcanzado and avance > i:
+            fin = xs[i] + (xs[i + 1] - xs[i]) * min(1.0, avance - i)
+            pygame.draw.line(screen, COLOR_BIEN, (xs[i], y), (int(fin), y), 4)
     for i, (_, nombre) in enumerate(PASOS):
+        if avance < i:
+            # Todavía no llegó la línea: apagado (el que se alcanzó, sin color).
+            pygame.draw.circle(screen, COLOR_PANEL, (xs[i], y), radio)
+            pygame.draw.circle(screen, COLOR_APAGADO, (xs[i], y), radio, 3)
+            _centrado(screen, nombre, f_chica, xs[i], y + radio + 5,
+                      int((rect.width - 2 * margen) / (n - 1)) - 4, COLOR_APAGADO)
+            continue
         if i < alcanzado:
             c, lleno = COLOR_BIEN, True
         elif i == alcanzado:
@@ -316,12 +415,24 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
         titular, color = "¡ESCAPARON DE LA NAVE!", COLOR_BIEN
     else:
         titular, color = "NO LOGRARON ESCAPAR", COLOR_MAL
-    _fondo(screen, color)
+    t = _desde((id(mision), id(logros), len(jugadores)))
+    _fondo(screen, color, t)
 
     # -- Titular -------------------------------------------------------------------
     y = int(18 * e)
     img = f_titular.render(titular, True, color)
-    screen.blit(img, img.get_rect(midtop=(ancho // 2, y)))
+    entra = _suave(t, 0, 550)
+    destino = img.get_rect(midtop=(ancho // 2, y - int((1 - entra) * 30)))
+    if entra < 1:
+        img.set_alpha(int(255 * entra))
+    if not victoria and mision is not None and mision.activa and 150 < t < 1300 and (t // 70) % 3 != 0:
+        # Glitch: copias corridas en rojo y celeste, de a ratos.
+        corrido = int(6 * (1 - (t - 150) / 1150))
+        for dx, c in ((-corrido, (255, 40, 60)), (corrido, (60, 220, 255))):
+            fantasma = f_titular.render(titular, True, c)
+            fantasma.set_alpha(110)
+            screen.blit(fantasma, destino.move(dx, 0))
+    screen.blit(img, destino)
     y += img.get_height() + int(6 * e)
     motivo = _motivo(mision)
     if motivo:
@@ -362,8 +473,10 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
         sep = int(14 * e)
         ancho_cifra = min(int(210 * e), (ancho - 2 * margen - sep * (len(cifras) - 1)) // len(cifras))
         x = ancho // 2 - (ancho_cifra * len(cifras) + sep * (len(cifras) - 1)) // 2
-        for valor, etiqueta, c in cifras:
-            _cifra(screen, pygame.Rect(x, y, ancho_cifra, alto_cifra), valor, etiqueta, c, f_cifra, f_chica)
+        for k, (valor, etiqueta, c) in enumerate(cifras):
+            inicio = 300 + 110 * k
+            _cifra(screen, pygame.Rect(x, y, ancho_cifra, alto_cifra), valor, etiqueta, c, f_cifra, f_chica,
+                   aparece=_suave(t, inicio, 380), cuenta=_suave(t, inicio + 100, 1100))
             x += ancho_cifra + sep
         y += alto_cifra + int(16 * e)
 
@@ -385,8 +498,20 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
     fuentes = (fuente_de_tamano(px(19)), f, f_chica, fuente_de_tamano(px(26)))
     for i, jugador in enumerate(jugadores):
         rect = pygame.Rect(caja.x + 10, y_c + i * (alto_tarjeta + sep), caja.width - 20, alto_tarjeta)
-        _tarjeta_jugador(screen, rect, i + 1, jugador, fuentes,
-                         mejor=unico and mejores > 0 and jugador.puntos == mejores)
+        entra = _suave(t, 700 + 160 * i, 450)
+        if entra <= 0:
+            continue
+        recorte = screen.get_clip()
+        screen.set_clip(caja.inflate(-4, -4).clip(recorte))
+        _tarjeta_jugador(screen, rect.move(-int((1 - entra) * (rect.width * 0.6)), 0), i + 1, jugador, fuentes,
+                         mejor=unico and mejores > 0 and jugador.puntos == mejores,
+                         cuenta=_suave(t, 800 + 160 * i, 1000))
+        screen.set_clip(recorte)
+    # Si sobra sitio debajo: las insignias de los logros de esta partida.
+    debajo = y_c + n * (alto_tarjeta + sep) + int(6 * e)
+    if logros is not None and caja.bottom - 12 - debajo >= int(70 * e):
+        _insignias_logros(screen, pygame.Rect(caja.x + 14, debajo, caja.width - 28, caja.bottom - 12 - debajo),
+                          logros.arbol, f_chica, e, t)
 
     # -- La misión y NEXUS (derecha) -----------------------------------------------------
     x_der = x_izq + ancho_izq + margen
@@ -404,8 +529,10 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
                        + (f.get_height() + 3) * len(lineas_cf) + 8)
         caja = pygame.Rect(x_der, y, ancho_der, alto_mision)
         y_c = _panel(screen, caja, "La misión", f_seccion)
+        alcanzado = _paso_alcanzado(mision)
         y_c = _pasos(screen, pygame.Rect(caja.x + 10, y_c, caja.width - 20, 40),
-                     _paso_alcanzado(mision), mision.resultado, f_chica, radio)
+                     alcanzado, mision.resultado, f_chica, radio,
+                     avance=alcanzado * _suave(t, 900, 300 + 320 * max(1, alcanzado)))
         if lineas_cf:
             img = f_chica.render("El Cambiaformas", True, COLOR_TITULO)
             screen.blit(img, (texto_x, y_c + 2))
@@ -419,6 +546,8 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
         y_c = _panel(screen, caja, "Su uso de NEXUS", f_seccion)
         r = nexus.resumen()
         verde, rojo = nexus.barras()
+        llena = _suave(t, 1300, 900)
+        verde, rojo = verde * llena, rojo * llena
         # La confianza al final: verde (en ustedes) contra rojo (en los aliens).
         barra = pygame.Rect(texto_x, y_c + 2, texto_ancho, int(14 * e))
         pygame.draw.rect(screen, (40, 42, 70), barra, border_radius=7)
@@ -502,4 +631,43 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
     pista = fuente_de_tamano(px(14)).render(
         f"Flechas + Enter  ·  Mando: cruceta y {botones_conectados('interactuar')}", True, COLOR_TENUE)
     screen.blit(pista, pista.get_rect(midtop=(ancho // 2, y_botones + alto_boton + 10)))
+    if victoria and efectos.ACTIVOS:
+        _papelitos(screen, t)
     return rects
+
+
+def _insignias_logros(screen, caja, arbol, f_chica, e, t):
+    """Las insignias de los logros conseguidos en la partida, apareciendo una
+    por una (las mismas del árbol de logros, screens/logros.py)."""
+    from screens.logros import insignia
+    obtenidos = [n for n in arbol.preorden() if n.obtenido]
+    titulo = f_chica.render(f"Logros de la partida  {len(obtenidos)}", True, COLOR_TITULO)
+    screen.blit(titulo, (caja.x, caja.y))
+    if not obtenidos:
+        screen.blit(f_chica.render("Ninguno esta vez.", True, COLOR_TENUE), (caja.x, caja.y + titulo.get_height() + 6))
+        return
+    d = max(24, int(38 * e))
+    paso = d + int(8 * e)
+    y0 = caja.y + titulo.get_height() + int(8 * e)
+    por_fila = max(1, caja.width // paso)
+    filas = max(1, (caja.bottom - y0) // paso)
+    caben = por_fila * filas
+    mostrar = obtenidos if len(obtenidos) <= caben else obtenidos[:caben - 1]
+    for i, nodo in enumerate(mostrar):
+        aparece = _suave(t, 1600 + 90 * i, 260)
+        if aparece <= 0:
+            break
+        # Crece un poco de más y vuelve (un "pop").
+        escala = aparece * (1 + 0.25 * math.sin(math.pi * aparece))
+        lado = max(4, int(d * escala))
+        img = insignia(d, nodo.rama, "obtenido")
+        if lado != d:
+            img = pygame.transform.smoothscale(img, (lado, lado))
+        cx = caja.x + (i % por_fila) * paso + d // 2
+        cy = y0 + (i // por_fila) * paso + d // 2
+        screen.blit(img, img.get_rect(center=(cx, cy)))
+    if len(mostrar) < len(obtenidos) and _suave(t, 1600 + 90 * len(mostrar), 260) > 0:
+        mas = f_chica.render(f"+{len(obtenidos) - len(mostrar)}", True, COLOR_TENUE)
+        i = len(mostrar)
+        screen.blit(mas, mas.get_rect(center=(caja.x + (i % por_fila) * paso + d // 2,
+                                              y0 + (i // por_fila) * paso + d // 2)))

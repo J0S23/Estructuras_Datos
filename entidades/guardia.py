@@ -29,6 +29,7 @@ from entidades.alien import Alien, _distancia, sprites_de, SPRITES_ALIEN, _RAIZ_
 from Estructuras.arbol_comportamiento import ArbolComportamiento
 from data.comportamiento_guardia import ARBOL_GUARDIA
 from juego.fuentes import fuente_de_tamano
+from juego import efectos
 
 ALCANCE_BRAZOS = 112           # a esta distancia (centro a centro) atrapa
 DISTANCIA_ESPERA = 120         # se para a esto del que le trae la fruta (se la dan a ≤ 170)
@@ -277,16 +278,12 @@ class Guardia(Alien):
             # encima (notas, fruta, "ñam") se pone sobre lo que se ve de él.
             pos = self._posicion_sprite(cuadro, datos, offset)
             rect = datos["contenido"].move(pos.topleft)
-            sombra = pygame.Rect(0, 0, int(rect.width * 0.8), 24)
-            sombra.center = (rect.centerx, self.hitbox.bottom - offset[1] + 2)
-            pygame.draw.ellipse(screen, (10, 11, 16), sombra)
+            efectos.sombra(screen, (rect.centerx, self.hitbox.bottom - offset[1] + 2), rect.width * 0.95, 140)
             screen.blit(cuadro, pos)
         else:
             imagen = self._imagen()
             rect = self._caja_figura(offset)
-            sombra = pygame.Rect(0, 0, int(rect.width * 0.8), 28)
-            sombra.center = (rect.centerx, self.hitbox.bottom - offset[1] + 2)
-            pygame.draw.ellipse(screen, (10, 11, 16), sombra)
+            efectos.sombra(screen, (rect.centerx, self.hitbox.bottom - offset[1] + 2), rect.width * 0.95, 140)
             screen.blit(imagen, rect)
         estado = self._estado_figura()
         if estado == "escucha":

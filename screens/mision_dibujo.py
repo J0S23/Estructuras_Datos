@@ -11,7 +11,7 @@ import os
 import pygame
 
 from juego.fuentes import fuente, fuente_de_tamano
-from juego import sprites_objetos, decoracion, cache_dibujo
+from juego import sprites_objetos, decoracion, cache_dibujo, efectos, luces
 from screens.flechas import flecha_alrededor, cerca_del_borde, dibujar_camino
 
 
@@ -83,6 +83,13 @@ def dibujar_flecha_objetivo(screen, vista, camara, dueño, mision, dificultad, r
                      None if camara.collidepoint(x, y) else texto, tiempo_ms)
 
 
+def _dibujar_puerta_codigo(screen, r, color):
+    pygame.draw.rect(screen, (60, 62, 78), r)
+    for i in range(r.top + 6, r.bottom, 14):
+        pygame.draw.line(screen, color, (r.left, i), (r.right, i), 4)
+    pygame.draw.rect(screen, color, r, 3)
+
+
 def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
     if mision is None or not mision.activa:
         return
@@ -90,14 +97,25 @@ def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
 
     varias = len(getattr(mision, "puertas", ())) > 1
     for puerta in getattr(mision, "puertas", ()):
-        if puerta["abierta"] or not puerta["rect"].colliderect(camara):
+        if not puerta["rect"].colliderect(camara):
+            continue
+        # Al abrirse se desliza dentro de la pared (juego/efectos.py lleva cuánto va).
+        abierta = efectos.apertura("puerta_codigo", puerta["rect"], puerta["abierta"])
+        if abierta >= 1:
             continue
         r = _en_pantalla(puerta["rect"], offset)
         color = puerta["color"] if varias else COLOR_PUERTA
-        pygame.draw.rect(screen, (60, 62, 78), r)
-        for i in range(r.top + 6, r.bottom, 14):
-            pygame.draw.line(screen, color, (r.left, i), (r.right, i), 4)
-        pygame.draw.rect(screen, color, r, 3)
+        if abierta > 0:
+            hoja = pygame.Surface(r.size)
+            _dibujar_puerta_codigo(hoja, hoja.get_rect(), color)
+            if r.width >= r.height:
+                queda = int(r.width * (1 - abierta))
+                screen.blit(hoja, (r.x, r.y), pygame.Rect(r.width - queda, 0, queda, r.height))
+            else:
+                queda = int(r.height * (1 - abierta))
+                screen.blit(hoja, (r.x, r.y), pygame.Rect(0, r.height - queda, r.width, queda))
+            continue
+        _dibujar_puerta_codigo(screen, r, color)
         # La luz del teclado, del color de la puerta (el de las tachuelas de sus notas).
         luz = puerta["color"]
         pygame.draw.circle(screen, luz if brillo > 0.8 else tuple(c // 2 for c in luz),
@@ -240,6 +258,10 @@ def _dibujar_consola(screen, offset, consola, mision, brillo):
         # con una palomita verde encima).
         pos = sprites_objetos.caja_dibujo("consola", consola["base"], img).move(-offset[0], -offset[1])
         screen.blit(img, pos)
+        if not lista and not getattr(getattr(mision, "juego", None), "sin_luz", False):
+            # Sus pantallas titilan (juego/luces.py).
+            luces.pantalla(screen, img, pos.topleft, pygame.time.get_ticks(),
+                           consola["base"].x // 7 + consola["base"].y // 11)
         if lista:
             c = (pos.centerx, pos.y - 12)
             pygame.draw.circle(screen, (20, 40, 28), c, 11)
