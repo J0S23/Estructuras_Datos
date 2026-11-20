@@ -1052,6 +1052,8 @@ class Game:
         """Un alien llegó a revisar un escondite: arranca el minijuego."""
         if jugador is None:
             return
+        if (jugador.panel or {}).get("tipo") == "celular":
+            jugador.cerrar_panel()      # ¡a calmar el pulso, no a mirar NEXUS!
         jugador.minijuego = MinijuegoLatidos(jugador.pulso, alien, escondite)
         self.decir("escondite_revisado", jugador.rol)
         jugador.avisar(f"¡El {alien.nombre} revisa tu escondite!", (236, 70, 60))
@@ -1623,7 +1625,7 @@ class Game:
         for jugador in self.jugadores:
             # Escondido manda sobre todo lo demás: la tecla de interactuar es
             # la del minijuego si un alien lo está revisando, y si no, la de
-            # salir. Mientras está metido no abre habilidades ni zonas.
+            # salir. Mientras está metido no abre habilidades ni zonas (el celular sí).
             # Encerrado en una celda: no puede hacer nada hasta que lo saquen.
             if jugador.preso is not None or jugador.eliminado:
                 if any(jugador.es_tecla(key, a) for a in jugador.teclas):
@@ -1648,7 +1650,14 @@ class Game:
                     return
                 continue
 
-            if jugador.escondido:
+            # En el casillero también se puede sacar el celular (Diego), mientras
+            # ningún alien lo esté revisando: con el celular abierto, sus teclas
+            # funcionan como afuera (más abajo); al cerrarlo, la tecla de
+            # interactuar vuelve a ser la de salir.
+            celular_escondido = (jugador.escondido and jugador.minijuego is None
+                                 and ((jugador.panel or {}).get("tipo") == "celular"
+                                      or (jugador.panel is None and jugador.es_tecla(key, "celular"))))
+            if jugador.escondido and not celular_escondido:
                 if jugador.es_tecla(key, "interactuar"):
                     if jugador.minijuego is not None:
                         acierto = jugador.minijuego.presionar(jugador)
