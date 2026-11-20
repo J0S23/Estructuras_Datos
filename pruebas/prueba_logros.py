@@ -222,6 +222,16 @@ for _ in range(80):
     if g.transitions.is_idle(): break
     g.transitions.update(g, 33)
 g.current_screen = "resultados"
+# Primero va la escena del final sola (screens/final.py): la primera tecla la
+# salta y quedan los resultados (con la escena de fondo).
+from screens import resultados as pantalla_resultados
+from juego import efectos
+g._dibujar()
+if efectos.ACTIVOS:
+    assert pantalla_resultados.en_intro()
+    cap("logros_d_escena_final.png")
+    g._manejar_tecla(pygame.K_RETURN)
+    assert not pantalla_resultados.en_intro() and g.resultados_vista == "resumen"
 cap("logros_d_resultados.png")
 print(f"escapar: 'Libertad', 'Todos a bordo' y 'Nadie me vio' -> {L.arbol.obtenidos()}/{L.arbol.total()}")
 

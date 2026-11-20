@@ -64,6 +64,7 @@ COLOR_LINEA_MUERTA = (56, 58, 76)
 
 COLOR_SELECCION = (255, 214, 64)
 COLOR_SELECCION_FONDO = (52, 57, 92)
+COLOR_DETALLE = (150, 210, 235)       # "en una terminal: ..." (lo que hace en el juego)
 
 MARGEN = 18
 
@@ -251,33 +252,38 @@ def _dibujar_panel_habilidades(screen, vista, jugador):
 
     caja = pygame.Rect(0, 0, ancho, min(alto_total, alto_max))
     caja.center = vista.center
+    from data.roles import ROLES_POR_NOMBRE
+    from screens import vidrio
+    color_rol = ROLES_POR_NOMBRE.get(jugador.rol, {}).get("color", COLOR_BORDE)
 
-    fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
-    fondo.fill(COLOR_FONDO)
-    screen.blit(fondo, caja.topleft)
-    pygame.draw.rect(screen, COLOR_BORDE, caja, 3)
+    # Vidrio con el borde del color del rol y un resplandor suave arriba.
+    vidrio.caja(screen, caja, color_rol, 238, 14)
+    vidrio.brillo(screen, (caja.centerx, caja.y), caja.width * 0.45, tuple(int(c * 0.12) for c in color_rol))
 
     clip_previo = screen.get_clip()
     screen.set_clip(caja)
 
+    # -- Encabezado: "ÁRBOL DE HABILIDADES" y los puntos; debajo el rol y el nivel.
     y = caja.y + MARGEN
-    titulo = f"Árbol de habilidades · {jugador.rol}"
-    screen.blit(f.render(titulo, True, COLOR_TITULO), (caja.x + MARGEN, y))
-    puntos = f.render(f"{_puntos(jugador)} pts del equipo" if getattr(jugador, "equipo", None)
-                      else f"{_puntos(jugador)} pts", True, COLOR_TITULO)
-    screen.blit(puntos, (caja.right - puntos.get_width() - MARGEN, y))
+    f_chica = fuente_de_tamano(max(10, f.get_height() - 4))
+    rotulo = f_chica.render(tr("Árbol de habilidades").upper(), True, COLOR_TENUE)
+    screen.blit(rotulo, (caja.x + MARGEN, y + (f.get_height() - rotulo.get_height()) // 2))
+    texto_puntos = (f"{_puntos(jugador)} pts del equipo" if getattr(jugador, "equipo", None)
+                    else f"{_puntos(jugador)} pts")
+    _pastilla(screen, f, texto_puntos, COLOR_TITULO, (caja.right - MARGEN, y), "topright")
     y += paso + 4
 
+    screen.blit(f.render(jugador.rol or "", True, color_rol), (caja.x + MARGEN, y))
     if arbol.vacio:
+        y += paso
         for linea in ["Este rol todavía no tiene árbol de habilidades definido."]:
             screen.blit(f.render(linea, True, COLOR_TENUE), (caja.x + MARGEN, y))
             y += paso
         _pie(screen, caja, f, jugador, "cerrar")
         screen.set_clip(clip_previo)
         return
-
-    screen.blit(f.render(f"Nivel {len(arbol.desbloqueadas())} de {arbol.altura()}",
-                        True, COLOR_TENUE), (caja.x + MARGEN, y))
+    nivel = f.render(tr("Nivel {} de {}").format(len(arbol.desbloqueadas()), arbol.altura()), True, COLOR_TENUE)
+    screen.blit(nivel, (caja.right - MARGEN - nivel.get_width(), y))
     y += paso
 
     # -- El árbol ---------------------------------------------------------------
@@ -298,36 +304,66 @@ def _dibujar_panel_habilidades(screen, vista, jugador):
             cy = tope + profundidad * paso_y + 10
             centros[id(nodo)] = (int(cx), int(cy))
 
+    def color_de(nodo):
+        if nodo.desbloqueada:
+            return COLOR_DESBLOQUEADA, COLOR_DESBLOQUEADA
+        if nodo.descartada:
+            return COLOR_DESCARTADA, (132, 134, 150)
+        if nodo.clave in claves_opciones:
+            return COLOR_DISPONIBLE, COLOR_DISPONIBLE
+        return (60, 64, 92), (130, 136, 168)
+
+    # Las conexiones como pistas de circuito: baja del padre, va de lado y
+    # baja al hijo. Encendidas hasta lo desbloqueado, doradas hacia lo que se
+    # puede escoger, apagadas hacia lo que se cerró.
+    medio_lado = lado // 2 + 4
     for nodo, _ in arbol.por_niveles():
         for hijo in nodo.hijos:
-            pygame.draw.line(screen,
-                             COLOR_LINEA_MUERTA if hijo.descartada else COLOR_LINEA,
-                             centros[id(nodo)], centros[id(hijo)], 2)
+            (x0, y0), (x1, y1) = centros[id(nodo)], centros[id(hijo)]
+            y0 += medio_lado
+            y1 -= medio_lado
+            ym = (y0 + y1) // 2
+            if hijo.desbloqueada:
+                color = COLOR_DESBLOQUEADA
+            elif hijo.descartada:
+                color = COLOR_LINEA_MUERTA
+            elif hijo.clave in claves_opciones:
+                color = COLOR_DISPONIBLE
+            else:
+                color = COLOR_LINEA
+            puntos = [(x0, y0), (x0, ym), (x1, ym), (x1, y1)]
+            if hijo.desbloqueada or hijo.clave in claves_opciones:
+                pygame.draw.lines(screen, tuple(c // 3 for c in color), False, puntos, 6)
+            pygame.draw.lines(screen, color, False, puntos, 2)
+            pygame.draw.circle(screen, color, (x0, ym), 4)
+            pygame.draw.circle(screen, color, (x1, y1), 3)
 
     for nodo, _ in arbol.por_niveles():
         cx, cy = centros[id(nodo)]
-        if nodo.desbloqueada:
-            borde, color_texto = COLOR_DESBLOQUEADA, COLOR_DESBLOQUEADA
-        elif nodo.descartada:
-            borde, color_texto = COLOR_DESCARTADA, (132, 134, 150)
-        elif nodo.clave in claves_opciones:
-            borde, color_texto = COLOR_DISPONIBLE, COLOR_DISPONIBLE
-        else:
-            borde, color_texto = (60, 64, 92), (130, 136, 168)
-
-        icono = icono_habilidad(jugador.rol, nodo.clave, lado)
-        marco = pygame.Rect(0, 0, lado + 8, lado + 8)
+        borde, color_texto = color_de(nodo)
+        marco = pygame.Rect(0, 0, lado + 10, lado + 10)
         marco.center = (cx, cy)
-
+        if nodo.desbloqueada or nodo.clave in claves_opciones:
+            vidrio.brillo(screen, marco.center, lado * 0.95, tuple(int(c * 0.3) for c in borde))
+        pygame.draw.rect(screen, (14, 14, 28), marco, border_radius=10)
+        icono = icono_habilidad(jugador.rol, nodo.clave, lado)
         if icono is not None:
-            screen.blit(_apagar(icono) if nodo.descartada else icono,
+            apagado = nodo.descartada or not (nodo.desbloqueada or nodo.clave in claves_opciones)
+            screen.blit(_apagar(icono, 120 if not nodo.descartada else 90) if apagado else icono,
                         icono.get_rect(center=marco.center))
         else:
-            pygame.draw.rect(screen, borde, marco, border_radius=6)
-            inicial = f.render(nodo.nombre[:1], True, (18, 19, 32))
+            inicial = f.render(nodo.nombre[:1], True, borde)
             screen.blit(inicial, inicial.get_rect(center=marco.center))
-        pygame.draw.rect(screen, borde, marco, 2, border_radius=6)
-
+        pygame.draw.rect(screen, borde, marco, 2, border_radius=10)
+        if nodo.desbloqueada:
+            # Una palomita verde en la esquina.
+            r = max(6, lado // 6)
+            esquina = (marco.right - 2, marco.y + 2)
+            pygame.draw.circle(screen, (16, 40, 24), esquina, r + 2)
+            pygame.draw.circle(screen, COLOR_DESBLOQUEADA, esquina, r)
+            pygame.draw.lines(screen, (16, 40, 24), False, [(esquina[0] - r * 0.5, esquina[1]),
+                                                            (esquina[0] - r * 0.1, esquina[1] + r * 0.45),
+                                                            (esquina[0] + r * 0.55, esquina[1] - r * 0.4)], 2)
         etiqueta = f.render(nodo.nombre, True, color_texto)
         screen.blit(etiqueta, etiqueta.get_rect(midtop=(cx, marco.bottom + 2)))
 
@@ -340,11 +376,17 @@ def _dibujar_panel_habilidades(screen, vista, jugador):
         y += paso
         if arbol.actual is not None and arbol.actual.detalle_puntos:
             for linea in _partir(arbol.actual.detalle_puntos, f, ancho_texto):
-                screen.blit(f.render(linea, True, COLOR_TENUE), (caja.x + MARGEN, y))
+                screen.blit(f.render(linea, True, COLOR_DETALLE), (caja.x + MARGEN, y))
                 y += paso
     else:
-        screen.blit(f.render("Escoge una. La otra se cierra por el resto de la ronda.",
-                            True, COLOR_TENUE), (caja.x + MARGEN, y))
+        aviso = "Escoge una. La otra se cierra por el resto de la ronda."
+        # (en una vista angosta no cabía y se cortaba: con letra más chica)
+        f_aviso = f
+        for px in range(f.get_height(), 8, -1):
+            f_aviso = fuente_de_tamano(px)
+            if f_aviso.size(tr(aviso))[0] <= caja.width - MARGEN * 2:
+                break
+        screen.blit(f_aviso.render(aviso, True, COLOR_TENUE), (caja.x + MARGEN, y))
         y += paso + 6
 
         for i, nodo in enumerate(opciones):
@@ -356,28 +398,45 @@ def _dibujar_panel_habilidades(screen, vista, jugador):
             alto_fila = paso * (1 + len(descripcion) + len(detalle)) + 8
             fila = pygame.Rect(caja.x + MARGEN - 6, y - 4,
                                caja.width - MARGEN * 2 + 12, alto_fila)
+            # Una tarjeta por opción: franja del color del rol; la escogida, dorada.
+            vidrio.caja(screen, fila, COLOR_SELECCION if seleccionada else (70, 76, 110),
+                        235 if seleccionada else 170, 8)
             if seleccionada:
-                pygame.draw.rect(screen, COLOR_SELECCION_FONDO, fila)
-                pygame.draw.rect(screen, COLOR_SELECCION, fila, 2)
+                vidrio.brillo(screen, (fila.x + 30, fila.centery), fila.h, (40, 34, 10))
+            pygame.draw.rect(screen, color_rol if alcanza else COLOR_DESCARTADA,
+                             (fila.x + 1, fila.y + 6, 4, fila.h - 12), border_radius=2)
 
             color = COLOR_TENUE if not alcanza else (
                 COLOR_SELECCION if seleccionada else COLOR_TEXTO)
-            encabezado = f"{'> ' if seleccionada else '  '}{nodo.nombre}"
+            screen.blit(f.render(nodo.nombre, True, color), (caja.x + MARGEN + 4, y))
             if nodo.costo:
-                encabezado += f"  ({nodo.costo} pts)"
-                if not alcanza:
-                    encabezado += f"  — faltan {nodo.costo - _puntos(jugador)}"
-            screen.blit(f.render(encabezado, True, color), (caja.x + MARGEN, y))
+                if alcanza:
+                    _pastilla(screen, f, f"{nodo.costo} pts", COLOR_TITULO, (fila.right - 8, y - 1), "topright")
+                else:
+                    _pastilla(screen, f, tr("  — faltan {}").format(nodo.costo - _puntos(jugador)).strip(" —"),
+                              (236, 100, 90), (fila.right - 8, y - 1), "topright")
             y += paso
 
-            for linea in descripcion + detalle:
-                screen.blit(f.render("   " + linea, True, COLOR_TENUE),
-                            (caja.x + MARGEN, y))
+            for linea in descripcion:
+                screen.blit(f.render("   " + linea, True, COLOR_TENUE), (caja.x + MARGEN, y))
+                y += paso
+            for linea in detalle:
+                screen.blit(f.render("   " + linea, True, COLOR_DETALLE), (caja.x + MARGEN, y))
                 y += paso
             y += 12
 
     _pie(screen, caja, f, jugador, "elegir")
     screen.set_clip(clip_previo)
+
+
+def _pastilla(screen, f, texto, color, punto, ancla="topleft"):
+    """Un texto en una pastilla con borde (los puntos, el costo)."""
+    img = f.render(texto, True, color)
+    caja = img.get_rect(**{ancla: punto}).inflate(16, 2)
+    caja = caja.move(-8 if ancla.endswith("right") else 8, 0)
+    pygame.draw.rect(screen, (16, 16, 30), caja, border_radius=caja.h // 2)
+    pygame.draw.rect(screen, tuple(c * 2 // 3 for c in color), caja, 1, border_radius=caja.h // 2)
+    screen.blit(img, img.get_rect(center=caja.center))
 
 
 def _medidas_arbol(cantidad_niveles, alto_max, fraccion):
@@ -446,14 +505,24 @@ def _alto_necesario(arbol, opciones, f, paso, ancho_texto, alto_max,
 
 
 def _pie(screen, caja, f, jugador, modo):
+    from screens import estilo
     if modo == "elegir":
         texto = (f"[{jugador.pista_mover()}] elegir   "
                  f"[{jugador.nombre_tecla('interactuar')}] desbloquear   "
                  f"[{jugador.nombre_tecla('habilidades')}] cerrar")
     else:
         texto = f"[{jugador.nombre_tecla('habilidades')}] cerrar"
-    etiqueta = f.render(texto, True, COLOR_TENUE)
-    screen.blit(etiqueta, (caja.x + MARGEN, caja.bottom - MARGEN - etiqueta.get_height()))
+    # Que quepa en el panel (con los nombres largos de teclas en inglés no cabía).
+    import re
+    traducido = tr(texto)
+    teclas = len(re.findall(r"\[[^\]]+\]", traducido))
+    limpio = traducido.replace("[", "").replace("]", "")
+    letra = f
+    for px in range(f.get_height(), 8, -1):
+        letra = fuente_de_tamano(px)
+        if letra.size(limpio)[0] + teclas * 16 + 36 <= caja.width - 12:
+            break
+    estilo.pie(screen, texto, caja.bottom - MARGEN - f.get_height() // 2, letra, COLOR_TENUE, x=caja.centerx)
 
 
 def _partir(texto, f, ancho_max):

@@ -32,7 +32,7 @@ from juego import cache_dibujo
 from juego import efectos
 from juego import luces
 from screens.paneles import (segundos_para_salir, render_panel, render_mosaico, render_hud, render_mensaje, render_pista_zona,
-                             render_pulso, render_tension, render_minijuego,
+                             render_pulso, render_habilidad, render_tension, render_minijuego,
                              render_escondido, render_eliminado,
                              render_inventario, fila_bajo_hud, partir_lineas,
                              dibujar_corazon, dibujar_infinito, _recortar, COLOR_SALA,
@@ -187,16 +187,22 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=None,
             pass    # el celular va al final, encima del inventario y del pulso
         elif jugador.panel is not None and jugador.panel.get("mosaico"):
             pass    # la Terminal NEXUS va encima de todo (render_terminales_encima)
+        elif jugador.panel is not None and jugador.panel.get("tipo") == "tarea":
+            pass    # el minijuego de la tarea va al final (juego/tareas.py)
         else:
             render_panel(screen, vista, jugador)
         render_mensaje(screen, vista, jugador, tapado)
         render_pulso(screen, vista, jugador)
+        render_habilidad(screen, vista, jugador)
         render_inventario(screen, vista, jugador)
         dibujo_roles.render_minimapa(screen, vista, jugador, extras)
         mision_dibujo.render_progreso(screen, vista, jugador)
         if jugador.panel is not None and jugador.panel.get("tipo") == "celular":
             dibujo_celular.render_celular(screen, vista, jugador, extras.get("nexus"), tapado)
         render_minijuego(screen, vista, jugador)
+        if jugador.panel is not None and jugador.panel.get("tipo") == "tarea":
+            from juego import tareas
+            tareas.dibujar(screen, vista, jugador)
         render_tutorial(screen, vista, jugador, extras.get("tutorial"))
         dibujar_susto(screen, vista, jugador)
         render_eliminado(screen, vista, jugador)
@@ -576,9 +582,10 @@ def render_escolta(screen, vista, jugador, escoltado, tapado=None, red=None):
             lineas.append((f"Verificando: {lugar}  ->  sigue la flecha azul", (120, 190, 255)))
         # Un rumor suyo a punto de volverse viral (redes/nexus.py).
         apurados = [p for p in red.por_verificar_de(jugador)
-                    if p.tipo == "rumor" and not p.viral and red.progreso_viral(p) >= AVISO_VIRAL]
+                    if p.tipo in ("rumor", "noticia") and not p.viral
+                    and red.progreso_viral(p) >= AVISO_VIRAL]
         if apurados:
-            lineas.append((f"¡Un rumor se está volviendo viral! NEXUS [{jugador.nombre_tecla('celular')}]",
+            lineas.append((f"¡Algo se está volviendo viral! NEXUS [{jugador.nombre_tecla('celular')}]",
                            (245, 150, 70)))
     jugador.hud_abajo = 0           # hasta dónde llega esto (el mensaje va debajo)
     if not lineas:
@@ -630,10 +637,15 @@ def render_tutorial(screen, vista, jugador, tutorial):
         caja.midbottom = (vista.centerx, pulso.top - 8)
     else:
         caja.bottomleft = (pulso.right + 16 + max(0, (libre - ancho) // 2), vista.bottom - 12)
-    fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
-    fondo.fill((12, 14, 30, 215))
-    screen.blit(fondo, caja.topleft)
-    pygame.draw.rect(screen, (90, 220, 230), caja, 2, border_radius=6)
+    from juego import efectos
+    if efectos.ACTIVOS:
+        from screens import vidrio
+        vidrio.caja(screen, caja, (90, 220, 230), 215, 8)
+    else:
+        fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
+        fondo.fill((12, 14, 30, 215))
+        screen.blit(fondo, caja.topleft)
+        pygame.draw.rect(screen, (90, 220, 230), caja, 2, border_radius=6)
     hechos, necesarios = tutorial.listos()
     pie = None
     if not tutorial.esta_listo(jugador):
@@ -826,6 +838,27 @@ def _caja_escondite(escondite):
     return guardado
 
 
+def dibujar_candado(screen, centro, ancho):
+    """Un candado colgado (la noticia del casillero con candado, redes/nexus.py):
+    el arco de metal, el cuerpo dorado y el ojo de la llave."""
+    x, y = centro
+    alto = int(ancho * 0.8)
+    cuerpo = pygame.Rect(0, 0, ancho, alto)
+    cuerpo.midtop = (x, y)
+    arco = pygame.Rect(0, 0, int(ancho * 0.7), int(ancho * 0.9))
+    arco.midbottom = (x, y + max(2, alto // 5))
+    grosor = max(2, ancho // 6)
+    pygame.draw.ellipse(screen, (20, 18, 24), arco.move(1, 2), grosor)
+    pygame.draw.ellipse(screen, (190, 196, 210), arco, grosor)
+    pygame.draw.rect(screen, (20, 18, 24), cuerpo.move(2, 2), border_radius=3)
+    pygame.draw.rect(screen, (222, 170, 52), cuerpo, border_radius=3)
+    pygame.draw.rect(screen, (255, 222, 120), cuerpo.inflate(-ancho // 2, -alto // 2).move(-ancho // 6, -alto // 6),
+                     border_radius=2)
+    pygame.draw.rect(screen, (120, 80, 20), cuerpo, 1, border_radius=3)
+    pygame.draw.circle(screen, (40, 28, 10), (x, cuerpo.centery - 1), max(2, ancho // 8))
+    pygame.draw.line(screen, (40, 28, 10), (x, cuerpo.centery), (x, cuerpo.centery + alto // 4), max(1, ancho // 10))
+
+
 def cerca_ocupado(escondite, dueño):
     """¿El dueño de la vista está junto a un casillero que ocupó un prisionero?"""
     return dueño is not None and escondite["rect"].inflate(40, 40).colliderect(dueño.hitbox)
@@ -862,6 +895,9 @@ def _dibujar_escondite(screen, escondite, offset, dueño):
             pygame.draw.line(screen, (34, 40, 58), (caja.x + 12, y), (caja.right - 12, y), 2)
         pygame.draw.circle(screen, (200, 205, 220), (caja.right - 10, caja.centery + 8), 3)
 
+    if escondite.get("candado"):
+        dibujar_candado(screen, (caja.centerx + caja.width // 6, caja.centery), max(10, caja.width // 4))
+
     if escondite.get("npc") is not None and cerca_ocupado(escondite, dueño):
         texto = "Ocupado"
         etiqueta = cache_dibujo.texto(fuente("small"), texto, (245, 130, 120))
@@ -870,7 +906,7 @@ def _dibujar_escondite(screen, escondite, offset, dueño):
         screen.blit(sombra, (pos[0] + 2, pos[1] + 2))
         screen.blit(etiqueta, pos)
     elif cerca or mio:
-        texto = "Escondido" if mio else escondite["nombre"]
+        texto = "Escondido" if mio else "Con candado" if escondite.get("candado") else escondite["nombre"]
         etiqueta = cache_dibujo.texto(fuente("small"), texto, (255, 214, 64))
         sombra = cache_dibujo.texto(fuente("small"), texto, COLOR_SOMBRA)
         pos = (caja.centerx - etiqueta.get_width() // 2, caja.y - etiqueta.get_height() - 4)

@@ -69,6 +69,7 @@ from juego import vision
 from entidades.alien import sprites_de, ANCHO_HITBOX as ANCHO_HITBOX_ALIEN, ALTO_HITBOX as ALTO_HITBOX_ALIEN
 from juego import presentacion_aliens
 from juego import historial_logros
+from juego import tareas
 from data.tipos_alien import TIPO_POR_DEFECTO
 from Estructuras.arbol_logros import ArbolLogros
 from data.logros import ARBOL_LOGROS
@@ -275,6 +276,9 @@ class Game:
         self.admin = None     # MenuAdmin mientras está abierto (F1 en la partida: juego/admin.py)
         self.admin_usado = False        # (esa partida no anota logros en el historial)
         self.admin_invencible = False
+        # Tareas con minijuego (juego/tareas.py) en vez de mantener la tecla.
+        # En red el servidor lo apaga (todavía es mantener la tecla).
+        self.minijuegos = True
         self._reiniciar_resultados()
         self.oscuridad = True # Pausa > Opciones la apaga (para probar o para quien la necesite)
         self.mandos = Mandos()  # controles de Xbox para los jugadores 3 y 4
@@ -599,7 +603,7 @@ class Game:
             # Si un mando se conectó o desconectó mientras el otro hilo creaba
             # a los jugadores, alguno pudo quedar con el dato viejo.
             self._sincronizar_mandos()
-            self.transitions.request(self, "partida")
+            self.transitions.request(self, "partida", estilo="glitch")
 
     def _progreso_carga(self):
         """La barra va por tiempo (la carga no avisa cuánto le falta): llega
@@ -613,7 +617,7 @@ class Game:
     def iniciar_partida(self):
         """Arma la partida de una (sin pantalla de carga) y pasa a jugar."""
         self._preparar_partida()
-        self.transitions.request(self, "partida")
+        self.transitions.request(self, "partida", estilo="glitch")
 
     def _preparar_partida(self):
         """Carga el mapa, arma los árboles y crea a los jugadores."""
@@ -1206,11 +1210,12 @@ class Game:
             jugador.progreso = None
             if mantiene and not jugador.ocupado and not jugador.escondido and not jugador.preso:
                 sosteniendo.append(jugador)
-                if self.mision is not None:
+                # (con minijuegos, estas tareas se hacen con su minijuego: tareas.py)
+                if self.mision is not None and not self.minijuegos:
                     self.mision.mantener(jugador, dt)
-                if self.eventos is not None:
+                if self.eventos is not None and not self.minijuegos:
                     self.eventos.mantener(jugador, dt)
-                if self.guardia_planta is not None:
+                if self.guardia_planta is not None and not self.minijuegos:
                     self.guardia_planta.mantener(jugador, dt)
             if self.mision is not None and self.mision.activa:
                 jugador.objetivo = self.mision.objetivo()
@@ -1229,9 +1234,31 @@ class Game:
             pista_caja = self.eventos.pista(jugador) if self.eventos is not None else None
             if pista_caja and not jugador.preso:
                 jugador.pista_mision = pista_caja
+            if self.nexus is not None and not jugador.preso and hasattr(self.nexus, "pista"):
+                pista_noticia = self.nexus.pista(jugador)
+                if pista_noticia:
+                    jugador.pista_mision = pista_noticia
+            if not jugador.pista_mision and not jugador.preso:
+                candado = next((e for e in self.escondites
+                                if e.get("candado") and e["rect"].colliderect(jugador.hitbox)), None)
+                if candado is not None:
+                    jugador.pista_mision = "Forzar el candado del casillero"
+            # Con minijuegos ya no se mantiene la tecla: "Mantener: reparar la
+            # cápsula" -> "Reparar la cápsula" (menos la puerta para dos).
+            pista = jugador.pista_mision
+            if (self.minijuegos and pista and pista.startswith("Mantener: ")
+                    and "panel (se necesitan dos)" not in pista):
+                resto = pista[len("Mantener: "):]
+                jugador.pista_mision = resto[:1].upper() + resto[1:]
         # Las puertas para dos son eléctricas: en un apagón no abren.
         puertas.actualizar(self.puertas_dobles, [] if self.sin_luz else sosteniendo, dt,
                            self._puerta_doble_abierta)
+        if self.minijuegos:
+            # Con minijuegos ya no hay barra de "mantener la tecla" en la vista
+            # (Diego): lo único que se mantiene es la puerta para dos, y esa ya
+            # muestra su avance debajo de la puerta y en sus paneles.
+            for jugador in self.jugadores:
+                jugador.progreso = None
 
         acciones_rol.actualizar(self, dt)
         if self.guardia_planta is not None:
@@ -1287,6 +1314,7 @@ class Game:
                     if elegida in panel["opciones"]:
                         jugador.cursor = panel["opciones"].index(elegida)
         self._actualizar_minijuegos(dt)
+        tareas.actualizar(self, dt)
         self._actualizar_pulsos(dt)
         self._actualizar_salas(dt)
         self._actualizar_ambiente(dt)
@@ -1377,7 +1405,12 @@ class Game:
         for jugador in self.jugadores:
             jugador.cerrar_panel()
         self._reiniciar_resultados()
-        self.transitions.request(self, "resultados")
+        # Al escapar, un destello blanco; si no, un círculo que se cierra
+        # (juego/transition_manager.py). Sin misión, el fundido de siempre.
+        estilo = None
+        if self.mision is not None and self.mision.activa and self.mision.resultado is not None:
+            estilo = "destello" if self.mision.resultado == "victoria" else "iris"
+        self.transitions.request(self, "resultados", estilo=estilo)
 
     # -- Abrir zonas ------------------------------------------------------------
 
@@ -1597,6 +1630,24 @@ class Game:
                     return
                 continue
 
+            # Jugando el minijuego de una tarea (juego/tareas.py): las flechas y
+            # la tecla de interactuar van al minijuego; las demás lo cierran.
+            if tareas.de(jugador) is not None:
+                for accion in ("arriba", "abajo", "izquierda", "derecha"):
+                    if jugador.es_tecla(key, accion):
+                        tareas.tecla(self, jugador, accion)
+                        return
+                if jugador.es_tecla(key, "interactuar"):
+                    tareas.tecla(self, jugador, "ok")
+                    return
+                if any(jugador.es_tecla(key, a) for a in ("habilidades", "habilidad", "celular", "soltar")):
+                    jugador.cerrar_panel()
+                    self.sonar("menu_mover", 0.4)
+                    return
+                if any(jugador.es_tecla(key, a) for a in jugador.teclas):
+                    return
+                continue
+
             if jugador.escondido:
                 if jugador.es_tecla(key, "interactuar"):
                     if jugador.minijuego is not None:
@@ -1663,6 +1714,10 @@ class Game:
 
             if not jugador.ocupado:
                 if jugador.es_tecla(key, "interactuar"):
+                    # Una tarea con minijuego (fusibles, consola, cápsula,
+                    # planta, lo de una noticia de NEXUS): tareas.py.
+                    if tareas.intentar(self, jugador):
+                        return
                     # Lo de la misión (celdas, puerta, notas, cápsula...) va
                     # primero; después zona, estación de su rol y escondite.
                     if self.eventos is not None and self.eventos.caja_cerca(jugador):
@@ -1690,6 +1745,8 @@ class Game:
                                else self.escondite_con_prisionero(jugador))
                     if estacion is not None:
                         acciones_rol.usar_estacion(self, jugador, estacion)
+                    elif escondite is not None and escondite.get("candado"):
+                        jugador.avisar("El casillero tiene candado.", (245, 130, 120))
                     elif escondite is not None:
                         jugador.esconderse(escondite)
                     elif ocupado is not None:
@@ -1917,8 +1974,12 @@ class Game:
                 self._manejar_tecla(tecla)
             return
         if accion in ("izquierda", "derecha"):
-            # Fuera del árbol de logros solo sirven para las pestañas del celular.
+            # Fuera del árbol de logros solo sirven para las pestañas del celular
+            # (y para el minijuego de una tarea, tareas.py).
             jugador = next((j for j in self.jugadores if j.esquema == puesto), None)
+            if self.current_screen == "partida" and jugador is not None and tareas.de(jugador) is not None:
+                self._manejar_tecla(tecla_virtual(puesto, accion))
+                return
             if (self.current_screen == "partida" and jugador is not None and jugador.panel
                     and jugador.panel.get("tipo") == "celular"):
                 if celular.cambiar_pestana(self, jugador, -1 if accion == "izquierda" else 1):
@@ -2086,6 +2147,10 @@ class Game:
         self.resultados_rects_logros = {}
 
     def _tecla_resultados(self, key):
+        # Durante la escena del final (screens/final.py), cualquier tecla la salta.
+        from screens import resultados as pantalla_resultados
+        if self.resultados_vista == "resumen" and pantalla_resultados.saltar_intro():
+            return
         if self.resultados_vista == "logros":
             if key in (pygame.K_ESCAPE, pygame.K_BACKSPACE, pygame.K_RETURN, pygame.K_KP_ENTER):
                 self.resultados_vista = "resumen"
@@ -2110,6 +2175,9 @@ class Game:
             self.transitions.request(self, "menu")
 
     def _click_resultados(self, pos):
+        from screens import resultados as pantalla_resultados
+        if self.resultados_vista == "resumen" and pantalla_resultados.saltar_intro():
+            return
         if self.resultados_vista == "logros":
             for nodo, rect in self.resultados_rects_logros.items():
                 if rect.collidepoint(pos):

@@ -728,12 +728,13 @@ class Mision:
                 return kit["rect"].center, "Toma el kit: con él ves las piezas"
             if not self.hay_planos() and red is not None:
                 nodo = red.nodo_de(jugador)
-                rumor = cerca([p for p in red.rumores_activos()
-                               if p.lugar is not None and nodo in p.alcanzados
+                # (rumores y noticias por igual: hasta ir no se sabe cuál es cierto)
+                rumor = cerca([p for p in red.rumores_activos() + red.noticias_activas()
+                               if p.lugar is not None and nodo in p.alcanzados and not p.arreglada
                                and p not in red.evidencias.get(jugador, ())],
                               lambda p: p.lugar)
                 if rumor is not None:
-                    return rumor.lugar, "Desmiente este rumor (foto)"
+                    return rumor.lugar, "Ve a ver si es verdad lo que dicen"
                 # Sin rumores a la mano: la central de ayuda dice cómo va la confianza.
                 terminal = cerca([z for z in getattr(self.juego, "zonas", ()) if z.get("tipo") == "nexus"],
                                  lambda z: z["rect"].center)
@@ -1012,10 +1013,7 @@ class Mision:
                 consola["progreso"] = min(1.0, consola["progreso"] + paso / duracion)
                 jugador.progreso = ("Apagando consola", consola["progreso"])
                 if consola["progreso"] >= 1:
-                    jugador.sumar_puntos(PUNTOS_CONSOLA)
-                    jugador.avisar("Consola apagada.", COLOR_BIEN)
-                    self._sonar("consola", 0.8)
-                    self._decir("consola", jugador.rol)
+                    self.apagar_consola(consola, jugador)
                 return
         if (self.fase == "capsula" and self.piezas_entregadas >= PIEZAS_NECESARIAS
                 and self._cerca(jugador, self.capsula, 10)):
@@ -1032,8 +1030,52 @@ class Mision:
             self.reparacion = min(1.0, self.reparacion + paso / duracion)
             jugador.progreso = ("Reparando la cápsula", self.reparacion)
             if self.reparacion >= 1:
-                jugador.sumar_puntos(PUNTOS_REPARACION)
-                self.empezar_huida()
+                self.terminar_reparacion(jugador)
+
+    # -- Lo mismo, con minijuego (juego/tareas.py) -------------------------------------
+    # En el juego local, en vez de mantener la tecla se juega un minijuego
+    # (misiones/minijuegos.py). Estas funciones dicen si se puede y qué pasa al
+    # ganarlo; los mensajes de "no se puede" son los mismos de mantener.
+
+    def consola_para(self, jugador):
+        """(consola, None) si puede apagar la que tiene enfrente, (None, aviso)
+        si la tiene enfrente pero no puede, (None, None) si no hay ninguna."""
+        if not self.activa or jugador.preso or self.fase != "sabotaje":
+            return None, None
+        for consola in self.consolas:
+            if consola["progreso"] >= 1 or not consola_cerca(consola, jugador):
+                continue
+            if getattr(self.juego, "sin_luz", False):
+                return None, "Sin energía: enciendan la caja de fusibles."
+            if jugador.rol != "Tecnomante" and "decodificador" not in jugador.objetos:
+                return None, "Necesitas al Tecnomante o un decodificador."
+            return consola, None
+        return None, None
+
+    def apagar_consola(self, consola, jugador):
+        consola["progreso"] = 1.0
+        jugador.sumar_puntos(PUNTOS_CONSOLA)
+        jugador.avisar("Consola apagada.", COLOR_BIEN)
+        self._sonar("consola", 0.8)
+        self._decir("consola", jugador.rol)
+
+    def capsula_para(self, jugador):
+        """(True, None) si puede reparar la cápsula ya, (False, aviso) si está
+        junto a ella pero falta algo, (False, None) si no está junto a ella o
+        todavía no toca (la misión se encarga: dejar piezas, etc.)."""
+        if not (self.activa and not jugador.preso and self.fase == "capsula"
+                and self.piezas_entregadas >= PIEZAS_NECESARIAS and self._cerca(jugador, self.capsula, 10)):
+            return False, None
+        if not self.hay_planos():
+            return False, None
+        if jugador.rol != "Forjador" and "kit" not in jugador.objetos:
+            return False, "Necesitas al Forjador o un kit de herramientas."
+        return True, None
+
+    def terminar_reparacion(self, jugador):
+        self.reparacion = 1.0
+        jugador.sumar_puntos(PUNTOS_REPARACION)
+        self.empezar_huida()
 
     # -- Celdas -------------------------------------------------------------------------
 

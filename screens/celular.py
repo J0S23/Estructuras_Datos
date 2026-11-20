@@ -163,8 +163,13 @@ def render_confianza(screen, red, cantidad):
         return
     verde, rojo = red.barras()
     caja = rect_confianza(screen, cantidad, red)
-    screen.blit(cache_dibujo.capa(caja.size, (14, 15, 28, 225)), caja.topleft)
-    pygame.draw.rect(screen, (90, 100, 150), caja, 1, border_radius=8)
+    from juego import efectos
+    if efectos.ACTIVOS:
+        from screens import vidrio
+        vidrio.caja(screen, caja, (90, 200, 230), 225, 10)
+    else:
+        screen.blit(cache_dibujo.capa(caja.size, (14, 15, 28, 225)), caja.topleft)
+        pygame.draw.rect(screen, (90, 100, 150), caja, 1, border_radius=8)
 
     from screens.partida import tiene_panel
     if tiene_panel(cantidad):
@@ -365,7 +370,16 @@ ESTADOS = {
     "foto": ("¡Foto lista! Publícala", (52, 168, 98)),
     "hecha": ("Desmentido", (150, 156, 175)),
     "reportada": ("Suplantación reportada", (150, 156, 175)),
+    "arreglada": ("Ya lo arreglaron", (150, 156, 175)),
 }
+
+
+def texto_estado(estado, pub):
+    """El chip de una misión (una noticia confirmada no dice "Desmentido")."""
+    texto, color = ESTADOS[estado]
+    if estado == "hecha" and pub.tipo == "noticia":
+        texto = "Confirmado"
+    return texto, color
 COLOR_INFO = (244, 246, 252)
 
 
@@ -529,7 +543,7 @@ def _icono(screen, tipo, centro, r, color):
     elif tipo == "foto":             # cámara
         pygame.draw.rect(screen, b, (x - r // 2 - 1, y - r // 3, r + 2, r * 2 // 3 + 1), border_radius=2)
         pygame.draw.circle(screen, color, (x, y), max(2, r // 4))
-    elif tipo in ("hecha", "reportada"):   # palomita
+    elif tipo in ("hecha", "reportada", "arreglada"):   # palomita
         pygame.draw.lines(screen, b, False, [(x - r // 2, y), (x - 2, y + r // 3), (x + r // 2, y - r // 3)], 3)
     else:                            # aviso
         pygame.draw.line(screen, b, (x, y - r // 2), (x, y + 1), 3)
@@ -567,20 +581,22 @@ def _tarjeta(red, jugador, pestana, pub, f, fb, fc, ancho):
     nuevo = pub.id not in red.vistas[jugador]
     if pestana == "misiones":
         estado = logica.estado_mision(red, jugador, pub)
-        texto_estado, color = ESTADOS[estado]
+        chip, color = texto_estado(estado, pub)
         if estado == "en_curso":
-            texto_estado += " · " + _direccion(jugador, pub)
+            chip += " · " + _direccion(jugador, pub)
         lugar = logica.nombre_lugar(pub) or "la nave"
-        # El título es el lugar: es lo que importa (a dónde hay que ir).
-        titulo = lugar[:1].upper() + lugar[1:] if pub.tipo == "rumor" else f"Ayuda: {lugar}"
-        hecha = estado in ("hecha", "reportada")
-        chips = [(texto_estado, color)]
-        if pub.tipo == "rumor" and pub.viral and not hecha:
+        # El título es el lugar: es lo que importa (a dónde hay que ir). Un
+        # rumor y una noticia se ven igual: hasta ir no se sabe cuál es verdad.
+        verificar = pub.tipo in ("rumor", "noticia")
+        titulo = lugar[:1].upper() + lugar[1:] if verificar else f"Ayuda: {lugar}"
+        hecha = estado in ("hecha", "reportada", "arreglada")
+        chips = [(chip, color)]
+        if verificar and pub.viral and not hecha:
             chips.append(("¡Viral!", COLOR_ROJO))
         if nuevo and not hecha:
             chips.append(("nuevo", (230, 150, 40)))
         # La barrita de "se está volviendo viral" (redes/nexus.py).
-        viral = red.progreso_viral(pub) if pub.tipo == "rumor" and not hecha else None
+        viral = red.progreso_viral(pub) if verificar and not hecha else None
         return {"titulo": titulo, "icono": estado, "color": color, "franja": color,
                 "lineas": _recortar(f"\"{pub.texto}\"", fc, ancho, 2), "fuente_lineas": fc,
                 "chips": chips, "viral": viral,
@@ -589,6 +605,8 @@ def _tarjeta(red, jugador, pestana, pub, f, fb, fc, ancho):
     chips = []
     if pub.tipo == "desmentido":
         chips.append(("Desmintió un rumor", COLOR_VERDE))
+    elif pub.tipo == "confirmacion":
+        chips.append(("Confirmó y lo arregló", COLOR_VERDE))
     elif pub.tipo == "compartido":
         chips.append(("Compartió", COLOR_MARCA))
     elif pub.tipo == "testimonio":
@@ -604,9 +622,9 @@ def _tarjeta(red, jugador, pestana, pub, f, fb, fc, ancho):
 
 VACIO = {
     "misiones": ("Nada por verificar.",
-                 "Cuando llegue un rumor o alguien pida ayuda, aparece aquí. Verifica antes de compartir."),
+                 "Cuando te llegue algo por verificar o alguien pida ayuda, aparece aquí. Verifica antes de compartir."),
     "equipo": ("Tu equipo no ha publicado nada.",
-               "Cuando alguien desmienta un rumor o rescate a un prisionero, sale aquí."),
+               "Cuando alguien desmienta un rumor, confirme algo o rescate a un prisionero, sale aquí."),
     "red": ("La red está callada.", "Aquí sale lo que comentan los prisioneros."),
 }
 
@@ -730,7 +748,8 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
 
     if vista == "post":
         pub = panel["pub"]
-        autor = red.via(jugador, pub) if pub.tipo in ("rumor", "trampa") else pub.autor
+        verificar = pub.tipo in ("rumor", "noticia")
+        autor = red.via(jugador, pub) if verificar or pub.tipo == "trampa" else pub.autor
         usuario = red.usuario(autor)
         _avatar(screen, (cuerpo.x + 20, y + 18), 16, usuario, f, red, autor)
         seguidores = red.seguidores(autor)
@@ -742,8 +761,8 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
         estado = panel.get("estado")
         borde = cuerpo.right
         if estado:
-            texto_estado, color = ESTADOS[estado]
-            img = fc.render(texto_estado, True, (255, 255, 255))
+            chip, color = texto_estado(estado, pub)
+            img = fc.render(chip, True, (255, 255, 255))
             caja = img.get_rect().inflate(12, 4)
             caja.topright = (cuerpo.right, y + 4)
             pygame.draw.rect(screen, color, caja, border_radius=caja.height // 2)
@@ -767,28 +786,37 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
         if pub.foto:
             info.append(("Foto: " + pub.foto, COLOR_MARCA))
         lugar = logica.nombre_lugar(pub)
-        if pub.tipo in ("rumor", "trampa") and lugar:
+        if (verificar or pub.tipo == "trampa") and lugar:
             info.append((f"Lugar: {lugar}", (232, 140, 40)))
         if estado == "en_curso":
             info.append((f"Vas para allá ({_direccion(jugador, pub)}). Sigue la flecha azul.", COLOR_MARCA))
-        if estado == "foto":
+        if estado == "foto" and pub.tipo == "noticia":
+            info.append(("Era verdad y ya lo arreglaste: publica la foto para confirmarlo.", COLOR_VERDE))
+        elif estado == "foto":
             info.append(("Ya sacaste la foto: publícala para frenar el rumor.", COLOR_VERDE))
-        if pub.tipo == "rumor" and pub.desmentida:
+        if estado == "arreglada":
+            info.append(("Alguien ya fue: era verdad y lo arregló. Falta que publique la foto.", COLOR_VERDE))
+        if pub.tipo == "noticia" and pub.desmentida:
+            info.append(("Alguien ya lo confirmó con una foto: era verdad.", COLOR_VERDE))
+        elif pub.tipo == "rumor" and pub.desmentida:
             info.append(("Alguien ya lo desmintió con una foto.", COLOR_VERDE))
+        elif pub.tipo == "noticia" and pub.viral:
+            info.append((f"¡Se volvió viral! {pub.rumor.get('viral') or VIRAL_GENERICO}", COLOR_ROJO))
         elif pub.tipo == "rumor" and pub.viral:
             info.append((f"¡Se volvió viral! {pub.rumor.get('viral') or VIRAL_GENERICO}", COLOR_ROJO))
             info.append(("Como en la vida real: la desinformación no se queda en la pantalla, "
                          "cambia lo que hace la gente. Desmentirlo lo deshace.", COLOR_TENUE))
-        elif pub.tipo == "rumor":
+        elif verificar and estado != "arreglada":
+            # (lo mismo para rumores y noticias: no se sabe cuál es cierto)
             progreso = red.progreso_viral(pub)
-            info.append((f"Se está volviendo viral: {int(progreso * 100)}%. Si nadie lo desmiente, "
-                         "la nave va a actuar como si fuera cierto.", color_viral(progreso)))
+            info.append((f"Se está volviendo viral: {int(progreso * 100)}%. Ve a ver si es verdad "
+                         "antes de que toda la nave hable de esto.", color_viral(progreso)))
         if pub.tipo == "trampa" and pub.reportada:
             info.append(("Reportada: no la escribió su dueño.", COLOR_ROJO))
-        if pub.tipo in ("rumor", "trampa") and autor != pub.autor:
+        if (verificar or pub.tipo == "trampa") and autor != pub.autor:
             info.append((f"{usuario} lo compartió. No dice de dónde lo sacó.", COLOR_TENUE))
-        if estado == "pendiente" and pub.tipo == "rumor":
-            info.append(("Antes de compartir, verifica: ve al lugar y saca una foto.", COLOR_TENUE))
+        if estado == "pendiente" and verificar:
+            info.append(("Antes de compartir, verifica: ve al lugar y mira si es verdad.", COLOR_TENUE))
         caja_info(info)
     elif vista == "origen":
         camino = panel.get("camino") or []
@@ -820,9 +848,13 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
                     info.append((f"{red.usuario(origen)} tiene {red.seguidores(origen)} seguidores y ganó "
                                  f"{ganados} desde que abrió la cuenta. Mientras nadie la reporte sigue "
                                  "creciendo, y cada rumor nuevo les llega a más.", COLOR_ROJO))
-                else:
-                    info.append((f"{red.usuario(origen)} tiene {red.seguidores(origen)} seguidores. Las cuentas "
-                                 "falsas que nadie reporta crecen: cortarla ahora la corta chica.", COLOR_TENUE))
+            if not red.es_bot(origen) or red.ganados(origen) <= 0:
+                # Igual para un prisionero y una cuenta falsa recién abierta: lo
+                # que publicó puede ser cierto (noticias) o no. Lo que delata a
+                # una cuenta falsa es cuánto crece (arriba).
+                info.append((f"{red.usuario(origen)} tiene {red.seguidores(origen)} seguidores. ¿Es una "
+                             "cuenta falsa o alguien que cuenta lo que vio? Verifica antes de reportar.",
+                             COLOR_TENUE))
             caja_info(info)
         else:
             caja_info([("La cuenta que lo empezó ya no existe.", COLOR_TENUE)])

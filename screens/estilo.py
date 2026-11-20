@@ -164,15 +164,48 @@ def _vidrio(tamano, elegido, radio):
     return img
 
 
+_halos_borde = {}
+
+
+def _halo_borde(tamano, color, radio):
+    """El resplandor de la tarjeta escogida: solo alrededor del borde. (El de
+    los botones, ui_components._halo, se arma de una superficie 6 veces más
+    chica: en una tarjeta grande se veía una mancha escalonada por dentro.)"""
+    clave = (tamano, color, radio)
+    img = _halos_borde.get(clave)
+    if img is None:
+        if len(_halos_borde) > 60:
+            _halos_borde.clear()
+        w, h = tamano[0] + 36, tamano[1] + 36
+        img = pygame.Surface((w, h))
+        img.fill((0, 0, 0))
+        # Anillos del borde hacia afuera, cada uno más tenue.
+        for k in range(18, 0, -1):
+            f = (1 - k / 19) ** 1.8
+            c = tuple(int(v * f) for v in color)
+            pygame.draw.rect(img, c, pygame.Rect(18 - k, 18 - k, tamano[0] + 2 * k, tamano[1] + 2 * k),
+                             border_radius=radio + k)
+        # Por dentro, solo una orilla de unos px que se apaga hacia el centro.
+        for k in range(1, 9):
+            f = (1 - k / 9) ** 2
+            c = tuple(int(v * f) for v in color)
+            pygame.draw.rect(img, c, pygame.Rect(18 + k, 18 + k, tamano[0] - 2 * k, tamano[1] - 2 * k),
+                             border_radius=max(2, radio - k))
+        pygame.draw.rect(img, (0, 0, 0), pygame.Rect(27, 27, tamano[0] - 18, tamano[1] - 18),
+                         border_radius=max(2, radio - 9))
+        _halos_borde[clave] = img
+    return img
+
+
 def tarjeta(screen, rect, elegido=False, color=COLOR_NEON, apagada=False, radio=12, franja=True):
     """Una tarjeta de vidrio. La escogida brilla (halo que late), la cruza un
     reflejo y lleva el borde de neón de su color."""
-    from juego.ui_components import _halo, _reflejo
+    from juego.ui_components import _reflejo
     t = _t()
     if elegido and not apagada:
         latido = 0.6 + 0.4 * math.sin(t / 280)
         nivel = round(latido * 4) / 4
-        halo = _halo((rect.w + 36, rect.h + 36), tuple(int(c * 0.45 * nivel) for c in color))
+        halo = _halo_borde(rect.size, tuple(int(c * 0.45 * nivel) for c in color), radio)
         screen.blit(halo, (rect.x - 18, rect.y - 18), special_flags=pygame.BLEND_RGB_ADD)
     screen.blit(_vidrio(rect.size, elegido and not apagada, radio), rect.topleft)
     if franja:
@@ -192,9 +225,13 @@ def tarjeta(screen, rect, elegido=False, color=COLOR_NEON, apagada=False, radio=
             x = rect.x - rect.h + int((dentro / 1200) * (rect.w + rect.h * 2))
             recorte = screen.get_clip()
             screen.set_clip(rect.inflate(-4, -4).clip(recorte))
-            for y in range(rect.y, rect.bottom, rect.h if rect.h <= 120 else 120):
-                reflejo = _reflejo(min(120, rect.h))
-                screen.blit(reflejo, (x, y), special_flags=pygame.BLEND_RGB_ADD)
+            # En tarjetas altas el reflejo va en pedazos de 120 px; cada uno se
+            # corre 60 px a la izquierda (lo que baja la diagonal en 120 px)
+            # para que la franja siga recta y no se vea partida en escalones.
+            tramo = min(120, rect.h)
+            reflejo = _reflejo(tramo)
+            for k, y in enumerate(range(rect.y, rect.bottom, tramo)):
+                screen.blit(reflejo, (x - k * (tramo // 2), y), special_flags=pygame.BLEND_RGB_ADD)
             screen.set_clip(recorte)
 
 

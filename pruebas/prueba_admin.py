@@ -145,7 +145,7 @@ escoger("Modo invencible")
 assert not g.admin_invencible
 escoger("Abrir todas las puertas")
 assert all(p["abierta"] for p in g.mision.puertas) and all(p["abierta"] for p in g.puertas_dobles)
-print("2. las 13 opciones hacen lo suyo y avisan: OK")
+print(f"2. las {len(A.OPCIONES)} opciones hacen lo suyo y avisan: OK")
 
 # -- 3. Mouse ---------------------------------------------------------------------------------------
 g._manejar_tecla(pygame.K_F1)
@@ -157,6 +157,16 @@ assert g.admin.cursor == indice("Que se vaya la luz")
 g._manejar_click(fila.center)
 assert g.admin is None and ev.apagon
 print("3. con el mouse: el cursor sigue al mouse y el clic la hace: OK")
+
+# -- 3b. Ganar ya: termina la partida y van los resultados (con la escena del final) ------------
+escoger("Ganar ya")
+assert g.mision.resultado == "victoria" and g.mision.motivo_fin == "escaparon"
+for _ in range(80):
+    if g.transitions.is_idle():
+        break
+    g.transitions.update(g, 33)
+assert g.current_screen == "resultados", g.current_screen
+print("3b. 'Ganar ya' termina la partida ganada (para ver la escena del final): OK")
 
 # -- 4. Historial de logros ----------------------------------------------------------------------------
 anotados = []

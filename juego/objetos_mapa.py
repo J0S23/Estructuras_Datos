@@ -219,7 +219,12 @@ def normalizar(datos):
         usadas = set()
         for i, obj in enumerate(datos.get(parte, [])):
             obj["rx"], obj["ry"] = r(obj["rx"]), r(obj["ry"])
-            obj.setdefault("nombre", nombre)
+            if parte == "escondites":
+                # Todos son casilleros (nov 20, Diego): los mapas viejos traían
+                # "Ducto", "Armario" o "Contenedor", que el editor dejaba poner.
+                obj["nombre"] = nombre
+            else:
+                obj.setdefault("nombre", nombre)
             clave = obj.get("clave")
             if not clave or clave in usadas:
                 n = i + 1

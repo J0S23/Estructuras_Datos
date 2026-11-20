@@ -133,7 +133,6 @@ TAMANO_ALIEN = (34, 20)
 # Los muebles del catálogo, ordenados por grupo (T / Y los recorren).
 MUEBLES = sorted(CATALOGO, key=lambda c: (GRUPOS.index(CATALOGO[c]["grupo"])
                                            if CATALOGO[c]["grupo"] in GRUPOS else 99, c))
-NOMBRES_ESCONDITE = ["Casillero", "Armario", "Contenedor", "Ducto"]
 # Los cuartos del modelo de la nave; T los recorre y Y escribe uno nuevo.
 NOMBRES_SALA = ["Control", "General", "Laboratorio", "Prisión", "Residencial", "Biosfera",
                 "Bahía", "Motores", "Comando", "Gestación", "Pasillo"]
@@ -153,7 +152,6 @@ AYUDA_HERRAMIENTA = {
                      "alien patrulla su lado; abierta, toda."],
     "escondites": ["Clic: pone uno.  Arrastrar: lo mueve.",
                    "Clic derecho: lo borra.",
-                   "T sobre uno: cambia el nombre.",
                    "Recuadro verde: sus patas, que se chocan;",
                    "se entra parado en la mitad de abajo."],
     "terminales": ["Clic: pone una (el punto es donde se para",
@@ -818,16 +816,6 @@ class EditorMapa:
                 self.datos["salas"][i]["nombre"] = self.nombre_sala = texto.strip()
                 self._terminar_cambio()
 
-    def cambiar_nombre(self, pos):
-        cosa = self.buscar("escondites", pos)
-        if self.clave != "escondites" or cosa is None:
-            return
-        self._empezar_cambio()
-        obj = self.datos["escondites"][cosa[1]]
-        i = NOMBRES_ESCONDITE.index(obj["nombre"]) if obj["nombre"] in NOMBRES_ESCONDITE else -1
-        obj["nombre"] = NOMBRES_ESCONDITE[(i + 1) % len(NOMBRES_ESCONDITE)]
-        self._terminar_cambio()
-
     def tipo_de_ruta(self, i):
         tipos = self.datos.get("tipos_aliens") or []
         return tipos[i] if i < len(tipos) else TIPO_POR_DEFECTO
@@ -1360,8 +1348,6 @@ class EditorMapa:
             self.nombre_siguiente_sala(pygame.mouse.get_pos())
         elif key == pygame.K_y and self.clave == "salas":
             self.empezar_a_escribir(pygame.mouse.get_pos())
-        elif key == pygame.K_t:
-            self.cambiar_nombre(pygame.mouse.get_pos())
         elif key in (pygame.K_PLUS, pygame.K_KP_PLUS, pygame.K_EQUALS):
             self.cambiar_radio(pygame.mouse.get_pos(), 0.005)
         elif key in (pygame.K_MINUS, pygame.K_KP_MINUS):

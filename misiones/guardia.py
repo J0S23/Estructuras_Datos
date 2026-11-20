@@ -51,6 +51,15 @@ CUADRO_PLANTA = 64
 _imagenes_planta = {}
 
 
+CRECER_VISTO_MS = 900     # cuánto tarda en verse cada salto del minijuego del abono
+
+
+def cuadro_planta(progreso, n):
+    """El cuadro de la tira (de `n`) que toca a ese progreso, sin la fruta (el
+    último cuadro es la planta ya crecida)."""
+    return max(0, min(n - 2, int(progreso * (n - 1))))
+
+
 def imagenes_planta():
     """(cuadros de crecer, sin fruta) agrandados, o None si faltan."""
     if "hojas" not in _imagenes_planta:
@@ -261,6 +270,13 @@ class GuardiaYPlanta:
     def actualizar(self, dt):
         for j in list(self.recarga_ms):
             self.recarga_ms[j] = max(0, self.recarga_ms[j] - dt)
+        p = self.planta
+        if p is not None and getattr(self.juego, "minijuegos", False):
+            # Con el minijuego del abono la planta crece a saltos (uno por
+            # acierto): lo que se ve sube de a poco hasta ahí, cuadro por
+            # cuadro de su animación (`imagen_planta`).
+            visto = p.get("visto", p["progreso"])
+            p["visto"] = min(p["progreso"], visto + dt / CRECER_VISTO_MS) if visto < p["progreso"] else p["progreso"]
 
     # -- Flecha amarilla (mision.punto_objetivo) -----------------------------------------
 
@@ -324,7 +340,7 @@ class GuardiaYPlanta:
         cuadros, sin_fruta = hojas
         if p["crecida"]:
             return cuadros[-1] if p["fruta"] else sin_fruta
-        return cuadros[min(len(cuadros) - 2, int(p["progreso"] * (len(cuadros) - 1)))]
+        return cuadros[cuadro_planta(p.get("visto", p["progreso"]), len(cuadros))]
 
     def caja_planta(self, img):
         caja = img.get_rect()

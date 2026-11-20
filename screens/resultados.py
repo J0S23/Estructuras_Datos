@@ -100,7 +100,7 @@ def _motivo(mision):
 
 # -- Animación de entrada -------------------------------------------------------------
 
-_entrada = {"clave": None, "t0": 0}
+_entrada = {"clave": None, "t0": 0, "intro": 0}
 
 
 def _desde(clave):
@@ -109,8 +109,48 @@ def _desde(clave):
         return 10 ** 9
     ahora = pygame.time.get_ticks()
     if _entrada["clave"] != clave:
-        _entrada["clave"], _entrada["t0"] = clave, ahora
+        _entrada["clave"], _entrada["t0"], _entrada["intro"] = clave, ahora, 0
     return ahora - _entrada["t0"]
+
+
+def en_intro():
+    """¿Se está viendo la escena del final sola (antes de los resultados)?"""
+    return (efectos.ACTIVOS and _entrada["intro"] > 0
+            and pygame.time.get_ticks() - _entrada["t0"] < _entrada["intro"])
+
+
+def saltar_intro():
+    """Enter, un botón o un clic durante la escena: pasa a los resultados (la
+    escena sigue de fondo). Devuelve True si había escena que saltar."""
+    if not en_intro():
+        return False
+    _entrada["t0"] = pygame.time.get_ticks() - _entrada["intro"]
+    return True
+
+
+def _hay_escena(mision):
+    return (efectos.ACTIVOS and mision is not None and mision.activa
+            and mision.resultado in ("victoria", "derrota"))
+
+
+def _intro(screen, victoria, t, jugadores, titular, color, motivo):
+    """La escena del final sola, con el titular y la pista para saltarla."""
+    from screens import estilo, final
+    ancho, alto = screen.get_size()
+    final.dibujar(screen, victoria, t, jugadores)
+    e = max(0.72, min(1.6, min(ancho / 1280, alto / 720)))
+    aparece = _suave(t, 2600 if victoria else 1700, 700)
+    if aparece > 0:
+        tam = int(54 * e)
+        y = int(alto * (0.13 if victoria else 0.1)) - int((1 - aparece) * 30)
+        if not victoria and (t // 70) % 4 == 0 and t < 3200:
+            y += 3
+        rect = estilo.titulo(screen, titular, (ancho // 2, y), tam, color, color)
+        if motivo and aparece >= 1:
+            estilo.texto(screen, motivo, fuente_de_tamano(max(14, int(19 * e))),
+                         (ancho // 2, rect.bottom + int(18 * e)), COLOR_TEXTO, "midtop")
+    if t > 700:
+        estilo.pie(screen, "[ENTER] ver los resultados", alto - 34)
 
 
 def _suave(t, inicio, duracion):
@@ -172,9 +212,25 @@ def _tiempo(ms):
     return f"{s // 60}:{s % 60:02d}"
 
 
+_vidrios = {}
+
+
+def _caja(screen, rect):
+    """El fondo de un recuadro: un poco transparente (detrás está la escena
+    del final, screens/final.py)."""
+    img = _vidrios.get(rect.size)
+    if img is None:
+        if len(_vidrios) > 30:
+            _vidrios.clear()
+        img = pygame.Surface(rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(img, (*COLOR_PANEL, 222), img.get_rect(), border_radius=12)
+        _vidrios[rect.size] = img
+    screen.blit(img, rect.topleft)
+
+
 def _panel(screen, rect, titulo=None, f_titulo=None, color=COLOR_TITULO):
     """Un recuadro con su título; devuelve la y donde empieza el contenido."""
-    pygame.draw.rect(screen, COLOR_PANEL, rect, border_radius=12)
+    _caja(screen, rect)
     pygame.draw.rect(screen, COLOR_PANEL_BORDE, rect, 2, border_radius=12)
     if not titulo:
         return rect.y + 12
@@ -228,7 +284,7 @@ def _cifra(screen, rect, valor, etiqueta, color, f_valor, f_etiqueta, aparece=1.
         return
     rect = rect.move(0, int((1 - aparece) * 24))
     valor = _contando(valor, cuenta)
-    pygame.draw.rect(screen, COLOR_PANEL, rect, border_radius=12)
+    _caja(screen, rect)
     pygame.draw.rect(screen, COLOR_PANEL_BORDE, rect, 2, border_radius=12)
     pygame.draw.rect(screen, color, (rect.x + 10, rect.y, rect.width - 20, 4), border_radius=2)
     img = f_valor.render(valor, True, color)
@@ -416,7 +472,19 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
     else:
         titular, color = "NO LOGRARON ESCAPAR", COLOR_MAL
     t = _desde((id(mision), id(logros), len(jugadores)))
-    _fondo(screen, color, t)
+    if _hay_escena(mision):
+        # Primero la escena del final sola (screens/final.py); después queda de
+        # fondo, oscurecida, y los resultados entran encima.
+        from screens import final
+        _entrada["intro"] = final.INTRO_MS
+        if t < final.INTRO_MS:
+            _intro(screen, victoria, t, jugadores, titular, color, _motivo(mision))
+            return []
+        final.dibujar(screen, victoria, t, jugadores)
+        final.oscurecer(screen, 140)
+        t -= final.INTRO_MS
+    else:
+        _fondo(screen, color, t)
 
     # -- Titular -------------------------------------------------------------------
     y = int(18 * e)
@@ -660,7 +728,7 @@ def _insignias_logros(screen, caja, arbol, f_chica, e, t):
         # Crece un poco de más y vuelve (un "pop").
         escala = aparece * (1 + 0.25 * math.sin(math.pi * aparece))
         lado = max(4, int(d * escala))
-        img = insignia(d, nodo.rama, "obtenido")
+        img = insignia(d, nodo.rama, "obtenido", nodo.clave)
         if lado != d:
             img = pygame.transform.smoothscale(img, (lado, lado))
         cx = caja.x + (i % por_fila) * paso + d // 2

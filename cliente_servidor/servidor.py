@@ -264,6 +264,9 @@ class Servidor:
         if self.mapa:
             objetos_mapa.mapa_activo = lambda: self.mapa
         g = App.Game()
+        # Las tareas con minijuego (juego/tareas.py) todavía no están en red:
+        # aquí se siguen haciendo manteniendo la tecla.
+        g.minijuegos = False
         if self.clave_dificultad:
             g.dificultad = Dificultad(self.clave_dificultad)
         nombres = [r["nombre"] for r in App.ROLES]
@@ -280,6 +283,8 @@ class Servidor:
         random.seed(self.semilla)
         with todos_se_mueven():
             g._preparar_partida()
+        if getattr(g, "nexus", None) is not None:
+            g.nexus.con_noticias = False     # las noticias verdaderas, tampoco todavía
         g.current_screen = "partida"
         # El tutorial del principio (juego/tutorial.py) también en red: cada
         # quien pasa sus pasos con su tecla de habilidad y la nave arranca

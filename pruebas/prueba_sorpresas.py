@@ -36,6 +36,7 @@ pygame.key.get_pressed = lambda: TECLAS
 
 def nueva_partida(roles=("Tecnomante", "Forjador")):
     g = App.Game()
+    g.minijuegos = False        # (aquí se prueba manteniendo la tecla; los minijuegos: prueba_minijuegos)
     def avanzar():
         for _ in range(80):
             if g.transitions.is_idle(): break

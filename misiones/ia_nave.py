@@ -1,4 +1,4 @@
-"""La IA de la nave: comenta lo que pasa y se burla de los prisioneros.
+"""La IA de la nave, Neila: comenta lo que pasa y se burla de los prisioneros.
 
 Habla poco para no cansar: después de cada frase espera unos segundos antes de
 decir otra (salvo los eventos importantes, que se dicen igual). Si pasa mucho
@@ -23,6 +23,9 @@ SILENCIO_PARA_AMBIENTE_MS = 40000
 LETRAS_POR_SEGUNDO = 45
 
 COLOR_IA = (190, 120, 255)
+
+# Cómo se llama la IA de la nave (sale en su cartel). Antes decía "IA DE LA NAVE".
+NOMBRE = "NEILA"
 COLOR_TEXTO = (240, 236, 255)
 
 
@@ -88,7 +91,7 @@ class Narrador:
         f = fuente_de_tamano(max(14, min(19, ancho_pantalla // 72)))
         f_etiqueta = fuente_de_tamano(max(11, min(13, ancho_pantalla // 110)))
 
-        etiqueta = cache_dibujo.texto(f_etiqueta, "IA DE LA NAVE", COLOR_IA).copy()
+        etiqueta = cache_dibujo.texto(f_etiqueta, NOMBRE, COLOR_IA).copy()
         # Partir el texto en líneas y medirlas: una vez por frase (antes en
         # cada cuadro mientras habla).
         from juego import idioma
@@ -110,6 +113,10 @@ class Narrador:
 
         # Se desvanece en el último medio segundo.
         alfa = 230 if self.restante_ms > 500 else int(230 * self.restante_ms / 500)
+        from juego import efectos
+        if efectos.ACTIVOS:
+            self._dibujar_vivo(screen, caja, etiqueta, f, visibles, lineas, alfa)
+            return
         # (El fondo y el borde, guardados por tamaño y alfa: antes eran dos
         # superficies nuevas en cada cuadro mientras habla.)
         screen.blit(cache_dibujo.capa(caja.size, (20, 10, 34, alfa)), caja.topleft)
@@ -132,3 +139,81 @@ class Narrador:
                 cuerpo.set_alpha(alfa)
                 screen.blit(cuerpo, (caja.x + 16, y))
             y += f.get_linesize()
+
+    # -- Con los efectos visuales: interferencia, onda de voz y cursor ---------------
+
+    def _dibujar_vivo(self, screen, caja, etiqueta, f, visibles, lineas, alfa):
+        """El cartel de vidrio de la IA. Al empezar a hablar entra con
+        interferencia (se corre, parpadea, rayas); mientras escribe, una onda
+        de voz al lado del nombre y un cursor al final del texto. Todo sale de
+        `mostrado_ms` (el estado que también recibe la otra laptop)."""
+        import math
+        from screens import vidrio
+        t = self.mostrado_ms
+        alfa = max(0, min(230, alfa)) // 23 * 23           # (pocos niveles: se guardan)
+        if alfa <= 0:
+            return
+        entrando = t < 380
+        azar = random.Random(int(t // 40))
+        if entrando:
+            if azar.random() < 0.25:
+                return                                   # parpadea
+            caja = caja.move(int(azar.uniform(-1, 1) * 6 * (1 - t / 380)), 0)
+        vidrio.caja(screen, caja, COLOR_IA, alfa, 8)
+        screen.blit(_rayas(caja.size), caja.topleft)
+        if entrando:
+            for _ in range(4):
+                y = caja.y + azar.randrange(4, max(5, caja.height - 4))
+                x0 = caja.x + azar.randrange(0, max(1, caja.width // 2))
+                pygame.draw.line(screen, (210, 170, 255), (x0, y), (x0 + azar.randrange(20, max(21, caja.width // 2)), y), 1)
+        # El nombre (con una copia corrida en cian al entrar) y la onda de voz.
+        x_etq, y_etq = caja.x + 16, caja.y + 7
+        if entrando:
+            fantasma = etiqueta.copy()
+            fantasma.fill((0, 255, 255, 120), special_flags=pygame.BLEND_RGBA_MULT)
+            screen.blit(fantasma, (x_etq + 2, y_etq))
+        etiqueta.set_alpha(alfa)
+        screen.blit(etiqueta, (x_etq, y_etq))
+        escribiendo = sum(len(v) for v in visibles) < sum(len(l) for l in lineas)
+        x_onda = x_etq + etiqueta.get_width() + 10
+        cy = y_etq + etiqueta.get_height() // 2
+        for i in range(9):
+            if escribiendo:
+                alto = 2 + int(abs(math.sin(t / 70 + i * 1.3) * math.sin(t / 190 + i * 0.7)) * 9)
+            else:
+                alto = 2 + int((1 + math.sin(t / 400 + i)) * 0.8)
+            c = tuple(int(v * alfa / 230) for v in COLOR_IA)
+            pygame.draw.rect(screen, c, (x_onda + i * 4, cy - alto // 2, 2, alto))
+        # El texto.
+        y = caja.y + 10 + etiqueta.get_height()
+        ultimo = None
+        for linea in visibles:
+            if linea:
+                cuerpo = cache_dibujo.texto(f, linea, COLOR_TEXTO).copy()
+                cuerpo.set_alpha(alfa)
+                screen.blit(cuerpo, (caja.x + 16, y))
+                ultimo = (caja.x + 16 + cuerpo.get_width(), y)
+            y += f.get_linesize()
+        # El cursor de terminal: fijo mientras escribe, parpadea al terminar.
+        if ultimo is None:
+            ultimo = (caja.x + 16, caja.y + 10 + etiqueta.get_height())
+        if escribiendo or (t // 380) % 2 == 0:
+            alto_cursor = f.get_height() - 4
+            pygame.draw.rect(screen, tuple(int(v * alfa / 230) for v in COLOR_IA),
+                             (ultimo[0] + 2, ultimo[1] + 2, max(3, alto_cursor // 2), alto_cursor))
+
+
+_capas_rayas = {}
+
+
+def _rayas(tam):
+    """Unas líneas de barrido muy tenues (como una pantalla vieja)."""
+    capa = _capas_rayas.get(tam)
+    if capa is None:
+        if len(_capas_rayas) > 30:
+            _capas_rayas.clear()
+        capa = pygame.Surface(tam, pygame.SRCALPHA)
+        for y in range(3, tam[1] - 3, 3):
+            pygame.draw.line(capa, (190, 120, 255, 14), (3, y), (tam[0] - 4, y))
+        _capas_rayas[tam] = capa
+    return capa

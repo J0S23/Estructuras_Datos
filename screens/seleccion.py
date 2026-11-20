@@ -420,8 +420,10 @@ def _retrato(rol, alto_max):
     return _retratos[clave]
 
 
-def _dibujar_retrato(screen, vista, rol, tope, color):
-    """El personaje sobre una luz de su color, flotando despacito."""
+def _dibujar_retrato(screen, vista, rol, tope, color, listo=False):
+    """El personaje sobre una luz de su color. Con los efectos visuales camina
+    en su lugar (o respira, si ya lo escogió) y hace lo de su habilidad
+    alrededor (screens/efectos_rol.py); sin efectos, quieto."""
     from screens import estilo
     from juego import efectos
     imagen = _retrato(rol, max(40, min(190, vista.height // 3)))
@@ -429,10 +431,14 @@ def _dibujar_retrato(screen, vista, rol, tope, color):
         return
     x = vista.right - MARGEN - imagen.get_width()
     y = vista.y + tope + MARGEN + 6
-    flota = int(3 * math.sin(pygame.time.get_ticks() / 500)) if efectos.ACTIVOS else 0
     estilo.pedestal(screen, (x + imagen.get_width() // 2, y + imagen.get_height() + 4),
                     int(imagen.get_width() * 0.9), color)
-    screen.blit(imagen, (x, y + flota - 4))
+    if efectos.ACTIVOS:
+        from screens import efectos_rol
+        if efectos_rol.dibujar(screen, pygame.Rect(x, y - 4, imagen.get_width(), imagen.get_height()),
+                               rol, color, listo):
+            return
+    screen.blit(imagen, (x, y - 4))
 
 
 def _seccion_jugador(screen, vista, indice, estado, tomados, tope=0):
@@ -456,7 +462,7 @@ def _seccion_jugador(screen, vista, indice, estado, tomados, tope=0):
         _confirmado(screen, vista, f, y, estado)
         rol = next((r for r in ROLES if r["nombre"] == estado["rol"]), None)
         if rol is not None:
-            _dibujar_retrato(screen, vista, rol["nombre"], tope, rol["color"])
+            _dibujar_retrato(screen, vista, rol["nombre"], tope, rol["color"], listo=True)
         screen.set_clip(clip_previo)
         return
 
