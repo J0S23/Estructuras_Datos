@@ -442,4 +442,34 @@ texto, puntos = red.compartir(j1, pub)
 assert puntos == 0 and "verdad" in texto, texto
 print("4. compartir charla o una noticia sin verificar: 0 puntos y la confianza no cambia: OK")
 
+
+# -- 5. El celular dentro del casillero ---------------------------------------------------
+juego = nueva_partida()
+red = juego.nexus
+j1 = juego.jugadores[0]
+esc = next(e for e in juego.escondites if not e.get("candado"))
+parar_en(j1, esc["rect"].center)
+juego._manejar_tecla(j1.teclas["interactuar"][0])
+assert j1.escondido
+juego._manejar_tecla(j1.teclas["celular"][0])
+assert (j1.panel or {}).get("tipo") == "celular", "no sacó el celular en el casillero"
+juego._manejar_tecla(j1.teclas["derecha"][0])
+assert red.pestanas.get(j1) == "equipo", "las pestañas no cambian"
+juego._manejar_tecla(j1.teclas["interactuar"][0])
+assert j1.escondido, "con el celular abierto, interactuar no lo saca del casillero"
+frames(juego, 3)
+foto(juego, "h_celular_casillero")
+# Un alien llega a revisar: se guarda el celular (hay que calmar el pulso).
+juego._alien_revisa(j1, juego.aliens[0], esc)
+assert j1.panel is None and j1.minijuego is not None
+juego._manejar_tecla(j1.teclas["celular"][0])
+assert j1.panel is None, "con el alien revisando no se saca el celular"
+j1.minijuego = None
+juego._manejar_tecla(j1.teclas["celular"][0])
+juego._manejar_tecla(j1.teclas["celular"][0])
+assert j1.panel is None and j1.escondido
+juego._manejar_tecla(j1.teclas["interactuar"][0])
+assert not j1.escondido, "con el celular guardado, interactuar sale del casillero"
+print("5. el celular se saca en el casillero (y se guarda si un alien revisa): OK")
+
 print("\nTODO OK")
