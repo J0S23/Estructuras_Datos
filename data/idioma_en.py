@@ -992,6 +992,7 @@ TEXTOS = {
     "Repara la cápsula (ojo: el Guardia)": "Repair the pod (careful: the Guard)",
     "Reparando la cápsula": "Repairing the pod",
     "Reparen la cápsula: mantengan la tecla.": "Repair the pod: hold the key.",
+    "Reparen la cápsula: conecten los cables.": "Repair the pod: connect the cables.",
     "Rescata a tu compañero": "Rescue your teammate",
     "Si te equivocas, suena la alarma.": "If you get it wrong, the alarm goes off.",
     "Teclado bloqueado hasta que todos terminen el tutorial": "Keypad locked until everyone finishes the tutorial",

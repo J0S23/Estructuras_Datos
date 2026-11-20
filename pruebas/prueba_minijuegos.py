@@ -8,7 +8,7 @@
 2. Las tareas (juego/tareas.py) en el juego local: apagar una consola (con la
    tecla de interactuar de verdad y las flechas), encender la caja de
    fusibles en un apagón, reparar la cápsula. Al ganar pasa lo mismo que al
-   llenar la barra; con `minijuegos = False` (red) no se abre nada.
+   llenar la barra; con `minijuegos = False` (algunas pruebas) no se abre nada.
 3. Noticias verdaderas (redes/nexus.py): las publica un prisionero, ponen el
    candado en un casillero (no se puede esconder ahí), la cuenta para
    volverse viral empieza cuando le llega a un jugador, en el lugar se
@@ -286,7 +286,7 @@ j1 = juego.jugadores[0]
 j1.objetos.add("decodificador")
 parar_en(j1, juego.mision.consolas[0]["rect"].center)
 assert not tareas.intentar(juego, j1) and tareas.de(j1) is None
-print("2d. sin minijuegos (red), las tareas siguen siendo mantener la tecla: OK")
+print("2d. sin minijuegos, las tareas siguen siendo mantener la tecla: OK")
 
 
 # -- 3. Noticias verdaderas ---------------------------------------------------------------

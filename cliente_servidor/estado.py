@@ -100,6 +100,11 @@ CLASES = {
     # reportan y se borran, colores). Sin esto la pestaña Red del cliente se
     # quedaba como al principio.
     "Grafo": ("Estructuras.grafo", None),
+    # Los minijuegos de las tareas (misiones/minijuegos.py, el panel "tarea"):
+    # se mandan y se arman con su propio `a_red` / `de_red` (tienen dicts con
+    # tuplas de clave, sets de tuplas...).
+    **{clase: ("misiones.minijuegos", None)
+       for clase in ("Cables", "Interruptores", "Senal", "Abono", "Ganzua")},
 }
 
 
@@ -108,6 +113,8 @@ def _objeto(valor, profundidad):
     if regla is None:
         return None
     _, campos = regla
+    if hasattr(valor, "a_red"):
+        return {"O": [type(valor).__name__, valor.a_red()]}
     datos = atributos(valor, profundidad=max(1, profundidad - 1))
     if campos is not None:
         datos = {k: v for k, v in datos.items() if k in campos}
@@ -131,6 +138,9 @@ def _armar(datos, actual=None):
             from Movimiento.Personaje import DireccionSuave
             actual.__dict__.update({"reloj_ms": 0, "direccion": "south", "fase": 0.0,
                                     "moviendose": False, "_giro": DireccionSuave()})
+    if hasattr(actual, "de_red"):
+        actual.de_red(atribs)
+        return actual
     # Cada atributo se pone de nuevo (no se mezcla): si en el servidor se
     # borró algo de un dict (un nodo del grafo), aquí también.
     for clave, v in atribs.items():

@@ -1,17 +1,19 @@
-"""Las tareas con minijuego (misiones/minijuegos.py), en el juego local.
+"""Las tareas con minijuego (misiones/minijuegos.py), en local y en red.
 
 Antes, apagar una consola, reparar la cápsula, encender la caja de fusibles o
-echarle abono a la planta era mantener la tecla de interactuar. Ahora, en el
-juego local (`Game.minijuegos`), al presionar la tecla frente a la tarea se
-abre su minijuego en la vista de quien la hace; al ganarlo pasa lo mismo que
-al llenar la barra. En red (el servidor pone `minijuegos = False`) y en las
-pruebas que lo apagan, sigue siendo mantener la tecla.
+echarle abono a la planta era mantener la tecla de interactuar. Ahora
+(`Game.minijuegos`), al presionar la tecla frente a la tarea se abre su
+minijuego en la vista de quien la hace; al ganarlo pasa lo mismo que al
+llenar la barra. En red lo juega el servidor con las teclas que mandan los
+clientes, y el cliente lo dibuja (cliente_servidor/espejo.py, `_tarea`). En
+las pruebas que ponen `minijuegos = False` sigue siendo mantener la tecla.
 
 También se abren aquí los arreglos de las noticias verdaderas de NEXUS
 (redes/nexus.py): un casillero con candado se fuerza con la ganzúa, una caja
 de fusibles con los breakers botados se arregla con las palancas, etc.
 
-El minijuego va en el panel del jugador ({"tipo": "tarea", "juego": ...}):
+El minijuego va en el panel del jugador ({"tipo": "tarea", "mini": ...}; no
+"juego": esa clave no viaja por la red, cliente_servidor/estado.SALTAR):
 mientras lo juega no camina, y si un alien llega, lo atrapa.
 """
 
@@ -31,12 +33,12 @@ def activas(juego):
 def de(jugador):
     """El minijuego que está jugando (o None)."""
     panel = jugador.panel or {}
-    return panel.get("juego") if panel.get("tipo") == "tarea" else None
+    return panel.get("mini") if panel.get("tipo") == "tarea" else None
 
 
 def empezar(juego, jugador, tipo, al_ganar, facil=False, titulo=None):
     juego_mini = minijuegos.crear(tipo, facil, titulo=titulo)
-    jugador.abrir_panel({"tipo": "tarea", "juego": juego_mini, "al_ganar": al_ganar})
+    jugador.abrir_panel({"tipo": "tarea", "mini": juego_mini, "al_ganar": al_ganar})
     juego.sonar("menu_ok", 0.5)
     return juego_mini
 

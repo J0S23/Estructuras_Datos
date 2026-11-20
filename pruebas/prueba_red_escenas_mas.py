@@ -125,6 +125,10 @@ def escenas(g, n):
         if g.presentacion is not None and g.presentacion.abierta:
             g.presentacion.cerrar()
         g.tiempo_restante_ms = None
+        # El aviso de un logro de la escena anterior (entra deslizándose con
+        # el reloj de cada proceso) no es parte de esta.
+        if g.logros is not None:
+            g.logros.avisos.clear()
 
     def mitad_del_susto(*indices):
         def cada():
@@ -305,6 +309,10 @@ def escenas(g, n):
         if quien.rol != "Forjador":
             quien.objetos.add("kit")
         _poner(g, quien, (m.capsula.centerx, m.capsula.bottom + 8))
+        # La reparación es un minijuego (juego/tareas.py: los cables), también
+        # en red: se abre como con la tecla de interactuar.
+        from juego import tareas
+        tareas.intentar(g, quien)
 
     def capsula_reparar_cada():
         if g.mision.reparacion > 0.5:
@@ -334,8 +342,12 @@ def escenas(g, n):
         quien = next((j for j in g.jugadores if j.rol == "Biomante"), J(0))
         st["biomante"] = g.jugadores.index(quien)
         p = g.guardia_planta.planta
-        p["progreso"], p["crecida"] = 0.0, False
+        # (ya con un abono: así se ve la planta crecida a medias en el mapa y
+        # en el minijuego, que también se juega en red)
+        p["progreso"], p["crecida"], p["visto"] = 0.4, False, 0.0
         _poner(g, quien, (p["rect"].centerx, p["rect"].bottom + 30))
+        from juego import tareas
+        tareas.intentar(g, quien)
 
     def planta_cada():
         p = g.guardia_planta.planta
@@ -618,8 +630,7 @@ def escenas(g, n):
         Escena("capsula_entregar", capsula_entregar, None,
                lambda e: e.mision.piezas_entregadas > 0, ("encajar",)),
         Escena("capsula_reparar", capsula_reparar, capsula_reparar_cada,
-               lambda e: any(j.progreso for j in e.jugadores),
-               (), {0: {"interactuar"}}),
+               lambda e: any(type(_tarea(j)).__name__ == "Cables" for j in e.jugadores)),
     ]
     prisioneros = [
         Escena("npc_sigue", npc_sigue, None,
@@ -629,8 +640,8 @@ def escenas(g, n):
     ]
     biosfera = [
         Escena("planta", planta, planta_cada,
-               lambda e: e.guardia_planta.planta["progreso"] > 0, (),
-               None),
+               lambda e: (any(type(_tarea(j)).__name__ == "Abono" for j in e.jugadores)
+                          and e.guardia_planta.planta.get("visto", 0) > 0.2)),
         Escena("guardia_distraido", guardia_distraido, None,
                lambda e: e.guardia_planta.guardia.distraido),
         Escena("guardia_come", guardia_come, None,
@@ -686,14 +697,11 @@ def escenas(g, n):
                lambda e: ve_habilidad(3, "INTERCEPCION")(e) and "intercepcion" in e.jugadores[3].efectos),
     ]
     if n == 2:
-        # La planta en 2 jugadores la hace crecer la Biomante (J1) manteniendo.
-        biosfera[0].mantener = {0: {"interactuar"}}
         lista = (sustos + sombra + cambiaformas + puertas + [mision[0], mision[1]] + mision[3:]
                  + prisioneros + biosfera + celu + terminal + avisos + habilidades[:1]
                  + [Escena("victoria", victoria, None, lambda e: e.mision.resultado == "victoria",
                            ("victoria",), resultado=True)])
     elif n == 3:
-        biosfera[0].mantener = {2: {"interactuar"}}
         lista = ([sustos[0], sustos[1]] + [sombra[0], sombra[1]] + [puertas[0], puertas[3]]
                  + [mision[3], mision[4], mision[5]] + biosfera[:1] + celu[:3] + avisos[:1]
                  + [Escena("vidas_bajan", vidas_bajan, None,
@@ -709,12 +717,13 @@ def escenas(g, n):
                  + [Escena("eliminado", eliminado, None, lambda e: e.jugadores[n - 1].eliminado),
                     Escena("victoria", victoria, None, lambda e: e.mision.resultado == "victoria",
                            ("victoria",), resultado=True)])
-    # La reparación: la mantiene el que tiene las piezas (el Forjador o J1 con el kit).
-    forjador = next((i for i, r in enumerate(PARTIDAS[n][0]) if r == "Forjador"), 0)
-    for e in lista:
-        if e.nombre == "capsula_reparar":
-            e.mantener = {forjador: {"interactuar"}}
     return lista
+
+
+def _tarea(jugador):
+    """El minijuego de una tarea que está jugando (juego/tareas.py) o None."""
+    from juego import tareas
+    return tareas.de(jugador)
 
 
 def congelar_relojes_del_susto():

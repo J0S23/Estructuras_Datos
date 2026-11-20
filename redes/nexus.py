@@ -157,7 +157,7 @@ class RedNexus:
         self.virales = 0             # rumores que se volvieron virales (resultados)
         self.creyeron_tarde = 0      # gente que se lo creyó antes de que llegara el desmentido
         self.seguidores_ganados = 0  # seguidores que ganaron los bots mientras nadie los reportaba
-        self.con_noticias = True     # noticias verdaderas (en red todavía no: servidor.py)
+        self.con_noticias = True     # noticias verdaderas (False: solo rumores)
         self._armar_red()
 
     # -- La red ---------------------------------------------------------------------
@@ -732,7 +732,7 @@ class RedNexus:
             nodo = self.nodo_de(jugador)
             c = jugador.hitbox.center
             # Las noticias se arreglan en el lugar con un minijuego
-            # (juego/tareas.py); sin minijuegos (en red), con solo llegar.
+            # (juego/tareas.py); sin minijuegos (algunas pruebas), con solo llegar.
             pub = self.noticia_para(jugador)
             if pub is not None and not getattr(self.juego, "minijuegos", False):
                 self.arreglar(jugador, pub)
