@@ -30,7 +30,7 @@ ROLES = [
         "nombre": "Biomante",
         "lema": "Vida que sostiene al equipo",
         "objetivo": "Mantén al equipo calmado y en pie.",
-        "resumen": "Siente el pulso de todos y lo calma.",
+        "resumen": "Siente el pulso de todos y los calma.",
         "color": (90, 220, 120),
     },
     {

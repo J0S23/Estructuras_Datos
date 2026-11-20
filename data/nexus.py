@@ -103,8 +103,65 @@ RUMORES = [
      "desmentido": "La puerta del pasillo NO está soldada: se abre entre dos. Foto."},
 ]
 
+# -- Noticias verdaderas --------------------------------------------------------------
+# Las publica un prisionero de verdad (no un bot) y lo que cuentan ES cierto:
+# en Misiones se ven igual que los rumores (no se sabe cuál es cuál hasta ir a
+# ver). Verificarla es ir al lugar y ARREGLARLO con un minijuego (`arreglo`,
+# misiones/minijuegos.py; en red, se arregla solo al llegar). Con la foto se
+# publica `confirmacion`. "efecto" = lo que pasa en la nave mientras nadie lo
+# arregla ("candado": ese casillero no se puede usar). "viral" es lo que se
+# avisa si se riega por toda la nave antes de que alguien la verifique.
+NOTICIAS = [
+    {"lugar": "escondite",
+     "texto": "Ojo: le pusieron candado a un casillero. Ya no sirve para esconderse.",
+     "foto": "El casillero sí tenía candado. Ya está abierto.",
+     "confirmacion": "Era cierto: un casillero tenía candado. Lo forcé y ya se puede usar.",
+     "arreglo": "ganzua", "titulo_arreglo": "El casillero tiene candado: fuérzalo",
+     "pista": "Revisar el casillero", "efecto": "candado",
+     "viral": "Toda la nave sabe lo del candado: nadie usa ese casillero."},
+    {"lugar": "fusibles",
+     "texto": "La caja de fusibles de mi pasillo tiene los breakers botados. Por eso parpadea la luz.",
+     "foto": "Los breakers sí estaban abajo. Ya están arriba.",
+     "confirmacion": "Era cierto lo de los breakers de la caja de fusibles. Ya los subí.",
+     "arreglo": "interruptores", "titulo_arreglo": "Breakers botados: sube las palancas",
+     "pista": "Revisar la caja de fusibles",
+     "viral": "Toda la nave sabe lo de la caja de fusibles."},
+    {"lugar": "panel",
+     "texto": "Un panel de reparación está echando chispas: tiene los cables cruzados.",
+     "foto": "Los cables del panel sí estaban cruzados. Ya están en su lugar.",
+     "confirmacion": "Era cierto: el panel tenía los cables cruzados. Ya lo arreglé.",
+     "arreglo": "cables", "titulo_arreglo": "Panel en corto: conecta los cables",
+     "pista": "Revisar el panel",
+     "viral": "Toda la nave sabe lo del panel en corto."},
+    {"lugar": "terminal",
+     "texto": "Una terminal se quedó colgada mostrando puro ruido. Que alguien la reinicie.",
+     "foto": "La terminal sí estaba colgada. Ya responde.",
+     "confirmacion": "Era cierto: la terminal estaba colgada. La resintonicé y ya funciona.",
+     "arreglo": "senal", "titulo_arreglo": "Terminal colgada: sintoniza la señal",
+     "pista": "Revisar la terminal",
+     "viral": "Toda la nave sabe lo de la terminal colgada."},
+    {"lugar": "celda",
+     "texto": "La cerradura de una celda quedó trabada. Si encierran a alguien ahí, va a costar sacarlo.",
+     "foto": "La cerradura sí estaba trabada. Ya abre bien.",
+     "confirmacion": "Era cierto lo de la cerradura de la celda. La destrabé.",
+     "arreglo": "ganzua", "titulo_arreglo": "Cerradura trabada: destrábala",
+     "pista": "Revisar la cerradura de la celda",
+     "viral": "Toda la nave sabe lo de la cerradura trabada."},
+    {"lugar": "puerta_doble",
+     "texto": "El lector de la puerta del pasillo tiene los cables sueltos, se apaga a ratos.",
+     "foto": "Los cables del lector sí estaban sueltos. Ya están conectados.",
+     "confirmacion": "Era cierto: el lector de la puerta tenía cables sueltos. Ya los conecté.",
+     "arreglo": "cables", "titulo_arreglo": "Lector de la puerta: conecta los cables",
+     "pista": "Revisar el lector de la puerta",
+     "viral": "Toda la nave sabe lo del lector de la puerta."},
+]
+PROB_NOTICIA = 0.4              # de lo que va a Misiones, qué parte es verdad
+PUNTOS_ARREGLAR = 10            # al arreglarlo en el lugar (antes de publicar)
+PUNTOS_CONFIRMAR = 15           # al publicar la foto
+
 # Publicaciones de relleno de los prisioneros: ciertas e inofensivas. Hacen que
-# el feed se sienta como una red social de verdad. Compartirlas suma poquito.
+# el feed se sienta como una red social de verdad. Compartirlas no da puntos ni
+# cambia la confianza: no hay nada que verificar.
 NORMALES = [
     "¿Alguien más tiene hambre? Llevo dos días sin comer nada decente.",
     "Extraño el sol. Aquí todo es luz azul.",

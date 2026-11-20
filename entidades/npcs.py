@@ -648,7 +648,7 @@ class GestorNPCs:
         juego = self.juego
         red = getattr(juego, "nexus", None)
         libres = [e for e in getattr(juego, "escondites", [])
-                  if e.get("ocupante") is None and e.get("npc") is None]
+                  if e.get("ocupante") is None and e.get("npc") is None and not e.get("candado")]
 
         def cree(npc):
             return red is None or npc.nodo not in red.grafo or red.color(npc.nodo) != "verde"

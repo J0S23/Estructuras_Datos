@@ -746,20 +746,25 @@ def render_mensaje(screen, vista, jugador, tapado=None):
         etiqueta = fuente_de_tamano(px).render(jugador.mensaje, True, jugador.mensaje_color)
         if etiqueta.get_width() <= disponible:
             caja = etiqueta.get_rect(centerx=(t0 + t1) // 2, top=fila.y + 4)
-            _caja_mensaje(screen, [etiqueta], caja)
+            _caja_mensaje(screen, [etiqueta], caja, jugador.mensaje_color)
             return
     # No cabe en una línea: en renglones, en ese mismo pedazo.
     renglones = partir_lineas(jugador.mensaje, f, max(80, disponible))
     imgs = [f.render(r, True, jugador.mensaje_color) for r in renglones]
     caja = pygame.Rect(0, 0, max(i.get_width() for i in imgs), len(imgs) * f.get_linesize())
     caja.midtop = ((t0 + t1) // 2, fila.y + 4)
-    _caja_mensaje(screen, imgs, caja)
+    _caja_mensaje(screen, imgs, caja, jugador.mensaje_color)
 
 
-def _caja_mensaje(screen, imgs, caja):
-    fondo = pygame.Surface((caja.width + 20, caja.height + 10), pygame.SRCALPHA)
-    fondo.fill((14, 15, 28, 215))
-    screen.blit(fondo, (caja.x - 10, caja.y - 5))
+def _caja_mensaje(screen, imgs, caja, color=None):
+    vidrio = _vidrio()
+    if vidrio is not None:
+        vidrio.caja(screen, pygame.Rect(caja.x - 12, caja.y - 6, caja.width + 24, caja.height + 12),
+                    color or COLOR_BORDE, 215, 8)
+    else:
+        fondo = pygame.Surface((caja.width + 20, caja.height + 10), pygame.SRCALPHA)
+        fondo.fill((14, 15, 28, 215))
+        screen.blit(fondo, (caja.x - 10, caja.y - 5))
     paso = caja.height // max(1, len(imgs))
     for k, img in enumerate(imgs):
         screen.blit(img, img.get_rect(midtop=(caja.centerx, caja.y + k * paso)))
@@ -824,10 +829,15 @@ def render_pista_zona(screen, vista, jugador):
     # centro, mientras dura, el tutorial (render_tutorial anota su borde).
     caja.bottom = min(vista.bottom - 96, tope_abajo(vista, jugador) - 12)
 
-    screen.blit(cache_dibujo.capa((caja.width + 24, caja.height + 12), (14, 15, 28, 225)),
-                (caja.x - 12, caja.y - 6))
-    pygame.draw.rect(screen, COLOR_BORDE, (caja.x - 12, caja.y - 6,
-                                           caja.width + 24, caja.height + 12), 2)
+    vidrio = _vidrio()
+    if vidrio is not None:
+        vidrio.caja(screen, pygame.Rect(caja.x - 14, caja.y - 7, caja.width + 28, caja.height + 14),
+                    COLOR_TITULO, 220, 8)
+    else:
+        screen.blit(cache_dibujo.capa((caja.width + 24, caja.height + 12), (14, 15, 28, 225)),
+                    (caja.x - 12, caja.y - 6))
+        pygame.draw.rect(screen, COLOR_BORDE, (caja.x - 12, caja.y - 6,
+                                               caja.width + 24, caja.height + 12), 2)
     screen.blit(etiqueta, caja.topleft)
 
 
@@ -907,8 +917,113 @@ def _medidas_pulso(screen, vista, jugador=None):
 
 def rect_pulso(screen, vista, jugador=None):
     """Dónde va el recuadro del pulso (para poner cosas justo encima: el mapa
-    del Tecnomante, roles.render_minimapa, y el tutorial)."""
-    return _medidas_pulso(screen, vista, jugador)[5]
+    del Tecnomante, roles.render_minimapa, y el tutorial). Con la habilidad
+    al lado (render_habilidad), los dos juntos."""
+    fondo = _medidas_pulso(screen, vista, jugador)[5]
+    hab = rect_habilidad(screen, vista, jugador) if jugador is not None else None
+    return fondo.union(hab) if hab is not None else fondo
+
+
+# -- La habilidad y su recarga, al lado del pulso ----------------------------------
+
+def nodo_con_recarga(jugador):
+    """La habilidad con recarga que tiene (la de la tecla, o la Reparación del
+    Forjador), o None si todavía no tiene ninguna."""
+    arbol = getattr(jugador, "arbol", None)
+    if arbol is None or getattr(arbol, "vacio", True):
+        return None
+    for nodo in reversed(arbol.desbloqueadas()):
+        if getattr(nodo, "recarga_s", 0):
+            return nodo
+    return None
+
+
+def rect_habilidad(screen, vista, jugador):
+    """El cuadrito de la habilidad: a la derecha del pulso, del mismo alto."""
+    if nodo_con_recarga(jugador) is None:
+        return None
+    fondo = _medidas_pulso(screen, vista, jugador)[5]
+    return pygame.Rect(fondo.right + 8, fondo.y, fondo.height, fondo.height)
+
+
+_sombras_recarga = {}
+
+
+def render_habilidad(screen, vista, jugador):
+    """La habilidad con su ícono. Mientras se recarga: el ícono apagado, una
+    sombra que se va abriendo como un reloj y los segundos que faltan; lista:
+    el ícono entero, el borde del color del rol y su tecla."""
+    caja = rect_habilidad(screen, vista, jugador)
+    if caja is None:
+        return
+    from screens.panel_habilidades import icono_habilidad, _apagar, ajustar_lado
+    from data.roles import ROLES_POR_NOMBRE
+    nodo = nodo_con_recarga(jugador)
+    color = ROLES_POR_NOMBRE.get(jugador.rol, {}).get("color", COLOR_BORDE)
+    total = max(1, int(nodo.recarga_s * 1000))
+    falta = max(0, getattr(jugador, "recarga_ms", 0))
+    lista = falta <= 0
+    vidrio = _vidrio()
+    if vidrio is not None:
+        if lista:
+            nivel = 0.6 + 0.4 * math.sin(pygame.time.get_ticks() / 300)
+            vidrio.brillo(screen, caja.center, caja.w * 0.75, tuple(int(c * 0.28 * nivel) for c in color))
+        vidrio.caja(screen, caja, color if lista else (90, 96, 130), 210, 10)
+    else:
+        screen.blit(cache_dibujo.capa(caja.size, (14, 15, 28, 190)), caja.topleft)
+        pygame.draw.rect(screen, color if lista else COLOR_BORDE, caja, 2)
+    lado = ajustar_lado(int(caja.h * 0.66))
+    icono = icono_habilidad(jugador.rol, nodo.clave, lado)
+    centro = (caja.centerx, caja.centery - (3 if lista else 0))
+    if icono is not None:
+        screen.blit(icono if lista else _apagar(icono, 150), icono.get_rect(center=centro))
+    if not lista:
+        # La sombra que falta, como un reloj (de las 12 en el sentido del reloj).
+        k = falta / total
+        radio = int(caja.w * 0.42)
+        clave = (radio, int(k * 60))
+        sombra = _sombras_recarga.get(clave)
+        if sombra is None:
+            if len(_sombras_recarga) > 200:
+                _sombras_recarga.clear()
+            sombra = pygame.Surface((radio * 2, radio * 2), pygame.SRCALPHA)
+            puntos = [(radio, radio)]
+            pasos = max(2, int(48 * clave[1] / 60))
+            for i in range(pasos + 1):
+                a = -math.pi / 2 + 2 * math.pi * (1 - clave[1] / 60) + 2 * math.pi * clave[1] / 60 * i / pasos
+                puntos.append((radio + radio * math.cos(a), radio + radio * math.sin(a)))
+            if len(puntos) >= 3:
+                pygame.draw.polygon(sombra, (6, 6, 14, 120), puntos)
+            _sombras_recarga[clave] = sombra
+        screen.blit(sombra, sombra.get_rect(center=caja.center))
+        # El aro del avance.
+        arco = caja.inflate(-8, -8)
+        hecho = 1 - k
+        if hecho > 0.01:
+            pygame.draw.arc(screen, color, arco, math.pi / 2 - 2 * math.pi * hecho, math.pi / 2, 3)
+        f = fuente_de_tamano(max(14, int(caja.h * 0.4)))
+        texto = str(math.ceil(falta / 1000))
+        _con_sombra(screen, f, texto, COLOR_TEXTO,
+                    (caja.centerx - f.size(texto)[0] // 2, caja.centery - f.get_height() // 2))
+        return
+    # Lista: su tecla abajo (la de habilidad; la Reparación se usa en un panel).
+    texto = jugador.nombre_tecla('habilidad') if getattr(nodo, "uso", "") == "activa" else "panel"
+    for px in range(max(10, int(caja.h * 0.2)), 7, -1):
+        f = fuente_de_tamano(px)
+        etiqueta = render_texto_mando(f, texto, COLOR_TITULO)
+        if etiqueta.get_width() <= caja.w - 8:
+            break
+    screen.blit(etiqueta, etiqueta.get_rect(midbottom=(caja.centerx, caja.bottom - 3)))
+
+
+def _vidrio():
+    """screens/vidrio.py si los efectos visuales están prendidos; si no, None
+    (el HUD de antes)."""
+    from juego import efectos
+    if not efectos.ACTIVOS:
+        return None
+    from screens import vidrio
+    return vidrio
 
 
 def render_pulso(screen, vista, jugador):
@@ -917,20 +1032,34 @@ def render_pulso(screen, vista, jugador):
     color = _color_pulso(jugador.pulso)
     golpe = _intensidad_latido(jugador.fase_latido)
     f, ancho_barra, alto_barra, x, base, fondo = _medidas_pulso(screen, vista, jugador)
-    screen.blit(cache_dibujo.capa(fondo.size, (14, 15, 28, 190)), fondo.topleft)
-
-    tamano = 26 + golpe * 8
-    _dibujar_corazon(screen, (x + 16, fondo.centery), tamano, color)
+    vidrio = _vidrio()
+    barra = pygame.Rect(x + 40, base - alto_barra - 2, ancho_barra, alto_barra)
+    if vidrio is not None:
+        # Vidrio con el borde del color del pulso; el corazón brilla con cada
+        # golpe (pum-pum, al ritmo de los lpm) y la barra va de verde a rojo.
+        vidrio.caja(screen, fondo, color, 205, 10)
+        nivel = round(golpe * 4) / 4
+        centro = (x + 16, fondo.centery)
+        if nivel > 0:
+            vidrio.brillo(screen, centro, 18 + 14 * nivel, tuple(int(c * 0.55 * nivel) for c in color))
+        dibujar_corazon(screen, (centro[0], centro[1] - 3), int((26 + golpe * 8) * 1.25), True, color)
+    else:
+        screen.blit(cache_dibujo.capa(fondo.size, (14, 15, 28, 190)), fondo.topleft)
+        tamano = 26 + golpe * 8
+        _dibujar_corazon(screen, (x + 16, fondo.centery), tamano, color)
 
     texto = cache_dibujo.texto(f, f"{jugador.latidos_por_minuto} lpm", COLOR_TEXTO)
     screen.blit(texto, (x + 40, fondo.y + 6))
 
-    barra = pygame.Rect(x + 40, base - alto_barra - 2, ancho_barra, alto_barra)
-    pygame.draw.rect(screen, (40, 42, 64), barra)
-    lleno = barra.copy()
-    lleno.width = int(barra.width * jugador.pulso / 100)
-    pygame.draw.rect(screen, color, lleno)
-    pygame.draw.rect(screen, COLOR_BORDE, barra, 1)
+    if vidrio is not None:
+        vidrio.barra(screen, barra, jugador.pulso / 100, COLOR_PULSO_CALMA, COLOR_PULSO_PANICO,
+                     COLOR_PULSO_ALERTA)
+    else:
+        pygame.draw.rect(screen, (40, 42, 64), barra)
+        lleno = barra.copy()
+        lleno.width = int(barra.width * jugador.pulso / 100)
+        pygame.draw.rect(screen, color, lleno)
+        pygame.draw.rect(screen, COLOR_BORDE, barra, 1)
 
     # Las vidas, a la derecha de los lpm.
     ancho_vidas = _ancho_vidas(vista, jugador)
@@ -941,8 +1070,11 @@ def render_pulso(screen, vista, jugador):
     if jugador.visto:
         aviso = cache_dibujo.texto(f, "¡TE VEN!", COLOR_PULSO_PANICO)
         caja = aviso.get_rect(bottomleft=(fondo.x + 6, fondo.y - 6))
-        screen.blit(cache_dibujo.capa(caja.inflate(12, 6).size, (14, 15, 28, 205)),
-                    caja.inflate(12, 6).topleft)
+        if vidrio is not None:
+            vidrio.caja(screen, caja.inflate(16, 8), COLOR_PULSO_PANICO, 215, 6)
+        else:
+            screen.blit(cache_dibujo.capa(caja.inflate(12, 6).size, (14, 15, 28, 205)),
+                        caja.inflate(12, 6).topleft)
         screen.blit(aviso, caja.topleft)
 
 

@@ -154,9 +154,11 @@ try:
     assert teclado.error_dibujo is None and mandos.error_dibujo is None
     pygame.image.save(pantallas[0], os.path.join(CARPETA, "red_resultados_laptop1.png"))
     pygame.image.save(pantallas[1], os.path.join(CARPETA, "red_resultados_laptop2.png"))
-    # Enter vuelve al menú.
+    # Enter vuelve al menú (el primero salta la escena del final, screens/final.py).
     enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="\r", mod=0, scancode=0)
     teclado.paso(pantallas[0], eventos=[enter])
+    if teclado.motivo != "terminada":
+        teclado.paso(pantallas[0], eventos=[enter])
     assert teclado.motivo == "terminada"
     for s in (teclado, mandos):
         s.cerrar()

@@ -106,19 +106,24 @@ python Editores/visor_personajes.py  # revisar que sprites y config tiene cada p
 
 Cada jugador tiene NEXUS en su celular. Los aliens (el Cambiaformas, con cuentas
 falsas que parecen prisioneros) riegan **rumores falsos** sobre lugares de la nave
-("la capsula exploto", "las celdas tienen gas"...). El celular tiene tres pestanas
+("la capsula exploto", "las celdas tienen gas"...). Pero no todo es mentira: a veces
+un prisionero cuenta algo **cierto** ("le pusieron candado a un casillero") y en
+Misiones se ve igual que un rumor: hasta ir no se sabe. El celular tiene tres pestanas
 (se cambian con A/D, las flechas o la cruceta): **Misiones** (lo que hay que ir a
 verificar, con su estado: por verificar, vas para alla, foto lista, desmentido),
 **Equipo** (lo que publican tus companeros) y **Red** (lo demas). Cada jugador tiene
 como maximo 3 cosas por verificar a la vez (si le llega otra estando lleno, no le
 aparece). Con el celular se puede:
 
-- **Ir a verificarlo**: una flecha lleva al lugar; al llegar se saca una foto sola.
+- **Ir a verificarlo**: una flecha lleva al lugar. Si era mentira, al llegar se saca
+  una foto sola; si era verdad, ahi mismo se arregla con un minijuego (forzar el
+  candado, subir los breakers...) y se **confirma** con la foto.
 - **Desmentir** con la foto: la verdad corre por la red y la tripulacion confia en
   ustedes. La foto tal cual convence a mas gente, pero se ve donde estas y el alien
   mas cercano va por ti; recortada es mas segura.
 - **Compartir**: compartir un rumor sin verificar lo riega mas y tus seguidores
-  dejan de confiar en ti.
+  dejan de confiar en ti. Compartir algo cierto sin verificarlo, o la charla de la
+  pestana Red, no da puntos ni cambia la confianza.
 - **¿De donde salio esto?** y **reportar**: reportar al bot que lo empezo lo borra
   de la red; reportar a un prisionero que solo se lo creyo no sirve de nada.
 
@@ -149,7 +154,7 @@ No le hacen nada el hackeo ni el señuelo. Hay dos formas de quitarlo:
 - **Un rato (Resonante):** cerca de el, la tecla de interactuar (su Sintonia de
   señales) lo distrae 18 s: se va a un rincon a escuchar y no ve a nadie. Hay que
   reparar la capsula rapido y salir. Una Emision que caiga en la Bahia tambien.
-- **Para siempre (Biomante):** mantener la tecla junto a la planta de la Biosfera
+- **Para siempre (Biomante):** echarle el abono a la planta de la Biosfera (un minijuego)
   hasta que crece y le da una **fruta** (queda en su inventario; la puede soltar
   para que otro la lleve). Quien la tenga se la da al Guardia y este
   se va a su rincon a comer. Sin Biomante (o si lo eliminan) aparece **abono**, y
@@ -259,8 +264,10 @@ Biomante puede devolver vidas con Regeneración. Si eliminan al Tecnomante deja 
 al Forjador deja un kit de herramientas (si no hay ya uno por ahi), para que la mision
 se pueda terminar. Si falta un rol desde el principio, aparece **uno solo** de su
 consumible (decodificador, kit o abono), cada uno en un lugar de consumibles distinto.
-Lo que lleva cada uno se ve en el inventario, abajo a la derecha. Las consolas y la reparacion se hacen
-**manteniendo** la tecla de interactuar. La habilidad escogida se usa con **F**
+Lo que lleva cada uno se ve en el inventario, abajo a la derecha. Las consolas, la reparacion de la capsula,
+la caja de fusibles y la planta tienen cada una su **minijuego** (sintonizar la senal,
+conectar los cables, subir las palancas, echar el abono), que se abre con la tecla de
+interactuar (en red, por ahora, se mantiene la tecla). La habilidad escogida se usa con **F**
 (jugador 1) o **Alt derecho** (jugador 2) y se paga con puntos del equipo.
 
 Cada jugador tiene un **campo de vision**, como en Among Us: no ve a traves de
@@ -271,7 +278,7 @@ paredes; de los aliens no se ven ni los ojos ni su rango de vision, y sus
 señales quedan a oscuras como ellos) y no funciona nada electrico: terminales,
 NEXUS, escaneo, teclados, consolas, puertas para dos y los sellos del Forjador.
 Dura hasta que alguien encuentre la caja de fusibles que parpadea en rojo y la
-encienda manteniendo la tecla; en cualquier dificultad, una **flecha roja**
+encienda (subiendo las palancas); en cualquier dificultad, una **flecha roja**
 alrededor de cada jugador señala dónde está. En el apagon, ademas, sale **la Sombra**
 (`entidades/sombra.py`, idea de Joseph): a oscuras solo se le ven los ojos; si la
 linterna la apunta no se puede mover (como los angeles llorones de Doctor Who), y si le das la
@@ -310,6 +317,7 @@ python pruebas/prueba_vista_grafo.py  # la vista de los grafos (Pausa > Opciones
 python pruebas/prueba_idioma.py      # el juego en ingles (Menu > Opciones > Idioma)
 python pruebas/prueba_rumores_virales.py  # rumores que se vuelven virales y desmentidos tarde
 python pruebas/prueba_bots_crecen.py      # las cuentas falsas que nadie reporta ganan seguidores
+python pruebas/prueba_minijuegos.py       # minijuegos de las tareas y noticias verdaderas en NEXUS
 python pruebas/prueba_flechas_camino.py   # las flechas guía siguen el camino, no atraviesan paredes
 python pruebas/prueba_infiltrado.py # mision secundaria del infiltrado de NEXUS
 python pruebas/prueba_logros.py    # arbol de logros y cuando se consigue cada uno

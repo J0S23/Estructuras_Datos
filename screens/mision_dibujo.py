@@ -306,6 +306,12 @@ def render_progreso(screen, vista, jugador):
     x = vista.centerx - ancho // 2
     from screens.paneles import tope_abajo
     y = min(vista.bottom - 150, tope_abajo(vista, jugador) - 66)   # encima de la pista
+    if efectos.ACTIVOS:
+        from screens import vidrio
+        vidrio.caja(screen, pygame.Rect(x - 12, y - 28, ancho + 24, 50), COLOR_LISTO, 220, 8)
+        _texto(screen, texto, vista.centerx, y - 22, (240, 242, 252))
+        vidrio.barra(screen, pygame.Rect(x, y, ancho, 12), valor, (70, 170, 110), (140, 240, 170))
+        return
     screen.blit(cache_dibujo.capa((ancho + 20, 46), (14, 15, 28, 220)), (x - 10, y - 26))
     _texto(screen, texto, vista.centerx, y - 22, (240, 242, 252))
     pygame.draw.rect(screen, (40, 42, 64), (x, y, ancho, 12))

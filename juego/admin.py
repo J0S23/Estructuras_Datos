@@ -153,6 +153,21 @@ def _liberar(juego):
     return f"{libres} liberados" if libres else "No hay nadie en las celdas"
 
 
+def _terminar(resultado, motivo):
+    """Termina la partida ya, ganada o perdida: para ver la escena del final
+    (screens/final.py) sin jugarla entera. El juego llama a terminar_ronda en
+    el siguiente cuadro, como cuando se gana o se pierde de verdad."""
+    def accion(juego):
+        mision = juego.mision
+        if mision is None or not mision.activa:
+            return "Este mapa no tiene misión"
+        if mision.resultado is not None:
+            return "La partida ya terminó"
+        mision.resultado, mision.motivo_fin = resultado, motivo
+        return "¡Escaparon!" if resultado == "victoria" else "Los encerraron a todos"
+    return accion
+
+
 def _si_no(valor):
     return "sí" if valor else "no"
 
@@ -175,6 +190,8 @@ OPCIONES = [
      "estado": lambda j: _si_no(getattr(j, "admin_invencible", False))},
     {"texto": "Abrir todas las puertas", "accion": _abrir_puertas},
     {"texto": "Sacar a todos de las celdas", "accion": _liberar},
+    {"texto": "Ganar ya (ver la escena del final)", "accion": _terminar("victoria", "escaparon")},
+    {"texto": "Perder ya (todos a las celdas)", "accion": _terminar("derrota", "atrapados")},
 ]
 
 

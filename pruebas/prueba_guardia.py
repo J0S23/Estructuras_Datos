@@ -76,6 +76,7 @@ class MandoQuieto:
 
 def nueva_partida(roles, dificultad="normal"):
     g = App.Game()
+    g.minijuegos = False        # (aquí se prueba manteniendo la tecla; los minijuegos: prueba_minijuegos)
     if len(roles) > 2:
         for puesto in (2, 3):
             g.mandos.por_puesto[puesto] = MandoQuieto(puesto)
@@ -395,4 +396,42 @@ frames(2)
 assert m.fase == "capsula" and not bahia.hay_camino_permanente()
 assert flecha(res) == "Distrae al Guardia (Sintonía)"
 print("sin forma de darle de comer: el Resonante lo distrae")
+
+# ---------- Con el minijuego del abono: la planta de verdad crece con cada acierto ----------
+from juego import tareas
+from misiones.guardia import cuadro_planta
+g = nueva_partida(["Biomante", "Forjador"])
+g.minijuegos = True
+bahia = g.guardia_planta
+bio = g.jugadores[0]
+planta = bahia.planta
+cuadros = imagenes_planta()[0]
+poner(bio, (planta["rect"].centerx, planta["rect"].bottom + 30))
+assert tareas.intentar(g, bio)
+mini = tareas.de(bio)
+assert mini.necesarios == 2, "el Biomante tiene la versión corta"
+
+
+def acertar():
+    mini.caida = (0.0, 0)
+    frames(int(mini.CAIDA_MS / DT) + 2)
+
+
+acertar()
+assert mini.aciertos == 1 and abs(planta["progreso"] - 0.5) < 1e-6, planta["progreso"]
+assert planta.get("visto", 0) < 0.5, "lo que se ve sube de a poco"
+frames(int(1200 / DT))
+assert bahia.imagen_planta() is cuadros[cuadro_planta(0.5, len(cuadros))], "los demás la ven a la mitad"
+g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "guardia_planta_minijuego.png"))
+# Lo deja a medias: al volver sigue desde donde iba.
+g._manejar_tecla(bio.teclas["habilidades"][0])
+assert tareas.de(bio) is None and planta["progreso"] == 0.5 and not planta["crecida"]
+assert tareas.intentar(g, bio)
+mini = tareas.de(bio)
+assert mini.aciertos == 1, mini.aciertos
+acertar()
+frames(int(1000 / DT))
+assert tareas.de(bio) is None and planta["crecida"] and planta["fruta"]
+assert bahia.imagen_planta() is cuadros[-1]
+print("minijuego del abono: la planta del mapa crece con cada acierto y sigue donde iba")
 print("\nTODO OK")

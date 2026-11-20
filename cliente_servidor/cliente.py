@@ -1116,10 +1116,12 @@ class Sesion:
         except Exception:
             aviso(pantalla, ["¡ESCAPARON!" if resultado == "victoria" else "DERROTA"])
         self._cartel(pantalla, "Partida en red terminada: Enter para volver al menú")
+        from screens import resultados as pantalla_resultados
         for ev in eventos:
-            if ev.type == pygame.KEYDOWN and ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                self.motivo = "terminada"
-            elif ev.type in (pygame.JOYBUTTONDOWN, getattr(pygame, "CONTROLLERBUTTONDOWN", -1)):
+            pulsa = ((ev.type == pygame.KEYDOWN and ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER))
+                     or ev.type in (pygame.JOYBUTTONDOWN, getattr(pygame, "CONTROLLERBUTTONDOWN", -1)))
+            # La primera pulsación salta la escena del final (screens/final.py).
+            if pulsa and not pantalla_resultados.saltar_intro():
                 self.motivo = "terminada"
 
     def jugar(self, pantalla):

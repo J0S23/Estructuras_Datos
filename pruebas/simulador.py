@@ -57,6 +57,7 @@ DIFICULTAD = None     # --dificultad facil|normal|... (sin eso: como Difícil)
 
 def nueva_partida(roles):
     g = App.Game()
+    g.minijuegos = False        # los bots mantienen la tecla (no juegan minijuegos)
     if DIFICULTAD:
         from juego.dificultad import Dificultad
         g.dificultad = Dificultad(DIFICULTAD)

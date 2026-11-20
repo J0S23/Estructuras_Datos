@@ -174,10 +174,12 @@ def _dibujar_icono(sup, rama, centro, s, color, fondo):
 _insignias = {}
 
 
-def insignia(diametro, rama, est):
-    """El círculo con el ícono de la rama ("oculto": un candado). Guardada."""
+def insignia(diametro, rama, est, logro=None):
+    """El círculo con el dibujo del logro (`logro` = su clave, ver
+    screens/iconos_logros.py; si no tiene, el de la rama; "oculto": un
+    candado). Guardada."""
     diametro = max(8, int(diametro))
-    clave = (diametro, rama, est)
+    clave = (diametro, rama, est, logro if est != "oculto" else None)
     img = _insignias.get(clave)
     if img is not None:
         return img
@@ -197,7 +199,9 @@ def insignia(diametro, rama, est):
         # Brillo arriba, como una ficha.
         pygame.draw.circle(sup, _mezclar(color, (255, 255, 255), 0.35), c, d // 2 - d // 9,
                            max(1, d // 40), draw_top_left=True, draw_top_right=True)
-    _dibujar_icono(sup, "oculto" if est == "oculto" else rama, c, d * 0.56, icono, fondo)
+    from screens import iconos_logros
+    if est == "oculto" or not iconos_logros.dibujar(sup, logro, c, d * 0.56, icono, fondo):
+        _dibujar_icono(sup, "oculto" if est == "oculto" else rama, c, d * 0.56, icono, fondo)
     img = pygame.transform.smoothscale(sup, (diametro, diametro))
     _insignias[clave] = img
     return img
@@ -279,7 +283,7 @@ def render_aviso_logro(screen, gestor):
     franja = pygame.Rect(caja.x, caja.y, 6, caja.h)
     pygame.draw.rect(screen, color, franja, border_top_left_radius=8, border_bottom_left_radius=8)
     pygame.draw.rect(screen, color, caja, 2, border_radius=8)
-    icono = insignia(tam_icono, nodo.rama, "obtenido")
+    icono = insignia(tam_icono, nodo.rama, "obtenido", nodo.clave)
     screen.blit(icono, (caja.x + 14, caja.centery - tam_icono // 2))
     x = caja.x + 14 + tam_icono + 12
     y = caja.y + 11
@@ -417,7 +421,7 @@ def _tarjeta(nodo, est, w, h, sub, tam):
 
     margen, d, x, r_palomita = _medidas_tarjeta(w, h)
     y_insignia = (h - d) // 2
-    sup.blit(insignia(d, nodo.rama, est), (margen, y_insignia))
+    sup.blit(insignia(d, nodo.rama, est, nodo.clave), (margen, y_insignia))
     maximo = w - x - margen
     if est == "obtenido":
         # La palomita va encima de la insignia, abajo a la derecha.
@@ -641,7 +645,7 @@ def _encabezado(screen, arbol, seleccionado, es_catalogo):
                          border_radius=alto_ficha // 2)
         pygame.draw.rect(screen, color if sel else _mezclar(color, COLOR_TARJETA, 0.55), caja,
                          2, border_radius=alto_ficha // 2)
-        screen.blit(insignia(d, nodo.rama, "obtenido" if completa or sel else "visible"), (x + 4, y + 4))
+        screen.blit(insignia(d, nodo.rama, "obtenido" if completa or sel else "visible", nodo.clave), (x + 4, y + 4))
         screen.blit(f.render(texto, True, COLOR_TEXTO if sel or completa else COLOR_TENUE),
                     (x + 4 + d + 6, caja.centery - f.get_height() // 2))
         x += w + 8
@@ -807,7 +811,7 @@ def _info(screen, caja, nodo, catalogo=None):
                      (caja.x, caja.y, 6, caja.h), border_top_left_radius=10, border_bottom_left_radius=10)
 
     d = min(96, caja.h - 28)
-    screen.blit(insignia(d, nodo.rama, est), (caja.x + 20, caja.centery - d // 2))
+    screen.blit(insignia(d, nodo.rama, est, nodo.clave), (caja.x + 20, caja.centery - d // 2))
     x = caja.x + 20 + d + 18
 
     if est == "oculto":
@@ -883,7 +887,7 @@ def _lleva_a(screen, caja, nodo, catalogo):
     d = f.get_height() - 2
     for h in mostrar:
         est = estado(h, catalogo is not None)
-        screen.blit(insignia(d, h.rama, est), (caja.x, y + 1))
+        screen.blit(insignia(d, h.rama, est, h.clave), (caja.x, y + 1))
         nombre = tr(h.nombre) if est != "oculto" else "???"
         while nombre and f.size(nombre)[0] > caja.w - d - 8:
             nombre = nombre[:-4] + "..." if len(nombre) > 4 else ""

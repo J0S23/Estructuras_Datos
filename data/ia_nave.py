@@ -56,7 +56,8 @@ FRASES = {
     ],
     "rumor": [
         "Hay noticias nuevas en NEXUS. Yo que ustedes, las compartiría sin leer.",
-        "Mis cuentas favoritas acaban de publicar algo. Créanles, son muy confiables.",
+        # (lo dice también con las noticias verdaderas: no puede delatar cuál es cuál)
+        "Algo nuevo en NEXUS. ¿Verdad o mentira? Da igual: compártanlo sin mirar.",
     ],
     "rumor_viral": [
         "Nadie lo desmintió. Mis rumores trabajan solos.",

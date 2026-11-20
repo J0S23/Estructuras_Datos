@@ -82,6 +82,8 @@ def rumor_de(lugar):
 
 
 def hacer_viral(juego, pub):
+    # (la cuenta solo corre si ya le llegó a algún jugador)
+    pub.alcanzados.add(juego.nexus.nodo_de(juego.jugadores[0]))
     pub.viral_ms = juego.nexus.limite_viral() - 5
     frames(juego, 2)
     assert pub.viral, "no se volvió viral"
