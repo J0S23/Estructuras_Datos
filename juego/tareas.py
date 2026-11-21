@@ -127,7 +127,7 @@ def _abrir_candado(juego, jugador, escondite):
         red.arreglar(jugador, pub)
     else:
         escondite["candado"] = False
-        jugador.avisar("Abriste el candado: el casillero se puede usar.", (120, 230, 150))
+        jugador.avisar("Abrí el candado: el casillero ya se puede usar.", (120, 230, 150))
 
 
 def tecla(juego, jugador, accion):

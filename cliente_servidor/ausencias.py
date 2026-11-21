@@ -54,7 +54,7 @@ def perdio(juego, jugador):
             alien.rendirse()
     if not getattr(jugador, "eliminado", False):
         _a_los_demas(juego, jugador, f"{_nombre(juego, jugador)} perdió la conexión. "
-                                     "Esperando a que vuelva...", COLOR_AVISO)
+                                     "Voy a esperar a que vuelva...", COLOR_AVISO)
 
 
 def se_fue(juego, jugador):
@@ -74,7 +74,7 @@ def se_fue(juego, jugador):
             npc.siguiendo = None
             if hasattr(npc, "decir"):
                 npc.decir("¿Dónde se metió? Me quedo aquí...")
-    _a_los_demas(juego, jugador, f"{_nombre(juego, jugador)} se desconectó.", COLOR_AVISO)
+    _a_los_demas(juego, jugador, f"{_nombre(juego, jugador)} se desconectó. Seguimos sin él.", COLOR_AVISO)
     # Primero las pruebas del infiltrado: soltar_al_morir vacía el inventario.
     if getattr(juego, "infiltrado", None) is not None:
         juego.infiltrado.soltar(jugador, donde)
@@ -92,10 +92,10 @@ def volvio(juego, jugador):
         return
     jugador.puede_moverse = True
     jugador.invulnerable_ms = max(jugador.invulnerable_ms, INVULNERABLE_AL_VOLVER_MS)
-    _a_los_demas(juego, jugador, f"{_nombre(juego, jugador)} volvió a conectarse.", COLOR_VUELVE)
+    _a_los_demas(juego, jugador, f"¡{_nombre(juego, jugador)} volvió a conectarse!", COLOR_VUELVE)
     if se_habia_ido:
-        jugador.avisar("Volviste. Lo que llevabas quedó en el piso donde te desconectaste.",
+        jugador.avisar("Volví. Lo que llevaba se quedó en el piso donde me desconecté.",
                        COLOR_VUELVE)
         juego.decir("reconectado", jugador.rol)
     else:
-        jugador.avisar("Volviste a conectarte.", COLOR_VUELVE)
+        jugador.avisar("Volví a conectarme.", COLOR_VUELVE)

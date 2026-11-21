@@ -157,7 +157,7 @@ class GestorLogros:
             self.capturas_fase = 0
         self.fase = mision.fase
         from misiones.mision import PIEZAS_NECESARIAS
-        if mision.piezas_entregadas >= PIEZAS_NECESARIAS:
+        if mision.piezas_entregadas >= getattr(mision, "piezas_necesarias", PIEZAS_NECESARIAS):
             self.conseguir("chatarrero")
 
     def _luz(self, dt):

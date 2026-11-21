@@ -62,6 +62,9 @@ class Espejo:
         if b.get("dificultad"):
             g.dificultad = Dificultad(b["dificultad"])
         g.cantidad_jugadores = b["jugadores"]
+        # El modo feria es el de la partida (lo escogió quien la creó), no el
+        # de Menú > Opciones de esta laptop: si no, el espejo recortaba otra nave.
+        g.modo_feria_forzado = bool(b.get("feria"))
         g.abrir_seleccion_roles(ir=False)
         for estado, rol in zip(g.seleccion_roles, b["roles"]):
             estado["rol"], estado["listo"] = rol, True
@@ -75,6 +78,7 @@ class Espejo:
                 g._preparar_partida()
         finally:
             objetos_mapa.mapa_activo = mapa_activo
+            g.modo_feria_forzado = None      # (el Game es el del menú: las partidas locales, con lo suyo)
             # El random es el de todo el juego (el espejo usa el Game del
             # menú): sin esto, después de una partida en red el random seguía
             # "sembrado" con la semilla del servidor y la siguiente partida
@@ -158,12 +162,19 @@ class Espejo:
                     except (AttributeError, TypeError):
                         pass
             aplicadas["g"] = glob
+        # De qué jugadores se copió la sección entera en este cuadro (su panel,
+        # su cursor, su minijuego vuelven a ser los del servidor): ahí el
+        # cliente vuelve a poner encima lo que ya presionó y el servidor todavía
+        # no vio (cliente.Sesion._eco).
+        self.completos = set()
         for i, jugador in enumerate(g.jugadores):
             datos = secciones.get(f"j{i}")
             if datos is not None:
-                self._jugador(jugador, datos, interpolado.get(f"j{i}"),
-                              completo=datos is not aplicadas.get(f"j{i}"))
+                completo = datos is not aplicadas.get(f"j{i}")
+                self._jugador(jugador, datos, interpolado.get(f"j{i}"), completo=completo)
                 aplicadas[f"j{i}"] = datos
+                if completo:
+                    self.completos.add(i)
         self._aliens(secciones.get("al", {}), interpolado)
         from cliente_servidor.servidor import OBJETOS, LISTAS
         for clave, nombre in OBJETOS.items():
@@ -180,6 +191,11 @@ class Espejo:
                 continue
             if objeto is not None:
                 cuerpo = {k: v for k, v in datos.items() if k != "ok"}
+                if nombre == "cambiaformas" and objeto in g.aliens:
+                    # Su lugar ya lo puso `_aliens` (interpolado, como los
+                    # demás): con el de esta sección (el último que llegó) se
+                    # iba y volvía en cada cuadro en que esta cambiaba.
+                    cuerpo.pop("hitbox", None)
                 if nombre == "npcs" and isinstance(cuerpo.get("npcs"), list):
                     self._npcs(objeto, cuerpo.pop("npcs"))
                 if nombre == "logros" and "obtenidos" in cuerpo:
@@ -218,6 +234,7 @@ class Espejo:
         self._presentacion(glob.get("presentacion"))
         self._tutorial(glob.get("tut_estado"))
         self._identidades()
+        self._npcs_interpolados(interpolado)
         self._animar_npcs()
         orden = (secciones.get("pubs") or {}).get("orden")
         red = getattr(g, "nexus", None)
@@ -282,6 +299,16 @@ class Espejo:
             if getattr(npc, "apariencia", None) is not None:
                 nuevos.append(npc)
         gestor.npcs = nuevos
+
+    def _npcs_interpolados(self, interpolado):
+        """Los prisioneros donde los pone la interpolación (como los aliens),
+        en cada cuadro: su sección solo trae dónde estaban en la última
+        instantánea."""
+        gestor = getattr(self.g, "npcs", None)
+        for npc in getattr(gestor, "npcs", None) or ():
+            q = interpolado.get(f"n{getattr(npc, 'nodo', None)}")
+            if q is not None and hasattr(npc, "hitbox"):
+                npc.hitbox.center = (round(q[0]), round(q[1]))
 
     def _animar_npcs(self):
         """Los prisioneros caminan con la animación del cliente: en el modo
@@ -578,12 +605,28 @@ class Espejo:
             g.screen = pantalla_original
 
     def dibujar_resultados(self, pantalla):
-        """La pantalla de resultados del modo local, con los datos del espejo."""
+        """La pantalla de resultados del modo local, con los datos del espejo:
+        el resumen con sus botones, el árbol de logros ("Ver logros") o el
+        álbum de fotos (screens/album.py). Lo que
+        está escogido lo lleva el Game del espejo, como en local
+        (`resultados_vista`, `resultados_sel`, `resultados_nodo`; las teclas,
+        cliente.Sesion._tecla_resultado)."""
         from screens.resultados import render_resultados
+        from screens.logros import render_arbol_logros
         g = self.g
-        render_resultados(pantalla, g.jugadores, g.font, g.small_font, g.mision, g.equipo,
-                          g.infiltrado, g.logros, 0, g.nexus, g.cambiaformas, g.npcs,
-                          g.dificultad, g.tiempo_jugado_ms)
+        if not hasattr(g, "resultados_vista"):
+            g._reiniciar_resultados()
+        if g.resultados_vista == "logros" and g.logros is not None:
+            g.resultados_rects_logros = render_arbol_logros(pantalla, g.logros.arbol, g.resultados_nodo)
+            return
+        if g.resultados_vista == "album":
+            from screens.album import render_album
+            g.album_rects = render_album(pantalla, g.nexus, getattr(g, "album_sel", 0))
+            return
+        g.resultados_rects = render_resultados(
+            pantalla, g.jugadores, g.font, g.small_font, g.mision, g.equipo,
+            g.infiltrado, g.logros, g.resultados_sel, g.nexus, g.cambiaformas, g.npcs,
+            g.dificultad, g.tiempo_jugado_ms)
 
 
 def _de(lista, indice):

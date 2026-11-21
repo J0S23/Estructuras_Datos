@@ -24,6 +24,7 @@ import pygame
 
 from juego import idioma
 from juego import efectos as efectos_visuales
+from juego import feria
 from juego.audio_manager import audio_manager
 
 
@@ -100,6 +101,7 @@ class MenuPausa:
                     ("Campo de visión y oscuridad: " + ("Sí" if self.juego.oscuridad else "No"), "oscuridad"),
                     ("Efectos visuales: " + ("Sí" if efectos_visuales.ACTIVOS else "No"), "visuales"),
                     (idioma.etiqueta(), "idioma"),
+                    ("Modo feria: " + ("Sí" if feria.ACTIVO else "No"), "feria"),
                     ("Volver", "volver"),
                 ]
             return [
@@ -243,7 +245,7 @@ class MenuPausa:
             self._cambiar_arbol(signo)
         elif accion == "grafo":
             self._cambiar_grafo(signo)
-        elif accion in ("oscuridad", "visuales", "pantalla_completa", "hitboxes", "idioma"):
+        elif accion in ("oscuridad", "visuales", "pantalla_completa", "hitboxes", "idioma", "feria"):
             return self.activar(self.seleccion)
         return None
 
@@ -279,6 +281,10 @@ class MenuPausa:
             # Luces, partículas, sombras, menú animado... (juego/efectos.py);
             # apagados, el juego se ve como antes (para un PC que no da abasto).
             efectos_visuales.cambiar(not efectos_visuales.ACTIVOS)
+        elif accion == "feria":
+            # Partida corta con reloj, ranking y la pantalla de atracción
+            # (juego/feria.py). Solo desde el menú: no cambia la partida que va.
+            feria.cambiar(not feria.ACTIVO)
         elif accion == "pantalla_completa":
             return "pantalla_completa"
         elif accion == "idioma":

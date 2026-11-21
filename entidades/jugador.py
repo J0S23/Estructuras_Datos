@@ -216,6 +216,7 @@ class Jugador:
         # Mensaje corto de feedback y su tiempo restante.
         self.mensaje = ""
         self.mensaje_color = (255, 255, 255)
+        self.mensaje_quien = None     # quién lo dice si no es él: [nombre, foto] (un prisionero)
         self.mensaje_ms = 0
 
         # Zona del mapa sobre la que está parado, para la pista de "presiona E".
@@ -255,6 +256,9 @@ class Jugador:
         self.equipo = None
         self.pista_mision = None
         self.susto_ms = 0            # cuánto le queda al susto de ser atrapado
+        self.foto_n = 0              # cuántas fotos tomó (redes/nexus._tomar_foto; screens/foto.py la anima)
+        self.foto_lugar = ""         # de dónde es la última
+        self.foto_pub = 0            # id del rumor o noticia de la última (screens/foto.py la guarda)
         self.susto_total_ms = 0      # cuánto dura el susto actual (ambiente.py)
         self.susto_tipo = "alien"    # "alien", "ciego", "cazador", "vigia", "cf_revela" o "cf_captura"
         self.susto_disfraz = None    # sprite del prisionero que imitaba el Cambiaformas
@@ -477,9 +481,14 @@ class Jugador:
     def puntos_para_habilidades(self):
         return self.equipo.puntos if self.equipo is not None else self.puntos
 
-    def avisar(self, texto, color=(255, 255, 255)):
+    def avisar(self, texto, color=(255, 255, 255), quien=None):
+        """Lo que dice o piensa el personaje (en primera persona: sale en un
+        recuadro de diálogo con su foto, screens/paneles.render_mensaje).
+        `quien` = [nombre, clave de su foto] si lo dice otro (un prisionero
+        que le habla)."""
         self.mensaje = texto
         self.mensaje_color = color
+        self.mensaje_quien = list(quien) if quien else None
         self.mensaje_ms = DURACION_MENSAJE_MS
 
     def actualizar_mensaje(self, dt):

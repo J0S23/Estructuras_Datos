@@ -412,6 +412,9 @@ class MenuRed:
         # (Con qué control juega cada uno ya no se elige aquí: antes de
         # entrar, cada jugador presiona el botón del suyo, _elegir_controles.)
         self.dificultad = "normal"
+        # Modo feria (juego/feria.py): empieza como esté en Menú > Opciones.
+        from juego import feria
+        self.feria = feria.ACTIVO
         self.codigo = ""                  # lo que se escribe para unirse
         self.ip = ""                      # (compatibilidad: una IP escrita)
         self.ip_propia = ip_local()
@@ -430,6 +433,7 @@ class MenuRed:
             return [("opcion", "total", f"{self.total}"),
                     ("opcion", "locales", f"{self.locales}"),
                     ("opcion", "dificultad", NOMBRE_DIFICULTAD[self.dificultad]),
+                    ("opcion", "feria", "Sí" if self.feria else "No"),
                     ("boton", "crear", "Crear partida"), ("boton", "atras", "Atrás")]
         partidas = self.buscador.partidas() if self.buscador is not None else []
         lista = [("partida", (ip, p, a), "") for ip, p, a in partidas[:4]]
@@ -461,6 +465,8 @@ class MenuRed:
         elif clave == "dificultad":
             i = DIFICULTADES.index(self.dificultad)
             self.dificultad = DIFICULTADES[(i + paso) % len(DIFICULTADES)]
+        elif clave == "feria":
+            self.feria = not self.feria
 
     # -- Entrada ----------------------------------------------------------------------
 
@@ -619,14 +625,15 @@ class MenuRed:
         w = int(min(700, ancho * 0.56))
         x = ancho // 2 - w // 2
         y = int(alto * 0.18)
-        h, sep = 60, 10
+        h, sep = (60, 10) if alto >= 700 else (50, 6)
         filas = [("Jugadores en total", f"{self.total}", "Entre todas las laptops"),
                  ("Juegan en esta laptop", f"{self.locales}", "Luego eligen su control"),
-                 ("Dificultad", NOMBRE_DIFICULTAD[self.dificultad], "")]
+                 ("Dificultad", NOMBRE_DIFICULTAD[self.dificultad], ""),
+                 ("Modo feria", "Sí" if self.feria else "No", "Partida corta con reloj y ranking")]
         for i, (etiqueta, valor, nota) in enumerate(filas):
             self._fila(pantalla, pygame.Rect(x, y + i * (h + sep), w, h), i, etiqueta, valor, nota)
         # Quién juega dónde: un muñequito por jugador, de su color de laptop.
-        y_rep = y + 3 * (h + sep) + 6
+        y_rep = y + len(filas) * (h + sep) + 6
         _reparto(pantalla, (ancho // 2, y_rep + 34), self.total, self.locales)
         if self.locales >= self.total:
             nota = "Todos juegan aquí: nadie más se puede unir"
@@ -639,10 +646,10 @@ class MenuRed:
         pantalla.blit(img, img.get_rect(midtop=(ancho // 2, y_rep + 92)))
         botones = pygame.Rect(0, 0, 260, 54)
         botones.midtop = (ancho // 2 + 140, y_rep + 130)
-        self._boton(pantalla, botones, 3, "Crear partida", VERDE)
+        self._boton(pantalla, botones, 4, "Crear partida", VERDE)
         atras = pygame.Rect(0, 0, 200, 54)
         atras.midtop = (ancho // 2 - 150, y_rep + 130)
-        self._boton(pantalla, atras, 4, "Atrás")
+        self._boton(pantalla, atras, 5, "Atrás")
 
     def _dibujar_unirse(self, pantalla, escala):
         from juego.fuentes import fuente, fuente_de_tamano
@@ -918,7 +925,9 @@ def _levantar(menu):
             ultimo = f"El puerto {puerto} ya está ocupado"
             continue
         proceso, puerto_o_error = levantar_servidor(menu.total, menu.dificultad, puerto=puerto,
-                                                    extra=("--tutorial", "--elegir-roles", *EXTRA_SERVIDOR))
+                                                    extra=("--tutorial", "--elegir-roles",
+                                                           *(("--feria",) if menu.feria else ()),
+                                                           *EXTRA_SERVIDOR))
         if proceso is not None:
             return proceso, puerto_o_error
         ultimo = puerto_o_error

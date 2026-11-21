@@ -166,14 +166,14 @@ class ArbolHabilidades:
         # cobrarlas es solo darle valor a COSTO_NIVEL_* en data/habilidades.py.
         if puntos_disponibles < elegido.costo:
             faltan = elegido.costo - puntos_disponibles
-            return False, f"Te faltan {faltan} puntos para {elegido.nombre}.", 0
+            return False, f"Me faltan {faltan} puntos para {elegido.nombre}.", 0
 
         elegido.desbloqueada = True
         for hermano in self.actual.hijos:
             if hermano is not elegido:
                 self._descartar(hermano)
         self.actual = elegido
-        return True, f"Desbloqueaste {elegido.nombre}.", elegido.costo
+        return True, f"¡Desbloqueé {elegido.nombre}!", elegido.costo
 
     def _descartar(self, nodo):
         """Marca en preorden el subárbol que el jugador dejó ir."""

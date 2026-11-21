@@ -22,6 +22,7 @@ from juego.fuentes import fuente_de_tamano
 from juego.idioma import tr
 from juego import perfiles
 from juego import cache_dibujo
+from screens import foto
 from screens.flechas import flecha_alrededor, cerca_del_borde, dibujar_camino
 from screens.paneles import partir_lineas
 from data.nexus import UMBRAL_PLANOS, VIRAL_GENERICO
@@ -326,6 +327,24 @@ def _tiras_marco(marco, telefono, pantalla, radio):
                     tiras.append((marco.subsurface(r).copy(), r.topleft))
         _tiras[clave] = tiras
     return tiras
+
+
+def precalentar(tamano_pantalla, cantidad, jugadores, red):
+    """El marco del teléfono ya leído y escalado al tamaño que va a tener en
+    cada vista (con y sin la barra de confianza encima). Lo llama la carga de
+    la partida: leerlo y agrandarlo la primera vez que alguien abría el
+    celular costaba ~15-30 ms en ese cuadro."""
+    if not hay_marco():
+        return
+    from screens.partida import calcular_viewports
+    pantalla = pygame.Surface(tamano_pantalla)
+    barra = rect_confianza(pantalla, cantidad, red) if red is not None else None
+    for vista, jugador in zip(calcular_viewports(*tamano_pantalla, cantidad), jugadores):
+        for tapado in (None, barra if barra is not None and barra.colliderect(vista) else None):
+            telefono, adentro = _marco(vista, tapado, jugador)
+            marco = _imagen_marco(telefono.size)
+            if marco is not None:
+                _tiras_marco(marco, telefono, adentro, max(4, adentro.width // 40))
 
 
 def hay_marco():
@@ -653,9 +672,17 @@ def _feed(screen, cuerpo, jugador, red, panel, f, fb, fc):
     margen_texto = 46
     ancho_texto = cuerpo.width - margen_texto - 10
     tarjetas = [_tarjeta(red, jugador, pestana, pub, f, fb, fc, ancho_texto) for _, pub in opciones]
+    # Las fotos de los desmentidos y confirmaciones (screens/foto.py): la que
+    # se tomó en el lugar, chica debajo del texto.
+    alto_foto = max(48, min(130, int(cuerpo.height * 0.24)))
+    tam_foto = (min(ancho_texto, alto_foto * 4 // 3), alto_foto)
+    tam_foto = (tam_foto[0], tam_foto[0] * 3 // 4)
+    for t, (_, pub) in zip(tarjetas, opciones):
+        t["foto"] = foto.de_publicacion(pub, red, tam_foto) if pestana != "misiones" else None
     alturas = []
     for t in tarjetas:
         alto = 10 + f.get_linesize() + len(t["lineas"]) * t["fuente_lineas"].get_linesize()
+        alto += (t["foto"].get_height() + 8) if t.get("foto") is not None else 0
         alto += (fc.get_linesize() + 8) if t["chips"] else 0
         alto += 8 if t.get("viral") is not None else 0
         alturas.append(alto + 8)
@@ -698,6 +725,9 @@ def _feed(screen, cuerpo, jugador, red, panel, f, fb, fc):
             screen.blit(fl.render(texto, True, COLOR_TENUE if t["apagada"] else (70, 74, 92)),
                         (rect.x + margen_texto, ty))
             ty += fl.get_linesize()
+        if t.get("foto") is not None:
+            foto.dibujar_en_celular(screen, t["foto"], (rect.x + margen_texto, ty + 4))
+            ty += t["foto"].get_height() + 8
         x = rect.x + margen_texto
         for texto, color in t["chips"]:
             if x + fc.size(texto)[0] + 12 > rect.right - 6:
@@ -782,6 +812,12 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
             screen.blit(f.render(renglon, True, COLOR_TEXTO), (cuerpo.x + 10, ty))
             ty += f.get_linesize()
         y = rect.bottom + 8
+        # La foto que se publicó (un desmentido o una confirmación del equipo).
+        ancho_foto = min(ancho, int(max(0, cuerpo.bottom - y) * 0.55) * 4 // 3)
+        img = foto.de_publicacion(pub, red, (ancho_foto, ancho_foto * 3 // 4)) if ancho_foto >= 60 else None
+        if img is not None:
+            caja = foto.dibujar_en_celular(screen, img, (cuerpo.centerx - img.get_width() // 2, y))
+            y = caja.bottom + 8
         info = []
         if pub.foto:
             info.append(("Foto: " + pub.foto, COLOR_MARCA))
@@ -860,6 +896,21 @@ def _detalle(screen, cuerpo, jugador, red, panel, f, fb, fc):
             caja_info([("La cuenta que lo empezó ya no existe.", COLOR_TENUE)])
     elif vista == "ubicacion":
         rumor = panel["rumor"]
+        # Las dos versiones de tu foto, lado a lado: tal cual y recortada.
+        ancho_foto = min((cuerpo.width - 10) // 2, int(cuerpo.height * 0.26) * 4 // 3)
+        if ancho_foto >= 50:
+            tam = (ancho_foto, ancho_foto * 3 // 4)
+            for k, (recortada, etiqueta, color) in enumerate(((False, "Tal cual", COLOR_ROJO),
+                                                               (True, "Recortada", COLOR_VERDE))):
+                img = foto.achicada(rumor, red, tam, recortada)
+                if img is None:
+                    break
+                x = cuerpo.centerx - ancho_foto - 5 if k == 0 else cuerpo.centerx + 5
+                foto.dibujar_en_celular(screen, img, (x, y), color)
+                texto = fc.render(etiqueta, True, color)
+                screen.blit(texto, texto.get_rect(midtop=(x + ancho_foto // 2, y + tam[1] + 3)))
+            else:
+                y += tam[1] + fc.get_linesize() + 10
         caja_info([("Tu foto: " + rumor.rumor["foto"], COLOR_MARCA)])
         caja_info([("Tal cual: se ve dónde estás. Convence a más gente, pero el alien más "
                     "cercano va a ir por ti.", COLOR_ROJO),

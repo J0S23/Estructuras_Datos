@@ -182,8 +182,11 @@ class Servidor:
     def __init__(self, jugadores=2, host=HOST, puerto=PUERTO, roles=None,
                  dificultad="normal", mapa=None, segundos=None, avisar=print,
                  presentaciones=True, aliens_quietos=False, espera_s=30.0, semilla=None,
-                 fase_final=False, tutorial=False, elegir_roles=False):
+                 fase_final=False, tutorial=False, elegir_roles=False, feria=False):
         self.n = jugadores
+        # Modo feria (juego/feria.py): lo escoge quien crea la partida (el
+        # lanzador pasa --feria); el espejo de cada cliente lo arma igual.
+        self.feria = bool(feria)
         self.host, self.puerto = host, puerto
         self.roles = roles
         self.clave_dificultad = dificultad
@@ -279,6 +282,7 @@ class Servidor:
         # La misma semilla que usa el espejo del cliente: así los dos arman
         # casi la misma partida (lo que no, lo corrigen las instantáneas).
         random.seed(self.semilla)
+        g.modo_feria_forzado = self.feria
         with todos_se_mueven():
             g._preparar_partida()
         g.current_screen = "partida"
@@ -345,6 +349,7 @@ class Servidor:
         return {"roles": [j.rol for j in g.jugadores],
                 "dificultad": g.dificultad.clave if g.dificultad is not None else None,
                 "semilla": self.semilla, "presentaciones": self.presentaciones,
+                "feria": self.feria,
                 "mapa": g.mundo.nombre_mapa, "ancho": g.mundo.ancho,
                 "alto": g.mundo.alto, "escala": g.mundo.escala,
                 "hz": HZ_JUEGO // CUADROS_POR_INSTANTANEA}
@@ -1374,6 +1379,8 @@ def main(argv=None):
     ap.add_argument("--dificultad", default="normal",
                     choices=("facil", "normal", "dificil", "inteligente"))
     ap.add_argument("--mapa", default=None, help="por defecto el de Hitboxes/mapa_activo.json")
+    ap.add_argument("--feria", action="store_true",
+                    help="modo feria (juego/feria.py): partida corta con reloj y ranking")
     ap.add_argument("--segundos", type=float, default=None, help="apagarse solo después de esto")
     ap.add_argument("--sin-presentaciones", action="store_true",
                     help="no pausar la primera vez que se ve cada alien")
@@ -1399,7 +1406,7 @@ def main(argv=None):
                         args.segundos, avisar=lambda texto: print("[servidor]", texto, flush=True),
                         presentaciones=not args.sin_presentaciones, aliens_quietos=args.aliens_quietos,
                         espera_s=args.espera, semilla=args.semilla, fase_final=args.fase_final,
-                        tutorial=args.tutorial, elegir_roles=args.elegir_roles)
+                        tutorial=args.tutorial, elegir_roles=args.elegir_roles, feria=args.feria)
     servidor.con_padre = args.con_padre      # (vigilar_padre empieza en correr)
     servidor.correr()
 

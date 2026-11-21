@@ -189,7 +189,7 @@ class Sellado:
         return bool(self.rects)
 
 
-def _evaluar(salas, grafo, nombres, cerradas, inicio, fijos, puntos):
+def _evaluar(salas, grafo, nombres, cerradas, inicio, fijos, puntos, minimos=None):
     """(abiertos, ok): los rectángulos que quedan jugables si se sellan
     `cerradas`, y si la combinación sirve."""
     abiertos_nombre = {i for i, (n, _) in enumerate(salas) if clave(n) not in cerradas}
@@ -205,7 +205,7 @@ def _evaluar(salas, grafo, nombres, cerradas, inicio, fijos, puntos):
 
     if not all(abierto(p) for p in fijos):
         return alcanzados, False
-    for parte, minimo in MINIMOS.items():
+    for parte, minimo in {**MINIMOS, **(minimos or {})}.items():
         total = len(puntos.get(parte, ()))
         if sum(1 for p in puntos.get(parte, ()) if abierto(p)) < min(minimo, total):
             return alcanzados, False
@@ -217,7 +217,7 @@ def _evaluar(salas, grafo, nombres, cerradas, inicio, fijos, puntos):
     return alcanzados, True
 
 
-def candidatas(salas, n_jugadores, objetos, mundo, rng=random):
+def candidatas(salas, n_jugadores, objetos, mundo, rng=random, minimos=None):
     """Las combinaciones de salas a sellar que sirven, en orden aleatorio:
     [(cerradas, alcanzados)]. [] si no hay que sellar nada (o no se puede)."""
     nombres = {}
@@ -246,7 +246,7 @@ def candidatas(salas, n_jugadores, objetos, mundo, rng=random):
     rng.shuffle(combinaciones)
     buenas = []
     for cerradas in combinaciones:
-        alcanzados, ok = _evaluar(salas, grafo, nombres, set(cerradas), inicio, fijos, puntos)
+        alcanzados, ok = _evaluar(salas, grafo, nombres, set(cerradas), inicio, fijos, puntos, minimos)
         if ok:
             buenas.append((set(cerradas), alcanzados))
     return buenas
@@ -314,16 +314,17 @@ def _comprobar(mundo, sellado, salas, alcanzados, desde):
     return True
 
 
-def aplicar(objetos, mundo, salas, n_jugadores, rng=random):
+def aplicar(objetos, mundo, salas, n_jugadores, rng=random, minimos=None):
     """Escoge qué salas se sellan, pone sus paredes en `mundo` y quita de
     `objetos` lo que quedó adentro. Devuelve el Sellado (también queda en
-    `mundo.sellado`, para dibujarlo)."""
+    `mundo.sellado`, para dibujarlo). `minimos` sube algún MINIMOS (el modo
+    feria: las consolas que pide, juego/feria.minimos_sellado)."""
     mundo.sellar([])
     sellado = Sellado()
     if not ACTIVO:
         mundo.sellado = sellado
         return sellado
-    combinaciones = candidatas(salas, n_jugadores, objetos, mundo, rng)
+    combinaciones = candidatas(salas, n_jugadores, objetos, mundo, rng, minimos)
     desde = _fijos(objetos, mundo)[0]
     for cerradas, alcanzados in combinaciones[:INTENTOS]:
         prueba = _armar(salas, cerradas, alcanzados)

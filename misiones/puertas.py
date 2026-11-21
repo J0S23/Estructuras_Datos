@@ -95,8 +95,8 @@ def actualizar(puertas, sosteniendo, dt, al_abrir=None):
     poco (no de golpe, para que un parpadeo no los castigue).
     """
     for puerta in puertas:
-        if puerta["abierta"]:
-            continue
+        if puerta["abierta"] or puerta.get("sin_corriente"):
+            continue        # (sin corriente: una noticia de NEXUS que nadie arregló, redes/nexus._empeorar)
         en_panel = [None, None]
         for jugador in sosteniendo:
             cerca = panel_cerca([puerta], jugador)
@@ -114,7 +114,7 @@ def actualizar(puertas, sosteniendo, dt, al_abrir=None):
                 puerta["abierta"] = True
                 for jugador in en_panel:
                     jugador.sumar_puntos(PUNTOS_PUERTA_DOBLE)
-                    jugador.avisar(f"¡Puerta abierta! +{PUNTOS_PUERTA_DOBLE}", COLOR_BIEN)
+                    jugador.avisar(f"¡Abrimos la puerta! +{PUNTOS_PUERTA_DOBLE}", COLOR_BIEN)
                 if al_abrir is not None:
                     al_abrir(puerta)
         else:

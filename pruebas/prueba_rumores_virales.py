@@ -63,6 +63,11 @@ def nueva_partida():
     juego.saltar_tutorial()
     juego.presentacion = None
     juego.mision.abrir_puerta()
+    # Los rumores solo salen de lugares a los que se puede llegar (redes/nexus
+    # `_alcanzable`): con las puertas para dos abiertas, de toda la nave.
+    for puerta in juego.puertas_dobles:
+        puerta["abierta"] = True
+        juego._puerta_doble_abierta(puerta)
     juego.quitar_cambiaformas()
     for a in juego.aliens:
         a.hitbox.topleft = (5, 5)

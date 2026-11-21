@@ -384,7 +384,9 @@ def panel_ayuda(juego, jugador, zona=None):
         return len(opciones) - 1
 
     filas = []
-    if getattr(juego, "infiltrado", None) is not None:
+    from juego import feria
+    caso = getattr(juego, "infiltrado", None)
+    if caso is not None and (caso.pruebas or not feria.activo(juego)):   # (la Feria va sin el caso)
         filas.append([agregar({"texto": "El caso del Cambiaformas", "icono": "cambiaformas",
                                "destacada": True, "detalle": _detalle_caso(juego, jugador)},
                               ("infiltrado", None))])

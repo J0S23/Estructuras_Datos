@@ -122,6 +122,11 @@ def escenas(g, n):
             j.pulso = 30.0
         if apagon and g.eventos is not None and g.eventos.apagon:
             g.eventos.restaurar_luz()
+        if g.eventos is not None:
+            # Sin eventos al azar en medio de las escenas: uno (una compuerta
+            # que bajó sola en la escena 12) hacía que la de la compuerta no
+            # pudiera lanzar la suya, y no sonaba (fallaba a veces).
+            g.eventos.proximo_ms = 10 ** 9
         if g.presentacion is not None and g.presentacion.abierta:
             g.presentacion.cerrar()
         g.tiempo_restante_ms = None
@@ -240,6 +245,8 @@ def escenas(g, n):
 
     def compuerta():
         limpiar()
+        if g.eventos.activo is not None:
+            g.eventos.terminar()
         g.eventos.lanzar("compuerta")
         c = g.eventos.compuerta
         if c is not None:
@@ -745,6 +752,15 @@ def congelar_relojes_del_susto():
             pygame.time.get_ticks = ticks
     partida.dibujar_susto = dibujar_susto
     partida.temblor = lambda jugador, _tiempo_ms: ambiente.temblor(jugador, 1000)
+    # La foto (screens/foto.py) va con el reloj de cada proceso desde que
+    # cada uno vio subir `foto_n`: el flash salía en uno y no en el otro
+    # (98 % distinto en cel_foto). Aquí no se dibuja; que el cliente la anime
+    # lo revisa pruebas/prueba_foto.py.
+    from screens import foto
+    foto.dibujar = lambda *args, **kwargs: None
+    # Y en el celular, la foto que vio cada proceso es distinta (la tomó en
+    # otro momento): los dos usan la del mapa.
+    foto.de_lugar = lambda origen, red: foto._del_mapa(origen, red)
 
 
 # -- El servidor (otro proceso) ------------------------------------------------------------
@@ -881,7 +897,16 @@ def cliente(n):
             sonar = s.espejo.sonar
 
             def anotar(sonidos, i=i, sonar=sonar, s=s):
-                k = getattr(s, "_escena_k", None)
+                # La escena de la instantánea más nueva AHORA, al sacar los
+                # sonidos (no la de antes del cuadro: si justo llegaba la
+                # primera de la escena siguiente, su sonido, como el de la
+                # compuerta, quedaba anotado en la anterior y la prueba fallaba
+                # a veces).
+                base_s = getattr(s, "_base", None)
+                if base_s is not None:
+                    k = (max((c.cuadro or 0) for c in s.conexiones) - base_s) // PASO
+                else:
+                    k = getattr(s, "_escena_k", None)
                 for nombre, _vol in sonidos or ():
                     oidos.setdefault(k, set()).add(nombre)
                 return sonar(sonidos)
@@ -905,6 +930,7 @@ def cliente(n):
                     # la última instantánea que llegó)
                     ultimo = max((c.cuadro or 0) for c in s.conexiones)
                     s._escena_k = (ultimo - base) // PASO
+                    s._base = base
                 if not s.paso(pantallas[i], eventos=[]):
                     time.sleep(1.5)
                     print("\n".join(salida[-80:]))

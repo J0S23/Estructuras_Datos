@@ -97,7 +97,7 @@ def ruta(dueño, destino, color, tiempo_ms):
         or (not puntos and math.dist(r["desde"], pie) > RECALCULAR_PX)
     if viejo:
         nuevo = nav.camino(pie, destino, parcial=True, sellos=False, por_partes=True,
-                           quien=("guia",) + clave)
+                           quien=("guia",) + clave, bolsa="guia")
         if nuevo is not None:
             r.update(desde=pie, previo=pie, ms=tiempo_ms, puntos=nuevo)
         elif not nav.ocupada:

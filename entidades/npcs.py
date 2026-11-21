@@ -583,11 +583,11 @@ class GestorNPCs:
             quien.destino_paseo = None
             quien.espera_ms = ESPERA_SOLTADO_MS
             quien.decir(FRASE_ESPERA)
-            jugador.avisar(f"{quien.usuario} se queda esperándote aquí.", (210, 210, 220))
+            jugador.avisar(f"Le dije a {quien.usuario} que me espere aquí.", (210, 210, 220))
         else:
             quien.siguiendo, quien.siguiendo_solo_ms = None, 0
             quien.burbuja, quien.burbuja_ms = "...", 2500
-            jugador.avisar(f"{quien.apariencia.usuario} asiente y se queda.", (210, 210, 220))
+            jugador.avisar(f"Le dije a {quien.apariencia.usuario} que me espere. Asintió.", (210, 210, 220))
         if hasattr(self.juego, "sonar"):
             self.juego.sonar("menu_ok", 0.4)
         return True
@@ -602,12 +602,12 @@ class GestorNPCs:
             return False
         seguidor = self.seguidor(jugador)
         if seguidor is not None:
-            jugador.avisar(f"Ya llevas a {self._nombre(seguidor)}. Para que te espere, "
+            jugador.avisar(f"Ya me sigue {self._nombre(seguidor)}. Para que me espere: "
                            f"[{jugador.nombre_tecla('interactuar')}] junto a él.", (255, 214, 64))
             return True
         if not isinstance(quien, NPC):
             quien.pedir_que_siga(jugador)       # el Cambiaformas: acepta callado
-            jugador.avisar(f"{quien.apariencia.usuario} asiente y te sigue.", (210, 210, 220))
+            jugador.avisar(f"{quien.apariencia.usuario} asintió y me sigue.", (210, 210, 220))
             return True
         red = getattr(self.juego, "nexus", None)
         color = red.color(quien.nodo) if red is not None and quien.nodo in red.grafo else "gris"
@@ -615,17 +615,17 @@ class GestorNPCs:
             # El rumor de la cápsula se volvió viral: nadie quiere ir.
             quien.decir(FRASE_RINDE)
             jugador.avisar(f"{quien.usuario} se rindió: cree que la cápsula explotó. "
-                           "Desmientan el rumor en NEXUS.", COLOR_ESTADO["rojo"])
+                           "Tengo que desmentir el rumor en NEXUS.", COLOR_ESTADO["rojo"])
         elif color == "verde":
             quien.siguiendo, quien.ruta, quien.espera_ms = jugador, [], 0
             quien.decir(FRASE_ACEPTA)
-            jugador.avisar(f"{quien.usuario} te sigue. Llévalo a la cápsula.", COLOR_ESTADO["verde"])
+            jugador.avisar(f"{quien.usuario} me sigue. Tengo que llevarlo a la cápsula.", COLOR_ESTADO["verde"])
         elif color == "rojo":
             quien.decir(FRASE_NIEGA)
-            jugador.avisar(f"{quien.usuario} no confía en ustedes.", COLOR_ESTADO["rojo"])
+            jugador.avisar(f"{quien.usuario} no confía en nosotros.", COLOR_ESTADO["rojo"])
         else:
             quien.decir(FRASE_DUDA)
-            jugador.avisar(f"{quien.usuario} todavía no les cree.", (210, 210, 220))
+            jugador.avisar(f"{quien.usuario} todavía no nos cree.", (210, 210, 220))
         return True
 
     # -- Rumores virales (redes/nexus.py) --------------------------------------------------
@@ -638,7 +638,7 @@ class GestorNPCs:
                 continue
             npc.siguiendo, npc.ruta, npc.lejos_ms = None, [], 0
             npc.decir(FRASE_RINDE)
-            guia.avisar(f"{npc.usuario} dejó de seguirte: cree que la cápsula explotó.",
+            guia.avisar(f"{npc.usuario} dejó de seguirme: cree que la cápsula explotó.",
                         COLOR_ESTADO["rojo"])
 
     def esconderse(self, cuantos, cerca_de=None):
@@ -688,7 +688,7 @@ class GestorNPCs:
         self.rescatados.append(npc.usuario)
         if guia is not None:
             guia.sumar_puntos(PUNTOS_RESCATE)
-            guia.avisar(f"¡{npc.usuario} está a salvo en la cápsula! +{PUNTOS_RESCATE}",
+            guia.avisar(f"¡Llevé a {npc.usuario} a salvo a la cápsula! +{PUNTOS_RESCATE}",
                         COLOR_ESTADO["verde"])
             from misiones.logros import logro
             logro(self.juego, "rescate", guia)
@@ -717,12 +717,16 @@ class GestorNPCs:
         npc.charla_ms = ENFRIAMIENTO_CHARLA_MS
         texto = self._frase(npc, jugador, color)
         npc.decir(texto)
-        aviso = f"{npc.usuario}: {texto}"
+        # Lo dice el prisionero: el recuadro lleva su nombre y su foto.
+        aviso = texto
         if texto == FRASE_PIDE_RESCATE:
-            aviso += f" [{jugador.nombre_tecla('interactuar')}] a su lado"
+            aviso += f"  [{jugador.nombre_tecla('interactuar')}] a su lado"
+        from juego import perfiles
+        foto = perfiles.clave_de({"sprite": getattr(npc.apariencia, "sprite", None)})
         jugador.avisar(aviso,
                        COLOR_ESTADO["verde"] if color == "verde" else
-                       COLOR_ESTADO["rojo"] if color == "rojo" else (210, 210, 220))
+                       COLOR_ESTADO["rojo"] if color == "rojo" else (210, 210, 220),
+                       quien=(npc.usuario, foto))
 
     def _frase(self, npc, jugador, color):
         juego = self.juego

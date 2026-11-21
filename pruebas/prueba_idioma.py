@@ -175,7 +175,7 @@ assert "opciones" in [b.action for b in g.menu_buttons]
 g._activar_opcion_menu("opciones")
 assert g.opciones_menu is not None
 acciones = [a for _, a in g.opciones_menu.opciones()]
-assert acciones == ["efectos", "pantalla_completa", "oscuridad", "visuales", "idioma", "volver"], acciones
+assert acciones == ["efectos", "pantalla_completa", "oscuridad", "visuales", "idioma", "feria", "volver"], acciones
 foto("menu_opciones")
 for _ in range(acciones.index("idioma")):
     g._manejar_tecla(pygame.K_DOWN)

@@ -659,7 +659,8 @@ def render_hud(screen, vista, jugador, segundos_restantes=None, tapado=None):
     if segundos_restantes is not None:
         reloj = _formato_reloj(segundos_restantes)
         x -= f.size(reloj)[0] + 20
-        _con_sombra(screen, f, reloj, COLOR_TEXTO, (x, y))
+        # (el último minuto, en rojo)
+        _con_sombra(screen, f, reloj, (255, 110, 100) if segundos_restantes < 60 else COLOR_TEXTO, (x, y))
     elif getattr(jugador, "sala", None):
         nueva = getattr(jugador, "sala_cambio_ms", 0) > 0
         color = COLOR_TITULO if nueva else COLOR_SALA
@@ -717,8 +718,12 @@ def _tramos_libres(desde, hasta, ocupados):
 
 
 def render_mensaje(screen, vista, jugador, tapado=None):
-    """Mensajito flotante de feedback, debajo de la franja de arriba (y de lo
-    que dice render_escolta, si hay algo)."""
+    """Lo que el personaje dice o piensa ("¡Lo de X es verdad!", "Foto tomada",
+    "¡Puerta abierta!"...), debajo de la franja de arriba (y de lo que dice
+    render_escolta, si hay algo), como un recuadro de diálogo con su foto de
+    perfil, su nombre en el color del rol y el texto (Diego: "que se vea más
+    inmersivo"; antes era una línea de texto suelta). Lo que dice la IA de la
+    nave va aparte (misiones/ia_nave.py)."""
     if not jugador.mensaje:
         return
     f = _fuente_para(vista)
@@ -740,34 +745,72 @@ def render_mensaje(screen, vista, jugador, tapado=None):
         ocupados.append((telefono.left - 12, telefono.right + 12))
     t0, t1 = max(_tramos_libres(fila.left, fila.right, ocupados),
                  key=lambda t: t[1] - t[0], default=(fila.left, fila.right))
-    disponible = t1 - t0 - 20
-    minimo = max(12, f.get_height() - 4)
-    for px in range(f.get_height(), minimo - 1, -1):
-        etiqueta = fuente_de_tamano(px).render(jugador.mensaje, True, jugador.mensaje_color)
-        if etiqueta.get_width() <= disponible:
-            caja = etiqueta.get_rect(centerx=(t0 + t1) // 2, top=fila.y + 4)
-            _caja_mensaje(screen, [etiqueta], caja, jugador.mensaje_color)
-            return
-    # No cabe en una línea: en renglones, en ese mismo pedazo.
-    renglones = partir_lineas(jugador.mensaje, f, max(80, disponible))
-    imgs = [f.render(r, True, jugador.mensaje_color) for r in renglones]
-    caja = pygame.Rect(0, 0, max(i.get_width() for i in imgs), len(imgs) * f.get_linesize())
-    caja.midtop = ((t0 + t1) // 2, fila.y + 4)
-    _caja_mensaje(screen, imgs, caja, jugador.mensaje_color)
+    _dialogo(screen, jugador, f, (t0 + t1) // 2, fila.y + 4, t1 - t0 - 20)
 
 
-def _caja_mensaje(screen, imgs, caja, color=None):
+def _dialogo(screen, jugador, f, centro_x, arriba, disponible):
+    """El recuadro de diálogo: [foto] Nombre del rol / texto (en renglones si
+    no cabe en uno). El borde, del color del mensaje (verde bueno, rojo malo)."""
+    color = jugador.mensaje_color
+    rol = getattr(jugador, "rol", "") or ""
+    color_rol = getattr(jugador, "color", (200, 205, 225))
+    clave_foto = rol.upper() if rol else None
+    quien = getattr(jugador, "mensaje_quien", None)
+    if quien:
+        # Lo dice otro (un prisionero que le habla): su nombre y su foto.
+        rol, clave_foto = quien[0] or "", quien[1] if len(quien) > 1 else None
+        color_rol = (200, 205, 225)
+    alto_linea = f.get_linesize()
+    d = max(38, int(alto_linea * 2.5))                      # la foto
+    f_nombre = fuente_de_tamano(max(11, f.get_height() - 2))
+    nombre = cache_dibujo.texto(f_nombre, rol, color_rol) if rol else None
+    ancho_texto = max(80, disponible - d - 34)
+    # Una línea si cabe (achicando un poco la letra); si no, en renglones.
+    imgs = None
+    for px in range(f.get_height(), max(12, f.get_height() - 4) - 1, -1):
+        img = fuente_de_tamano(px).render(jugador.mensaje, True, color)
+        if img.get_width() <= ancho_texto:
+            imgs = [img]
+            break
+    if imgs is None:
+        imgs = [f.render(r, True, color) for r in partir_lineas(jugador.mensaje, f, ancho_texto)]
+    alto_texto = sum(i.get_height() for i in imgs)
+    alto_nombre = nombre.get_height() + 2 if nombre is not None else 0
+    ancho = d + 12 + max([i.get_width() for i in imgs] + [nombre.get_width() if nombre else 0])
+    alto = max(d, alto_nombre + alto_texto)
+    caja = pygame.Rect(0, 0, ancho + 20, alto + 12)
+    caja.midtop = (centro_x, arriba)
+    # Entra deslizándose y la foto "salta" (solo con los efectos visuales).
+    from entidades.jugador import DURACION_MENSAJE_MS
     vidrio = _vidrio()
+    desde = DURACION_MENSAJE_MS - (getattr(jugador, "mensaje_ms", 0) or 0)
+    k = 1.0 if vidrio is None else max(0.0, min(1.0, desde / 180))
+    caja.y -= int(10 * (1 - k) ** 2)
     if vidrio is not None:
-        vidrio.caja(screen, pygame.Rect(caja.x - 12, caja.y - 6, caja.width + 24, caja.height + 12),
-                    color or COLOR_BORDE, 215, 8)
+        vidrio.caja(screen, caja, color, 215, 10)
     else:
-        fondo = pygame.Surface((caja.width + 20, caja.height + 10), pygame.SRCALPHA)
-        fondo.fill((14, 15, 28, 215))
-        screen.blit(fondo, (caja.x - 10, caja.y - 5))
-    paso = caja.height // max(1, len(imgs))
-    for k, img in enumerate(imgs):
-        screen.blit(img, img.get_rect(midtop=(caja.centerx, caja.y + k * paso)))
+        screen.blit(cache_dibujo.capa(caja.size, (14, 15, 28, 215)), caja.topleft)
+        pygame.draw.rect(screen, color, caja, 1, border_radius=6)
+    # La foto de perfil del rol (Imagenes/Perfiles), con un aro de su color.
+    centro = (caja.x + 10 + d // 2, caja.y + 6 + alto // 2)
+    dd = d if k >= 1 else max(8, int(d * (0.6 + 0.4 * k + 0.12 * math.sin(k * math.pi))))
+    foto = perfiles.foto(clave_foto, dd - 4) if clave_foto else None
+    pygame.draw.circle(screen, (24, 26, 40), centro, dd // 2)
+    if foto is not None:
+        screen.blit(foto, foto.get_rect(center=centro))
+    elif rol:
+        letra = cache_dibujo.texto(f, rol.lstrip("@")[:1].upper(), color_rol)
+        screen.blit(letra, letra.get_rect(center=centro))
+    pygame.draw.circle(screen, color_rol, centro, dd // 2, 2)
+    # Nombre y texto a la derecha de la foto.
+    x = caja.x + 10 + d + 12
+    y = caja.y + 6 + (alto - alto_nombre - alto_texto) // 2
+    if nombre is not None:
+        screen.blit(nombre, (x, y))
+        y += alto_nombre
+    for img in imgs:
+        screen.blit(img, (x, y))
+        y += img.get_height()
 
 
 def tope_abajo(vista, jugador):

@@ -54,6 +54,7 @@ MOTIVOS = {
     "eliminados": "Se quedaron sin vidas.",
     "terminaron": "Terminaron la partida antes de escapar.",
     "imposible": "Ya no se podía escapar.",
+    "tiempo": "Se acabó el tiempo.",
 }
 # Los pasos de la misión, en orden (misiones/mision.py).
 PASOS = [("prision", "Salir de la prisión"), ("sabotaje", "Apagar consolas"),
@@ -61,11 +62,16 @@ PASOS = [("prision", "Salir de la prisión"), ("sabotaje", "Apagar consolas"),
          ("huida", "Escapar")]
 
 
-def opciones_resultados(logros):
-    """(texto, acción) de los botones de abajo."""
+def opciones_resultados(logros, nexus=None):
+    """(texto, acción) de los botones de abajo. "Álbum de fotos" solo si el
+    equipo subió alguna (screens/album.py)."""
+    from screens import album
     opciones = []
     if logros is not None:
         opciones.append((f"Ver logros  {logros.arbol.obtenidos()}/{logros.arbol.total()}", "logros"))
+    fotos = len(album.fotos_del_equipo(nexus))
+    if fotos:
+        opciones.append((f"Álbum de fotos  {fotos}", "album"))
     opciones.append(("Volver al menú", "menu"))
     return opciones
 
@@ -81,7 +87,7 @@ def _paso_alcanzado(mision):
     if fase == "sabotaje":
         return 1
     if fase == "capsula":
-        return 3 if mision.piezas_entregadas >= PIEZAS_NECESARIAS else 2
+        return 3 if mision.piezas_entregadas >= getattr(mision, "piezas_necesarias", PIEZAS_NECESARIAS) else 2
     if fase == "huida":
         return 4
     return 0
@@ -526,8 +532,9 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
     if mision is not None and mision.activa:
         from misiones.mision import PIEZAS_NECESARIAS
         piezas = mision.piezas_entregadas
-        cifras.append((f"{piezas}/{PIEZAS_NECESARIAS}", "piezas en la cápsula",
-                       COLOR_BIEN if piezas >= PIEZAS_NECESARIAS else COLOR_TEXTO))
+        necesarias = getattr(mision, "piezas_necesarias", PIEZAS_NECESARIAS)
+        cifras.append((f"{piezas}/{necesarias}", "piezas en la cápsula",
+                       COLOR_BIEN if piezas >= necesarias else COLOR_TEXTO))
     if logros is not None:
         cifras.append((f"{logros.arbol.obtenidos()}/{logros.arbol.total()}", "logros", COLOR_TITULO))
     if npcs is not None:
@@ -684,7 +691,7 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
             yy += fc.get_linesize()
 
     # -- Botones ------------------------------------------------------------------
-    opciones = opciones_resultados(logros)
+    opciones = opciones_resultados(logros, nexus)
     ancho_boton = min(360, (ancho - 80) // len(opciones) - 20)
     separacion = 28
     total = len(opciones) * ancho_boton + (len(opciones) - 1) * separacion

@@ -409,7 +409,8 @@ cuadros = imagenes_planta()[0]
 poner(bio, (planta["rect"].centerx, planta["rect"].bottom + 30))
 assert tareas.intentar(g, bio)
 mini = tareas.de(bio)
-assert mini.necesarios == 2, "el Biomante tiene la versión corta"
+assert mini.facil and mini.necesarios == 3, "el Biomante tiene la versión corta (3 de 4)"
+UNO = 1 / mini.necesarios
 
 
 def acertar():
@@ -418,18 +419,19 @@ def acertar():
 
 
 acertar()
-assert mini.aciertos == 1 and abs(planta["progreso"] - 0.5) < 1e-6, planta["progreso"]
-assert planta.get("visto", 0) < 0.5, "lo que se ve sube de a poco"
+assert mini.aciertos == 1 and abs(planta["progreso"] - UNO) < 1e-6, planta["progreso"]
+assert planta.get("visto", 0) < UNO, "lo que se ve sube de a poco"
 frames(int(1200 / DT))
-assert bahia.imagen_planta() is cuadros[cuadro_planta(0.5, len(cuadros))], "los demás la ven a la mitad"
+assert bahia.imagen_planta() is cuadros[cuadro_planta(UNO, len(cuadros))], "los demás la ven a un tercio"
 g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "guardia_planta_minijuego.png"))
 # Lo deja a medias: al volver sigue desde donde iba.
 g._manejar_tecla(bio.teclas["habilidades"][0])
-assert tareas.de(bio) is None and planta["progreso"] == 0.5 and not planta["crecida"]
+assert tareas.de(bio) is None and abs(planta["progreso"] - UNO) < 1e-6 and not planta["crecida"]
 assert tareas.intentar(g, bio)
 mini = tareas.de(bio)
 assert mini.aciertos == 1, mini.aciertos
-acertar()
+while mini.aciertos < mini.necesarios:
+    acertar()
 frames(int(1000 / DT))
 assert tareas.de(bio) is None and planta["crecida"] and planta["fruta"]
 assert bahia.imagen_planta() is cuadros[-1]
