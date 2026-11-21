@@ -93,6 +93,29 @@ menu de pausa: continuar, opciones, logros y terminar partida. En Opciones, adem
 sonido y la pantalla completa, estan las vistas para probar: apagar el campo de vision y
 la oscuridad, ver las hitboxes y ver el arbol de comportamiento de cada alien en vivo. No hay limite de tiempo: se pierde si atrapan a todos o se quedan sin vidas. Al terminar sale una pantalla de resultados (con cuanto duro la partida), desde donde se puede ver el arbol de logros de la partida. En el menu principal, **Logros** muestra el arbol completo con los que ya se consiguieron alguna vez en ese computador (se guardan en `Guardado/logros.json`).
 
+Para la feria: **Menu > Opciones > Modo feria** (queda guardado en
+`Guardado/opciones.json`). Con el modo feria, la partida (en la dificultad que
+escojan) dura ~7 minutos (`juego/feria.py`, numeros en `data/feria.py`): un solo
+codigo (la puerta de la salida), las consolas mas cercanas caminando (una con 2
+jugadores, dos con 3 y tres con 4), dos piezas,
+con el Guardia, la planta y la puerta para dos (como siempre), sin el caso del
+Cambiaformas, el primer rumor a los 20 s, la confianza sube mas rapido (la verdad corre
+tres veces mas rapido y convence a mas gente), los planos piden el 80 % (hacen
+falta unos 3 desmentidos), las cuentas falsas no ganan
+seguidores y un **reloj** de 12 minutos en el HUD (avisa a los 2 minutos y a 1, y al
+llegar a 0 termina: "Se acabo el tiempo"). En **Jugar en red > Crear partida** tambien
+se escoge "Modo feria: Si/No" para esa partida (las otras laptops la juegan igual;
+el nombre para el ranking sale en la laptop que la creo). Ademas, al terminar una partida el equipo pone su **nombre** (hasta 16
+letras: se escribe con el teclado, o con el mando como en las maquinas de arcade) y queda en el **Ranking**
+(Menu > Ranking, `Guardado/ranking.json`): puntos del equipo + 100 si escapan + 1 por
+cada 5 s que les sobren del reloj. Si nadie toca el menu 30 s (con el modo feria), sale la **pantalla de
+atraccion** (`juego/demo.py`): una partida que se juega sola con "Presiona
+cualquier boton para jugar", despues el ranking y vuelta al menu; cualquier tecla o
+boton vuelve al menu. Si algo falla en un cuadro, el juego no se cierra: lo anota en
+`Guardado/errores.txt` y vuelve al menu. **[F12] dos veces** vuelve al menu desde
+donde sea (sin resultados). Antes de la feria: `python pruebas/ensayo_feria.py 10`
+juega 10 partidas seguidas y dice si la memoria o los cuadros van creciendo.
+
 Ademas hay editores para preparar los assets:
 
 ```bash
@@ -116,8 +139,13 @@ como maximo 3 cosas por verificar a la vez (si le llega otra estando lleno, no l
 aparece). Con el celular se puede:
 
 - **Ir a verificarlo**: una flecha lleva al lugar. Si era mentira, al llegar se saca
-  una foto sola; si era verdad, ahi mismo se arregla con un minijuego (forzar el
-  candado, subir los breakers...) y se **confirma** con la foto.
+  una foto sola (flash, clic de la camara y la foto que vuela al celular; la foto sale
+  despues en lo que publica el equipo y en el **album de fotos** de los resultados); si era
+  verdad, ahi mismo se arregla con un minijuego (forzar el candado, subir los breakers...) y se
+  **confirma** con la foto. Si algo que era verdad se vuelve viral y nadie lo arreglo,
+  **empeora**: los breakers terminan en un apagon, el panel en corto baja una compuerta, la
+  terminal se desconecta, las celdas cuestan el doble, la puerta para dos se queda sin
+  corriente, y parte de la gente deja de confiar en ustedes.
 - **Desmentir** con la foto: la verdad corre por la red y la tripulacion confia en
   ustedes. La foto tal cual convence a mas gente, pero se ve donde estas y el alien
   mas cercano va por ti; recortada es mas segura.
@@ -312,6 +340,12 @@ python pruebas/prueba_vision.py    # campo de vision: las paredes tapan
 python pruebas/prueba_nexus.py     # NEXUS: grafo, rumores, celular, barras y planos
 python pruebas/prueba_cambiaformas.py # prisioneros que caminan y el Cambiaformas
 python pruebas/prueba_dificultad.py   # las 4 dificultades, la flecha, la fuga y el director
+python pruebas/prueba_feria.py        # modo feria, ranking, pantalla de atraccion y blindaje
+python pruebas/prueba_foto.py         # la foto al llegar al lugar de un rumor (flash, polaroid, sonido)
+python pruebas/prueba_album.py        # el album de fotos de los resultados
+python pruebas/prueba_huellas.py      # las huellas miran hacia donde se camina
+python pruebas/prueba_noticias_empeoran.py  # lo verdadero que nadie arregla empeora
+python pruebas/prueba_red_eco.py      # en red: interpolacion que se adapta al wifi y eco local
 python pruebas/prueba_victoria.py     # una partida ganada en Normal (NEXUS, planos y Cambiaformas)
 python pruebas/prueba_vista_grafo.py  # la vista de los grafos (Pausa > Opciones > Grafo)
 python pruebas/prueba_idioma.py      # el juego en ingles (Menu > Opciones > Idioma)

@@ -311,14 +311,21 @@ frames(g, 1)
 assert m.resultado == "derrota"
 print("todos encerrados -> DERROTA")
 
-# Dibujos de Anny: la nave de la cápsula por tercios de la reparación y la
-# consola apagada.
+# Dibujos de Anny: la nave de la cápsula (rota, en partes desde la primera
+# pieza o el primer tercio de la reparación, completa) y la consola apagada.
 from screens import mision_dibujo as md
 from juego import sprites_objetos
 m.fase = "capsula"
+entregadas = m.piezas_entregadas
+m.piezas_entregadas = 0
 for rep, etapa in ((0.0, 0), (0.32, 0), (0.34, 1), (0.66, 1), (0.67, 2), (1.0, 2)):
     m.reparacion = rep
     assert md.etapa_nave(m) == etapa, (rep, md.etapa_nave(m))
+# Con minijuegos la barra pasa de 0 a lista de una: "en partes" sale desde la
+# primera pieza que le ponen.
+m.reparacion, m.piezas_entregadas = 0.0, 1
+assert md.etapa_nave(m) == 1, "con una pieza puesta, la nave en partes"
+m.piezas_entregadas = entregadas
 m.fase, m.reparacion = "huida", 0.0
 assert md.etapa_nave(m) == 2, "en la huida, completa"
 naves = [md.imagen_nave(e) for e in range(3)]

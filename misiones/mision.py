@@ -91,7 +91,7 @@ TEXTO_FASE = {
     "reparar": "Reparen la cápsula: mantengan la tecla.",
     # Con minijuegos (juego/tareas.py) ya no se mantiene: son los cables.
     "reparar_mini": "Reparen la cápsula: conecten los cables.",
-    "planos": "Faltan los planos: ganen la confianza en NEXUS.",
+    "planos": "Faltan los planos: hay que ganar la confianza en NEXUS.",
     "huida": "¡Alerta! Todos a la cápsula.",
 }
 
@@ -243,6 +243,8 @@ class Mision:
         self.capsula = None
         self.consolas, self.celdas, self.notas, self.consumibles = [], [], [], []
         self.piezas_entregadas = 0
+        # Las que pide la cápsula (el modo Feria pide menos: juego/feria.py).
+        self.piezas_necesarias = PIEZAS_NECESARIAS
         self.codigos_fallidos = 0        # para el logro "A la primera"
         self.abrio = None                # quién abrió la puerta de la prisión
         self._objetivos = []             # rects de lo de la misión (para ver qué tapan las puertas)
@@ -490,7 +492,7 @@ class Mision:
             hechas = sum(c["progreso"] >= 1 for c in self.consolas)
             return TEXTO_FASE["sabotaje"].format(hechas=hechas, total=len(self.consolas))
         if self.fase == "capsula":
-            faltan = PIEZAS_NECESARIAS - self.piezas_entregadas
+            faltan = self.piezas_necesarias - self.piezas_entregadas
             if faltan > 0:
                 return TEXTO_FASE["capsula"].format(faltan=faltan)
             if not self.hay_planos():
@@ -712,23 +714,23 @@ class Mision:
                 # El Resonante lo distrae cuando alguien tiene que llegar a la
                 # cápsula (con una pieza o para repararla), o si ya no hay
                 # forma de darle de comer.
-                listos = self.piezas_entregadas >= PIEZAS_NECESARIAS and self.hay_planos()
+                listos = self.piezas_entregadas >= self.piezas_necesarias and self.hay_planos()
                 con_pieza = any(getattr(j, "piezas", 0) > 0 for j in self.juego.jugadores)
                 if listos or con_pieza or not bahia.hay_camino_permanente():
                     distraer = bahia.punto_distraer(jugador)
                     if distraer is not None:
                         return distraer
-            if getattr(jugador, "piezas", 0) > 0 and self.piezas_entregadas < PIEZAS_NECESARIAS:
+            if getattr(jugador, "piezas", 0) > 0 and self.piezas_entregadas < self.piezas_necesarias:
                 if bahia is not None and not bahia.guardia.distraido:
                     return self.capsula.center, "Lleva la pieza (ojo: el Guardia la cuida)"
                 return self.capsula.center, "Lleva la pieza a la cápsula"
-            if self.piezas_entregadas < PIEZAS_NECESARIAS and self.ve_piezas(jugador):
+            if self.piezas_entregadas < self.piezas_necesarias and self.ve_piezas(jugador):
                 pieza = cerca([p for p in getattr(self.juego, "piezas", []) if not p["recogida"]],
                               lambda p: p["rect"].center)
                 if pieza is not None:
                     return pieza["rect"].center, "Recoge esta pieza"
             kit = self.kit_libre() if self.piezas_para_todos else None
-            if self.piezas_entregadas < PIEZAS_NECESARIAS and kit is not None:
+            if self.piezas_entregadas < self.piezas_necesarias and kit is not None:
                 return kit["rect"].center, "Toma el kit: con él ves las piezas"
             if not self.hay_planos() and red is not None:
                 nodo = red.nodo_de(jugador)
@@ -744,11 +746,11 @@ class Mision:
                                  lambda z: z["rect"].center)
                 if terminal is not None:
                     return terminal["rect"].center, "Faltan los planos: revisa NEXUS aquí"
-            if self.piezas_entregadas >= PIEZAS_NECESARIAS and self.hay_planos():
+            if self.piezas_entregadas >= self.piezas_necesarias and self.hay_planos():
                 if bahia is not None and not bahia.guardia.distraido:
                     return self.capsula.center, "Repara la cápsula (ojo: el Guardia)"
                 return self.capsula.center, "Repara la cápsula"
-            if self.piezas_entregadas < PIEZAS_NECESARIAS:
+            if self.piezas_entregadas < self.piezas_necesarias:
                 return self.capsula.center, "Ayuda con la cápsula"
         return None
 
@@ -846,7 +848,7 @@ class Mision:
             if not cons["tomado"] and self._cerca(jugador, cons["rect"], 15):
                 return f"Recoger {NOMBRE_CONSUMIBLE[cons['tipo']].lower()}"
         if self.capsula and self.fase == "capsula" and self._cerca(jugador, self.capsula, 10):
-            if self.piezas_entregadas < PIEZAS_NECESARIAS:
+            if self.piezas_entregadas < self.piezas_necesarias:
                 return "Dejar piezas en la cápsula" if jugador.piezas else "Cápsula: faltan piezas"
             if not self.hay_planos():
                 return "Cápsula: faltan los planos (confianza en NEXUS)"
@@ -879,10 +881,10 @@ class Mision:
         if puerta is not None:
             if getattr(self.juego, "en_tutorial", False):
                 # Con los aliens dormidos sería gratis: primero todos terminan el tutorial.
-                jugador.avisar("El teclado no responde: terminen todos el tutorial.", COLOR_MAL)
+                jugador.avisar("El teclado no responde: primero terminamos todos el tutorial.", COLOR_MAL)
                 return True
             if getattr(self.juego, "sin_luz", False):
-                jugador.avisar("El teclado está apagado. Sin energía: enciendan la caja de fusibles.", COLOR_MAL)
+                jugador.avisar("El teclado está apagado. Sin energía: hay que encender la caja de fusibles.", COLOR_MAL)
                 return True
             self._panel_codigo(jugador, self.puertas.index(puerta))
             return True
@@ -890,28 +892,28 @@ class Mision:
             if not cons["tomado"] and self._cerca(jugador, cons["rect"], 15):
                 cons["tomado"] = True
                 jugador.objetos.add(cons["tipo"])
-                jugador.avisar(f"Recogiste: {NOMBRE_CONSUMIBLE[cons['tipo']]}", COLOR_BIEN)
+                jugador.avisar(f"Recogí: {NOMBRE_CONSUMIBLE[cons['tipo']]}", COLOR_BIEN)
                 self._sonar("recoger", 0.7)
                 return True
         if self.capsula and self.fase == "capsula" and self._cerca(jugador, self.capsula, 10):
-            faltan = PIEZAS_NECESARIAS - self.piezas_entregadas
+            faltan = self.piezas_necesarias - self.piezas_entregadas
             if faltan > 0 and jugador.piezas > 0:
                 dejar = min(faltan, jugador.piezas)
                 jugador.piezas -= dejar
                 self.piezas_entregadas += dejar
                 jugador.sumar_puntos(PUNTOS_PIEZA * dejar)
                 self._sonar("encajar", 0.8)
-                jugador.avisar(f"Piezas en la cápsula: {self.piezas_entregadas}/{PIEZAS_NECESARIAS}",
+                jugador.avisar(f"Puse piezas en la cápsula: {self.piezas_entregadas}/{self.piezas_necesarias}",
                                COLOR_BIEN)
             elif faltan > 0:
                 quien = ("Las ve y las recoge quien lleve el kit de herramientas"
                          if self.piezas_para_todos else "El Forjador tiene que recogerlas")
                 jugador.avisar(f"Faltan {faltan} pieza(s). {quien}.", COLOR_MAL)
             elif not self.hay_planos():
-                jugador.avisar("Sin los planos no saben cómo repararla. Ganen la confianza "
+                jugador.avisar("Sin los planos no sé cómo repararla. Hay que ganar la confianza "
                                "de la tripulación en NEXUS.", COLOR_MAL)
             else:
-                jugador.avisar("Mantén la tecla para reparar la cápsula.", COLOR_AVISO)
+                jugador.avisar("Tengo que mantener la tecla para reparar la cápsula.", COLOR_AVISO)
             return True
         for nota in self.notas:
             if self._cerca(jugador, nota["rect"], 20):
@@ -925,7 +927,7 @@ class Mision:
         if self.fase == "sabotaje":
             for consola in self.consolas:
                 if consola["progreso"] < 1 and consola_cerca(consola, jugador):
-                    jugador.avisar("Mantén la tecla para apagar la consola.", COLOR_AVISO)
+                    jugador.avisar("Tengo que mantener la tecla para apagar la consola.", COLOR_AVISO)
                     return True
         return False
 
@@ -1005,31 +1007,31 @@ class Mision:
                     continue
                 if getattr(self.juego, "sin_luz", False):
                     # Sin energía no hay sistema que desconectar.
-                    jugador.avisar("Sin energía: enciendan la caja de fusibles.", COLOR_MAL)
+                    jugador.avisar("Sin energía: hay que encender la caja de fusibles.", COLOR_MAL)
                     return
                 if jugador.rol == "Tecnomante":
                     duracion = SABOTAJE_ROL_S
                 elif "decodificador" in jugador.objetos:
                     duracion = SABOTAJE_OTROS_S
                 else:
-                    jugador.avisar("Necesitas al Tecnomante o un decodificador.", COLOR_MAL)
+                    jugador.avisar("Necesito al Tecnomante o un decodificador.", COLOR_MAL)
                     return
                 consola["progreso"] = min(1.0, consola["progreso"] + paso / duracion)
                 jugador.progreso = ("Apagando consola", consola["progreso"])
                 if consola["progreso"] >= 1:
                     self.apagar_consola(consola, jugador)
                 return
-        if (self.fase == "capsula" and self.piezas_entregadas >= PIEZAS_NECESARIAS
+        if (self.fase == "capsula" and self.piezas_entregadas >= self.piezas_necesarias
                 and self._cerca(jugador, self.capsula, 10)):
             if not self.hay_planos():
-                jugador.avisar("Faltan los planos: ganen la confianza en NEXUS.", COLOR_MAL)
+                jugador.avisar("Faltan los planos: hay que ganar la confianza en NEXUS.", COLOR_MAL)
                 return
             if jugador.rol == "Forjador":
                 duracion = REPARACION_ROL_S
             elif "kit" in jugador.objetos:
                 duracion = REPARACION_OTROS_S
             else:
-                jugador.avisar("Necesitas al Forjador o un kit de herramientas.", COLOR_MAL)
+                jugador.avisar("Necesito al Forjador o un kit de herramientas.", COLOR_MAL)
                 return
             self.reparacion = min(1.0, self.reparacion + paso / duracion)
             jugador.progreso = ("Reparando la cápsula", self.reparacion)
@@ -1050,16 +1052,16 @@ class Mision:
             if consola["progreso"] >= 1 or not consola_cerca(consola, jugador):
                 continue
             if getattr(self.juego, "sin_luz", False):
-                return None, "Sin energía: enciendan la caja de fusibles."
+                return None, "Sin energía: hay que encender la caja de fusibles."
             if jugador.rol != "Tecnomante" and "decodificador" not in jugador.objetos:
-                return None, "Necesitas al Tecnomante o un decodificador."
+                return None, "Necesito al Tecnomante o un decodificador."
             return consola, None
         return None, None
 
     def apagar_consola(self, consola, jugador):
         consola["progreso"] = 1.0
         jugador.sumar_puntos(PUNTOS_CONSOLA)
-        jugador.avisar("Consola apagada.", COLOR_BIEN)
+        jugador.avisar("¡Apagué la consola!", COLOR_BIEN)
         self._sonar("consola", 0.8)
         self._decir("consola", jugador.rol)
 
@@ -1068,12 +1070,12 @@ class Mision:
         junto a ella pero falta algo, (False, None) si no está junto a ella o
         todavía no toca (la misión se encarga: dejar piezas, etc.)."""
         if not (self.activa and not jugador.preso and self.fase == "capsula"
-                and self.piezas_entregadas >= PIEZAS_NECESARIAS and self._cerca(jugador, self.capsula, 10)):
+                and self.piezas_entregadas >= self.piezas_necesarias and self._cerca(jugador, self.capsula, 10)):
             return False, None
         if not self.hay_planos():
             return False, None
         if jugador.rol != "Forjador" and "kit" not in jugador.objetos:
-            return False, "Necesitas al Forjador o un kit de herramientas."
+            return False, "Necesito al Forjador o un kit de herramientas."
         return True, None
 
     def terminar_reparacion(self, jugador):
@@ -1095,17 +1097,18 @@ class Mision:
             # para hacerle espacio. Antes solo se le quitaba "preso" y se quedaba
             # dentro de la pared de la celda, sin poder moverse.
             self._sacar_de_celda(anterior, celda)
-            anterior.avisar(f"Los aliens te sacaron para encerrar al {jugador.rol}. ¡Corre!", COLOR_BIEN)
+            anterior.avisar(f"Los aliens me sacaron para encerrar al {jugador.rol}. ¡A correr!", COLOR_BIEN)
         celda["preso"] = jugador
         # Dificultades fáciles: sale solo después de un rato (dificultad.py).
         dif = getattr(self.juego, "dificultad", None)
         celda["fuga_ms"] = dif.fuga_ms if dif is not None else None
+        celda["fuga_total"] = celda["fuga_ms"]      # (para la barra: app.py)
         jugador.preso = celda
         jugador.personaje.hitbox.center = celda["punto"]
         jugador.personaje.sync_sprite_from_hitbox()
         for otro in self.juego.jugadores:
             if otro is not jugador:
-                otro.avisar(f"¡Encerraron al {jugador.rol}! Vayan a sacarlo.", COLOR_MAL)
+                otro.avisar(f"¡Encerraron al {jugador.rol}! Hay que ir a sacarlo.", COLOR_MAL)
         return True
 
     def fugarse(self, celda):
@@ -1116,7 +1119,7 @@ class Mision:
         celda["preso"] = None
         celda["fuga_ms"] = None
         self._sacar_de_celda(preso, celda)
-        preso.avisar("Forzaste la reja: ¡estás libre!", COLOR_BIEN)
+        preso.avisar("Forcé la reja: ¡estoy libre!", COLOR_BIEN)
         self._sonar("puerta", 0.6)
 
     def _sacar_de_celda(self, preso, celda):
@@ -1138,10 +1141,10 @@ class Mision:
         rescatador.sumar_puntos(PUNTOS_RESCATE)
         if rescatador.rol == "Biomante":
             preso.pulso = min(preso.pulso, 20.0)
-            preso.avisar("La Biomante te sacó y te calmó.", COLOR_BIEN)
+            preso.avisar("La Biomante me sacó y me calmó.", COLOR_BIEN)
         else:
-            preso.avisar(f"El {rescatador.rol} te sacó de la celda.", COLOR_BIEN)
-        rescatador.avisar(f"Liberaste al {preso.rol}. +{PUNTOS_RESCATE}", COLOR_BIEN)
+            preso.avisar(f"¡El {rescatador.rol} me sacó de la celda!", COLOR_BIEN)
+        rescatador.avisar(f"Liberé al {preso.rol}. +{PUNTOS_RESCATE}", COLOR_BIEN)
         logro(self.juego, "nadie_atras", rescatador)
         if preso.vidas == 1:
             logro(self.juego, "segunda_oportunidad", rescatador)
@@ -1207,7 +1210,7 @@ class Mision:
             for s in soltados:
                 cuenta[s] = cuenta.get(s, 0) + 1
             lista = ", ".join(f"{n} {nombres[t][n > 1]}" for t, n in cuenta.items())
-            self._avisar_todos(f"El {jugador.rol} dejó caer: {lista}. ¡Recójanlo!", COLOR_AVISO)
+            self._avisar_todos(f"El {jugador.rol} dejó caer: {lista}. ¡Hay que recogerlo!", COLOR_AVISO)
         return soltados
 
     # -- Fases --------------------------------------------------------------------------
@@ -1308,7 +1311,7 @@ class Mision:
         activos = self._activos()
         if not activos:
             return None
-        faltan = PIEZAS_NECESARIAS - self.piezas_entregadas
+        faltan = self.piezas_necesarias - self.piezas_entregadas
         piezas_piso = [p for p in getattr(juego, "piezas", ()) if not p.get("recogida")]
         llevan = sum(getattr(j, "piezas", 0) for j in juego.jugadores if not getattr(j, "eliminado", False))
         if faltan > 0 and len(piezas_piso) + llevan < faltan:
@@ -1348,7 +1351,7 @@ class Mision:
             razon = self.razon_imposible()
             if razon is None:
                 if self._imposible_avisado:
-                    self._avisar_todos("¡Todavía se puede! Sigan.", COLOR_BIEN)
+                    self._avisar_todos("¡Todavía se puede! Sigamos.", COLOR_BIEN)
                 self.razon_imposible_txt, self._imposible_ms, self._imposible_avisado = None, 0, False
             elif razon != self.razon_imposible_txt:
                 self.razon_imposible_txt, self._imposible_ms, self._imposible_avisado = razon, 0, False

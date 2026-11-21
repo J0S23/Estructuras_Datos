@@ -41,6 +41,9 @@ from juego.mundo import Mundo
 from juego import salas as salas_mapa
 from juego import salas_selladas
 from juego import decoracion
+from juego import feria
+from juego import demo as demo_feria
+from juego import ranking
 from juego import sprites_objetos
 from entidades.jugador import Jugador, TECLAS_POR_PUESTO, NOMBRE_CONTROLES, NOMBRE_ESQUEMA
 from Movimiento.Personaje import Personaje, CONTROLES_WASD, CONTROLES_FLECHAS
@@ -55,6 +58,20 @@ from juego.ambiente import Ambiente
 from misiones.ia_nave import Narrador
 from juego.mandos import (Mandos, tecla_virtual, PUESTOS_CON_MANDO, nombre_boton,
                           EVENTOS_ENTRADA, EVENTOS_CONEXION)
+# Dónde se anotan los cuadros que fallaron (Game._fallo).
+RUTA_ERRORES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "Guardado", "errores.txt")
+# El nombre del equipo para el ranking (en los resultados, juego/ranking.py):
+# las letras se escriben (el unicode del evento) y estas teclas hacen lo
+# demás. El mando llega como flechas, Enter y Esc (_tecla_mando).
+TECLAS_INICIALES = {pygame.K_UP: "arriba", pygame.K_DOWN: "abajo",
+                    pygame.K_LEFT: "izquierda", pygame.K_RIGHT: "derecha",
+                    pygame.K_RETURN: "ok", pygame.K_KP_ENTER: "ok",
+                    pygame.K_ESCAPE: "saltar", pygame.K_BACKSPACE: "borrar", pygame.K_DELETE: "borrar"}
+# Lo que cuenta como "alguien tocó algo" (la demo de la feria, juego/demo.py).
+# Los ejes de los sticks no: un mando con drift sacaría de la demo solo.
+EVENTOS_SALIR_DEMO = (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN, pygame.JOYBUTTONDOWN, pygame.JOYHATMOTION,
+                      getattr(pygame, "CONTROLLERBUTTONDOWN", -1))
+EVENTOS_ACTIVIDAD = EVENTOS_SALIR_DEMO + (pygame.MOUSEMOTION,)
 from juego.tutorial import Tutorial
 from juego.pausa import MenuPausa, mover_en_logros
 from juego.admin import MenuAdmin, INVENCIBLE_MS
@@ -145,10 +162,12 @@ def botones_menu(ancho, alto):
     """Los botones del menú van a la derecha, debajo del título NEXUS del
     fondo, para no tapar a los cuatro personajes ni el planeta."""
     chica = alto < 700          # (en ventana, 960x600: más juntos para que quepan)
+    # (con "Ranking" son 8: un poco más bajos y más abajo, para no tapar el
+    # lema que va debajo del logo)
     return construir_botones(OPCIONES_MENU, ancho, alto,
-                             centro_x=ancho * 0.765, centro_y=alto * 0.6,
-                             ancho=min(380, int(ancho * 0.26)), alto=40 if chica else 46,
-                             separacion=8 if chica else 12)
+                             centro_x=ancho * 0.765, centro_y=alto * (0.64 if chica else 0.618),
+                             ancho=min(380, int(ancho * 0.26)), alto=36 if chica else 44,
+                             separacion=6 if chica else 10)
 
 
 def _nombre(tecla):
@@ -179,6 +198,22 @@ def mover_en_mosaico(filas, cursor, dfila, dcol):
     relativo = (c + 0.5) / len(fila)
     return nueva[min(len(nueva) - 1, int(relativo * len(nueva)))]
 
+
+
+def _olvidar_partida_anterior():
+    """Las cachés del dibujo que van por objeto de la partida (los cuadros de
+    los personajes, cada jugador): con cada partida nueva se cargan otros, y
+    las cachés seguían guardando los de todas las anteriores (y con ellos, sus
+    imágenes). El ensayo de la feria (pruebas/ensayo_feria.py) lo encontró:
+    ~35 MB más por partida (los contornos de 208 cuadros, los mapas de luz del
+    tamaño de la vista de cada jugador...), en una feria de 100 partidas se
+    acababa la memoria. Ahora, al empezar cada una, se sueltan."""
+    from juego import efectos as _efectos, cache_dibujo, vision, oscuridad, luces as _luces
+    from screens import flechas, foto
+    for cache in (_efectos._contornos, cache_dibujo._recortes, vision._recientes, vision._de_dueño,
+                  oscuridad._ultimo, oscuridad._luz_vista, flechas._rutas, _luces._filtrados):
+        cache.clear()
+    foto.olvidar()
 
 
 def _ordenar_memoria():
@@ -215,6 +250,7 @@ class Game:
 
         idioma.cargar_preferencia()          # Guardado/opciones.json (español si no hay)
         efectos.cargar_preferencia()         # y si los efectos visuales van prendidos
+        feria.cargar_preferencia()           # y el modo feria (Menú > Opciones)
         self.fuentes = construir_fuentes()
         self.font = self.fuentes["subtitle"]
         self.small_font = self.fuentes["small"]
@@ -296,6 +332,20 @@ class Game:
         # Cuenta regresiva: solo en un mapa sin misión (el modo viejo, por
         # tiempo). Con misión es None: no se pierde por tiempo.
         self.tiempo_restante_ms = None
+
+        # La feria: la pantalla de atracción (juego/demo.py: el menú quieto un
+        # rato -> el juego se juega solo), las iniciales del ranking en los
+        # resultados (juego/ranking.py) y lo que la blinda (_cuadro).
+        self.modo_feria = False          # esta partida va en modo feria (juego/feria.py)
+        self.demo = None
+        self.demo_permitida = os.environ.get("SDL_VIDEODRIVER") != "dummy"
+        self._menu_quieto_ms = 0
+        self.iniciales = None            # ranking.Iniciales en los resultados
+        self.ranking_entradas = []       # lo que muestra la pantalla del ranking
+        self.ranking_resaltar = None
+        self.aviso_menu = None           # (texto, hasta qué tick) encima del menú
+        self._errores = []               # cuándo fallaron los últimos cuadros
+        self._f12 = 0                    # F12 dos veces seguidas: de vuelta al menú
 
         self.running = True
 
@@ -578,15 +628,23 @@ class Game:
         self.carga = {"ms": 0, "listo": False, "error": None,
                       "consejo": random.choice(CONSEJOS), "roles": roles}
 
+        carga = self.carga
+
         def cargar():
             try:
                 self._preparar_partida()
             except Exception as error:          # se relanza en el hilo principal
-                self.carga["error"] = error
-            self.carga["listo"] = True
+                carga["error"] = error
+            carga["listo"] = True
 
+        # Si una carga anterior se abandonó (salir de la demo, F12, un error),
+        # su hilo puede seguir armando cosas: que termine antes de empezar otra.
+        anterior = getattr(self, "_hilo_carga", None)
+        if anterior is not None and anterior.is_alive():
+            anterior.join(15)
         self.transitions.request(self, "cargando")
-        threading.Thread(target=cargar, daemon=True).start()
+        self._hilo_carga = threading.Thread(target=cargar, daemon=True)
+        self._hilo_carga.start()
 
     def _actualizar_carga(self, dt):
         carga = self.carga
@@ -621,6 +679,11 @@ class Game:
 
     def _preparar_partida(self):
         """Carga el mapa, arma los árboles y crea a los jugadores."""
+        _olvidar_partida_anterior()
+        # (lo que diga Menú > Opciones al empezar; en red lo dice quien creó la
+        # partida: el servidor y el espejo del cliente lo fuerzan)
+        forzado = getattr(self, "modo_feria_forzado", None)
+        self.modo_feria = feria.ACTIVO if forzado is None else bool(forzado)
         self.pausa = None
         self.admin = None
         self.admin_usado = self.admin_invencible = False
@@ -640,6 +703,9 @@ class Game:
         # Dónde va cada cosa del mapa: lo que se puso con el editor de mapa, y
         # lo que no, de data/ (ver objetos_mapa.py).
         self.objetos = objetos_mapa.cargar(nombre_mapa)
+        # La Feria (juego/feria.py): una consola, sin el Guardia ni la puerta
+        # para dos... fuera del mapa antes de armar nada.
+        feria.recortar_objetos(self, self.objetos, self.mundo)
         self.salas = salas_mapa.preparar(self.objetos, self.mundo)
         # Los muebles de la decoración: sus hitboxes pasan a ser parte del mapa
         # ANTES de armar nada más (rutas, puntos de paseo, navegación).
@@ -647,7 +713,11 @@ class Game:
         # Menos jugadores, menos salas: las que sobran se sellan y lo que había
         # adentro se quita de self.objetos antes de armar nada (salas_selladas.py).
         self.sellado = salas_selladas.aplicar(self.objetos, self.mundo, self.salas,
-                                              len(self.seleccion_roles))
+                                              len(self.seleccion_roles),
+                                              minimos=feria.minimos_sellado(self, len(self.seleccion_roles)))
+        # La Feria: de las consolas que quedaron (ya ordenadas por distancia),
+        # las que tocan con esta cantidad de jugadores.
+        feria.recortar_consolas(self, self.objetos, len(self.seleccion_roles))
         self._preparar_zonas()
 
         self.tiempo_restante_ms = DURACION_RONDA_S * 1000
@@ -731,6 +801,7 @@ class Game:
                 jugador.vidas_infinitas = self.dificultad.vidas_infinitas
             if self.nexus is not None:
                 self.nexus.umbral_planos = self.dificultad.umbral_planos
+        feria.aplicar(self)              # (las piezas, el primer rumor, el reloj)
         if self.mision.activa:
             self.eventos = GestorEventos(self, cajas=crear_cajas(self.objetos, self.mundo))
             # Los pasos del principio salen en todas las dificultades.
@@ -747,7 +818,25 @@ class Game:
         # carga, y no la primera vez que aparecen (un tirón en medio del juego).
         luces.precalentar(self._extras_dibujo(), getattr(self, "zonas", ()), self.mundo)
         efectos.precalentar_contornos(self.jugadores)
+        self._precargar_imagenes()
+        self._preparar_demo()            # (si es la pantalla de atracción)
         _ordenar_memoria()
+
+    def _precargar_imagenes(self):
+        """Lo que antes se leía del disco la primera vez que salía (un tirón de
+        15-30 ms en ese cuadro): el marco del celular ya escalado a cada vista,
+        las fotos de perfil y los logos de NEXUS, la planta de la Biosfera."""
+        from screens import celular as dibujo_celular
+        from misiones import guardia
+        from juego import perfiles
+        perfiles.precargar()
+        guardia.imagenes_planta()
+        try:
+            principal, _ = self._reparto_pantallas()
+            dibujo_celular.precalentar(self.screen.get_size(), len(principal), principal,
+                                       getattr(self, "nexus", None))
+        except (pygame.error, AttributeError, TypeError):
+            pass
 
     def _crear_aliens(self):
         """Un alien por ruta del mapa (las que se trazan en el editor de mapa).
@@ -924,10 +1013,10 @@ class Game:
         jugador.pulso = max(jugador.pulso, 85.0)
         if dificultad.valor(self, "sombra_hasta_luz", 1) >= 0.5:
             jugador.sin_linterna_ms = self.SIN_LINTERNA_HASTA_LA_LUZ
-            jugador.avisar("¡La Sombra te apagó la linterna hasta que vuelva la luz!", (176, 150, 236))
+            jugador.avisar("¡La Sombra me apagó la linterna hasta que vuelva la luz!", (176, 150, 236))
         else:
             jugador.sin_linterna_ms = int(dificultad.valor(self, "sombra_apaga_ms", 10000))
-            jugador.avisar("¡La Sombra te apagó la linterna!", (176, 150, 236))
+            jugador.avisar("¡La Sombra me apagó la linterna!", (176, 150, 236))
         self.decir("sombra_linterna", jugador.rol, forzar=True)
 
     def quitar_sombra(self):
@@ -1056,7 +1145,7 @@ class Game:
             jugador.cerrar_panel()      # ¡a calmar el pulso, no a mirar NEXUS!
         jugador.minijuego = MinijuegoLatidos(jugador.pulso, alien, escondite)
         self.decir("escondite_revisado", jugador.rol)
-        jugador.avisar(f"¡El {alien.nombre} revisa tu escondite!", (236, 70, 60))
+        jugador.avisar(f"¡El {alien.nombre} está revisando mi escondite!", (236, 70, 60))
 
     def _actualizar_minijuegos(self, dt):
         for jugador in self.jugadores:
@@ -1067,7 +1156,7 @@ class Game:
             if alien.escondite_objetivo is not juego.escondite:
                 # El alien dejó de revisar (lo hackearon): se acabó el peligro.
                 jugador.minijuego = None
-                jugador.avisar("El alien se fue de tu escondite.", (96, 200, 120))
+                jugador.avisar("El alien se fue de mi escondite.", (96, 200, 120))
                 continue
             juego.actualizar(dt, jugador)
             if not juego.terminado:
@@ -1079,7 +1168,7 @@ class Game:
                 if self.logros is not None:
                     self.logros.conseguir("fantasma", jugador)
                 jugador.sumar_puntos(5)
-                jugador.avisar("Te calmaste. El alien se fue. +5", (96, 200, 120))
+                jugador.avisar("Me calmé y el alien se fue. +5", (96, 200, 120))
             else:
                 alien.entrar_al_escondite()
                 self._atrapar(jugador, alien)
@@ -1109,7 +1198,7 @@ class Game:
             self.decir("eliminado", jugador.rol, forzar=True)
             self.sonar("eliminado", 0.8)
             veces = jugador.vidas_max
-            jugador.avisar(f"Te atraparon {veces} {'vez' if veces == 1 else 'veces'}. Estás fuera.",
+            jugador.avisar(f"Me atraparon {veces} {'vez' if veces == 1 else 'veces'}. Estoy fuera.",
                            (236, 70, 60))
             for otro in self.jugadores:
                 if otro is not jugador:
@@ -1119,13 +1208,13 @@ class Game:
         if self.mision is not None and self.mision.encarcelar(jugador):
             vidas = jugador.vidas
             if jugador.vidas_infinitas:
-                jugador.avisar("¡Te encerraron! En Fácil no pierdes vidas.", (236, 70, 60))
+                jugador.avisar("¡Me encerraron! En Fácil no pierdo vidas.", (236, 70, 60))
             else:
-                jugador.avisar(f"¡Te encerraron! Te queda{'n' if vidas > 1 else ''} {vidas} "
+                jugador.avisar(f"¡Me encerraron! Me queda{'n' if vidas > 1 else ''} {vidas} "
                                f"vida{'s' if vidas > 1 else ''}.", (236, 70, 60))
             return
         jugador.sumar_puntos(-PUNTOS_POR_SER_ATRAPADO)
-        jugador.avisar(f"¡Te atrapó el {alien.nombre}! -{PUNTOS_POR_SER_ATRAPADO}",
+        jugador.avisar(f"¡Me atrapó el {alien.nombre}! -{PUNTOS_POR_SER_ATRAPADO}",
                        (236, 70, 60))
 
     def _avisar_zonas_inalcanzables(self):
@@ -1188,7 +1277,10 @@ class Game:
             # Menú de admin: nadie los caza (aunque salgan de una celda).
             for jugador in self.jugadores:
                 jugador.invulnerable_ms = max(jugador.invulnerable_ms, INVENCIBLE_MS)
-        teclas = self.mandos.envolver(pygame.key.get_pressed())
+        if self.demo is not None and self.demo.parte == "partida":
+            teclas = self.demo.teclas(self, dt)     # el piloto automático (juego/demo.py)
+        else:
+            teclas = self.mandos.envolver(pygame.key.get_pressed())
         en_tutorial = self.en_tutorial
         if en_tutorial:
             self.tutorial.actualizar(dt)
@@ -1232,7 +1324,10 @@ class Game:
                 jugador.pista_mision = self.npcs.pista(jugador)
             pista_puerta = puertas.pista(self.puertas_dobles, jugador)
             if pista_puerta and not jugador.preso:
-                jugador.pista_mision = "Puerta sin energía" if self.sin_luz else pista_puerta
+                cerca = puertas.panel_cerca(self.puertas_dobles, jugador)
+                sin_corriente = cerca is not None and cerca[0].get("sin_corriente")
+                jugador.pista_mision = ("Puerta sin energía" if self.sin_luz or sin_corriente
+                                        else pista_puerta)
             pista_caja = self.eventos.pista(jugador) if self.eventos is not None else None
             if pista_caja and not jugador.preso:
                 jugador.pista_mision = pista_caja
@@ -1255,12 +1350,19 @@ class Game:
         # Las puertas para dos son eléctricas: en un apagón no abren.
         puertas.actualizar(self.puertas_dobles, [] if self.sin_luz else sosteniendo, dt,
                            self._puerta_doble_abierta)
-        if self.minijuegos:
-            # Con minijuegos ya no hay barra de "mantener la tecla" en la vista
-            # (Diego): lo único que se mantiene es la puerta para dos, y esa ya
-            # muestra su avance debajo de la puerta y en sus paneles.
-            for jugador in self.jugadores:
-                jugador.progreso = None
+        # La barra de progreso (mision_dibujo.render_progreso) es para lo que
+        # se hace manteniendo la tecla o esperando: con minijuegos, lo único que
+        # se mantiene es la puerta para dos (la barra la pone puertas.py: "Abriendo
+        # la puerta" / "Esperando al otro panel..."; Diego la quiere ver); las
+        # consolas, la cápsula, los fusibles y la planta ya no la ponen porque
+        # su `mantener` no corre. Y el encerrado que sale solo (dificultades
+        # fáciles) ve cuánto le falta para forzar la reja.
+        for jugador in self.jugadores:
+            celda = jugador.preso
+            if (isinstance(celda, dict) and celda.get("fuga_ms") is not None
+                    and celda.get("fuga_total")):
+                hecho = 1 - max(0.0, celda["fuga_ms"]) / celda["fuga_total"]
+                jugador.progreso = ("Forzando la reja", max(0.0, min(1.0, hecho)))
 
         acciones_rol.actualizar(self, dt)
         if self.guardia_planta is not None:
@@ -1335,7 +1437,9 @@ class Game:
             self.tiempo_jugado_ms += dt
             if self.tiempo_restante_ms is not None:
                 self.tiempo_restante_ms -= dt
-        # Solo en un mapa sin misión se acaba la ronda por tiempo.
+        # En la Feria hay reloj: avisa y, al llegar a 0, se pierde por tiempo.
+        feria.actualizar(self)
+        # Solo en un mapa sin misión (o en la Feria) se acaba la ronda por tiempo.
         if self.tiempo_restante_ms is not None and self.tiempo_restante_ms <= 0:
             self.tiempo_restante_ms = 0
             self.terminar_ronda()
@@ -1392,6 +1496,9 @@ class Game:
                 if not getattr(a, "disfrazado", False) and not getattr(a, "oculta", False)]
 
     def terminar_ronda(self):
+        if self.demo is not None:
+            self._demo_al_ranking()      # la demo no tiene resultados: al ranking
+            return
         if self.mision is not None:
             self.mision.terminar_sin_escapar()   # si nadie ganó todavía (Terminar partida)
         if self.logros is not None:
@@ -1407,6 +1514,10 @@ class Game:
         for jugador in self.jugadores:
             jugador.cerrar_panel()
         self._reiniciar_resultados()
+        # Las iniciales para el ranking (solo en modo feria y si no se usó el menú de admin).
+        self.iniciales = (ranking.Iniciales(self) if self.modo_feria and self.mision is not None
+                          and self.mision.activa and self.mision.resultado is not None
+                          and not self.admin_usado else None)
         # Al escapar, un destello blanco; si no, un círculo que se cierra
         # (juego/transition_manager.py). Sin misión, el fundido de siempre.
         estilo = None
@@ -1433,7 +1544,7 @@ class Game:
             return
         if zona.get("desconectada"):
             jugador.avisar("Los prisioneros desconectaron esta terminal por el rumor de las cámaras. "
-                           "Desmiéntanlo en NEXUS y la vuelven a conectar.", (245, 130, 120))
+                           "Si desmiento el rumor en NEXUS, la vuelven a conectar.", (245, 130, 120))
             return
         if self.logros is not None:
             self.logros.conseguir("conectado", jugador)
@@ -1493,7 +1604,7 @@ class Game:
         from screens.paneles import NOMBRE_OBJETO
         objetos = self._inventario(jugador)
         if not objetos:
-            jugador.avisar("No llevas nada que soltar.", (210, 210, 220))
+            jugador.avisar("No llevo nada que soltar.", (210, 210, 220))
             return
         if len(objetos) == 1:
             self._soltar_objeto(jugador, objetos[0][0])
@@ -1535,7 +1646,7 @@ class Game:
                 return
             jugador.objetos.discard(tipo)
             self.mision.consumibles.append({"rect": rect, "tipo": tipo, "tomado": False})
-        jugador.avisar(f"Soltaste: {NOMBRE_OBJETO[tipo][0]}", (210, 210, 220))
+        jugador.avisar(f"Solté: {NOMBRE_OBJETO[tipo][0]}", (210, 210, 220))
         self.sonar("recoger", 0.4)
 
     def _resolver_infiltrado(self, jugador, panel, indice):
@@ -1730,14 +1841,14 @@ class Game:
                     # Lo de la misión (celdas, puerta, notas, cápsula...) va
                     # primero; después zona, estación de su rol y escondite.
                     if self.eventos is not None and self.eventos.caja_cerca(jugador):
-                        jugador.avisar("Mantén la tecla para cambiar los fusibles.", (255, 214, 64))
+                        jugador.avisar("Tengo que mantener la tecla para cambiar los fusibles.", (255, 214, 64))
                         return
                     if self.eventos is not None and self.eventos.caja_falsa_cerca(jugador):
-                        jugador.avisar("Esta caja está bien. Busquen la que parpadea en rojo.",
+                        jugador.avisar("Esta caja está bien. Hay que buscar la que parpadea en rojo.",
                                        (245, 130, 120))
                         return
                     if puertas.panel_cerca(self.puertas_dobles, jugador) is not None:
-                        jugador.avisar("Mantén la tecla aquí mientras otro mantiene el otro panel.",
+                        jugador.avisar("Tengo que mantener la tecla aquí mientras otro mantiene el otro panel.",
                                        (255, 214, 64))
                         return
                     if self.guardia_planta is not None and self.guardia_planta.interactuar(jugador):
@@ -1760,7 +1871,7 @@ class Game:
                         jugador.esconderse(escondite)
                     elif ocupado is not None:
                         jugador.avisar(f"Ocupado: {ocupado['npc'].usuario} se metió aquí por el rumor "
-                                       "de los casilleros. Desmiéntanlo en NEXUS.", (245, 130, 120))
+                                       "de los casilleros. Tengo que desmentirlo en NEXUS.", (245, 130, 120))
                     elif self.zona_bajo(jugador) is None and self.npcs is not None:
                         self.npcs.hablar(jugador)     # "¿vienes conmigo?" (npcs.py)
                     else:
@@ -1803,37 +1914,190 @@ class Game:
     def run(self):
         while self.running:
             dt = min(self.clock.tick(DEFAULT_FPS), DT_MAXIMO_MS)
-            if self.mostrar_fps and self.cazar_tirones:
-                self.diagnostico.empezar()
-            t_eventos = time.perf_counter()
-            self.mandos.muestrear()          # centro del stick de los mandos recién conectados
-            self._manejar_eventos()
-            self._sonido_de_fondo()
-            t0 = time.perf_counter()
-            if self.current_screen == "partida" and self.transitions.is_idle():
-                if self.pausa is not None:
-                    self.pausa.actualizar(dt)   # el juego queda congelado
-                elif self.admin is not None:
-                    pass                        # menú de admin: también congelado
-                else:
-                    self._actualizar_partida(dt)
-            self._actualizar_carga(dt)
-            self.transitions.update(self, dt)
-            t1 = time.perf_counter()
-            self._dibujar()
-            t2 = time.perf_counter()
-            if self.mostrar_fps:
-                self._medir_cuadro(dt, (t1 - t0) * 1000, (t2 - t1) * 1000)
-            pygame.display.flip()
-            if self.segunda is not None:
-                self.segunda.mostrar()
-            # (sin F3 no hay perfil y esto no hace nada)
-            self.diagnostico.terminar(self, {"eventos": (t0 - t_eventos) * 1000,
-                                             "actualizar": (t1 - t0) * 1000,
-                                             "dibujar": (t2 - t1) * 1000,
-                                             "flip": (time.perf_counter() - t2) * 1000})
+            self._cuadro_seguro(dt)
         pygame.quit()
         sys.exit()
+
+    def _cuadro_seguro(self, dt):
+        """Blindaje para la feria: un error raro ya no cierra el juego (y deja
+        a la fila esperando); se anota y se vuelve al menú."""
+        try:
+            self._cuadro(dt)
+        except Exception as error:
+            self._fallo(error)
+
+    def _cuadro(self, dt):
+        """Un cuadro del juego: eventos, actualizar, dibujar y mostrar."""
+        if self.mostrar_fps and self.cazar_tirones:
+            self.diagnostico.empezar()
+        t_eventos = time.perf_counter()
+        self.mandos.muestrear()          # centro del stick de los mandos recién conectados
+        self._manejar_eventos()
+        self._sonido_de_fondo()
+        t0 = time.perf_counter()
+        if self.current_screen == "partida" and self.transitions.is_idle():
+            if self.pausa is not None:
+                self.pausa.actualizar(dt)   # el juego queda congelado
+            elif self.admin is not None:
+                pass                        # menú de admin: también congelado
+            else:
+                self._actualizar_partida(dt)
+        self._actualizar_carga(dt)
+        self._actualizar_demo(dt)
+        self.transitions.update(self, dt)
+        t1 = time.perf_counter()
+        self._dibujar()
+        t2 = time.perf_counter()
+        if self.mostrar_fps:
+            self._medir_cuadro(dt, (t1 - t0) * 1000, (t2 - t1) * 1000)
+        pygame.display.flip()
+        if self.segunda is not None:
+            self.segunda.mostrar()
+        # (sin F3 no hay perfil y esto no hace nada)
+        self.diagnostico.terminar(self, {"eventos": (t0 - t_eventos) * 1000,
+                                         "actualizar": (t1 - t0) * 1000,
+                                         "dibujar": (t2 - t1) * 1000,
+                                         "flip": (time.perf_counter() - t2) * 1000})
+
+    # -- La pantalla de atracción (juego/demo.py) ------------------------------------------
+
+    def _actualizar_demo(self, dt):
+        """El menú quieto un rato -> la demo; y la demo: partida -> ranking -> menú."""
+        if self.demo is None:
+            if (self.demo_permitida and feria.ACTIVO and self.current_screen == "menu"
+                    and self.opciones_menu is None
+                    and self.carga is None and self.transitions.is_idle()):
+                self._menu_quieto_ms += dt
+                if self._menu_quieto_ms >= demo_feria.ESPERA_MENU_S * 1000:
+                    self._entrar_demo()
+            else:
+                self._menu_quieto_ms = 0
+            return
+        d = self.demo
+        d.ms += dt
+        if d.salir and self.carga is None:
+            self.salir_demo()             # (tocaron algo mientras cargaba)
+            return
+        if d.parte == "partida" and self.current_screen == "partida" and self.transitions.is_idle():
+            if d.ms >= demo_feria.PARTIDA_S * 1000:
+                self._demo_al_ranking()
+        elif d.parte == "ranking" and self.current_screen == "ranking" and self.transitions.is_idle():
+            if d.ms >= demo_feria.RANKING_S * 1000:
+                self.salir_demo()
+
+    def _entrar_demo(self):
+        import random
+        guardado = {"cantidad_jugadores": self.cantidad_jugadores, "dificultad": self.dificultad,
+                    "esquemas": list(self.esquemas), "minijuegos": self.minijuegos}
+        self.demo = demo_feria.Demo(guardado)
+        self.cantidad_jugadores = demo_feria.JUGADORES
+        self.esquemas = list(range(demo_feria.JUGADORES))
+        self.abrir_seleccion_roles(ir=False)
+        for estado, rol in zip(self.seleccion_roles,
+                               random.sample([r["nombre"] for r in ROLES], demo_feria.JUGADORES)):
+            estado["rol"], estado["listo"] = rol, True
+        self.dificultad = Dificultad("facil")
+        self.minijuegos = False          # (el piloto mantiene la tecla: no juega minijuegos)
+        self.empezar_carga()
+
+    def _preparar_demo(self):
+        """Al final de armar una partida de demo (en el hilo de la carga)."""
+        if self.demo is None:
+            return
+        self.admin_usado = True           # no anota logros
+        # Nadie los atrapa: en la demo los aliens persiguen igual, pero si
+        # caían a la celda se pasaban la demo en la Prisión.
+        self.admin_invencible = True
+        if self.tutorial is not None:
+            self.saltar_tutorial()
+        self.presentacion = None
+        self.demo.empezar_partida(self)
+
+    def _demo_al_ranking(self):
+        self.demo.parte, self.demo.ms = "ranking", 0
+        for jugador in self.jugadores:
+            jugador.cerrar_panel()
+        self.abrir_ranking(anterior="menu")
+
+    def salir_demo(self):
+        """Alguien tocó algo: al menú. Si todavía estaba cargando, en cuanto termine."""
+        if self.demo is None:
+            return
+        if self.carga is not None:
+            self.demo.salir = True
+            return
+        self._restaurar_demo()
+        self.transitions = TransitionManager()
+        self.current_screen = "menu"
+        self._menu_quieto_ms = 0
+
+    def _restaurar_demo(self):
+        g = self.demo.guardado
+        self.demo = None
+        self.cantidad_jugadores = g["cantidad_jugadores"]
+        self.dificultad = g["dificultad"]
+        self.esquemas = g["esquemas"]
+        self.minijuegos = g["minijuegos"]
+        for jugador in self.jugadores:
+            jugador.cerrar_panel()
+
+    # -- El ranking (juego/ranking.py, screens/ranking.py) ---------------------------------
+
+    def abrir_ranking(self, anterior="menu"):
+        self.ranking_entradas = ranking.cargar()
+        ultima = ranking.agregar.ultima
+        self.ranking_resaltar = ultima.get("id") if ultima else None
+        self.pantalla_anterior = anterior
+        self.transitions.request(self, "ranking")
+
+    # -- Blindaje (la feria) -------------------------------------------------------------
+
+    MAX_FALLOS = 8              # tantos en FALLOS_EN_S segundos: ya no tiene arreglo, se cierra
+    FALLOS_EN_S = 10
+
+    def _fallo(self, error):
+        """Un cuadro se cayó: se anota en Guardado/errores.txt y se vuelve al
+        menú con un aviso. Si sigue fallando una y otra vez (también en el
+        menú), se deja caer: así no se queda en un bucle de errores."""
+        import traceback
+        ahora = time.time()
+        self._errores = [t for t in self._errores if ahora - t < self.FALLOS_EN_S] + [ahora]
+        texto = traceback.format_exc()
+        print(texto, file=sys.stderr)
+        try:
+            ruta = RUTA_ERRORES
+            os.makedirs(os.path.dirname(ruta), exist_ok=True)
+            with open(ruta, "a", encoding="utf-8") as fh:
+                fh.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} · pantalla {self.current_screen}"
+                         f" · dificultad {getattr(self.dificultad, 'clave', None)}\n{texto}")
+        except OSError:
+            pass
+        if len(self._errores) >= self.MAX_FALLOS:
+            raise error
+        self.volver_al_menu("Algo falló y volvimos al menú (quedó anotado en Guardado/errores.txt).")
+
+    def volver_al_menu(self, aviso=None):
+        """De donde sea, al menú, sin resultados ni logros (el error de arriba,
+        F12 dos veces, salir de la demo)."""
+        if self.demo is not None:
+            self._restaurar_demo()
+        self.pausa = self.admin = None
+        self.opciones_menu = None
+        self.iniciales = None
+        self.presentacion = None
+        if self.carga is not None:
+            # (el otro hilo sigue armando la partida: cuando termine, nadie la usa)
+            self.carga["abandonada"] = True
+            self.carga = None
+        self.transitions = TransitionManager()
+        self.current_screen = "menu"
+        self._menu_quieto_ms = 0
+        self.aviso_menu = (aviso, pygame.time.get_ticks() + 6000) if aviso else None
+        try:
+            audio_manager.parar_bucle()
+            audio_manager.parar_musica()
+        except Exception:
+            pass
 
     def _medir_cuadro(self, dt, ms_actualizar, ms_dibujar):
         """F3: FPS y milisegundos de actualizar/dibujar arriba a la derecha.
@@ -1888,8 +2152,13 @@ class Game:
 
     def _manejar_eventos(self):
         for evento in pygame.event.get():
+            if evento.type in EVENTOS_ACTIVIDAD:
+                self._menu_quieto_ms = 0        # (alguien está ahí: nada de demo)
             if evento.type == pygame.QUIT:
                 self.running = False
+            elif self.demo is not None and evento.type in EVENTOS_SALIR_DEMO:
+                # Cualquier tecla, botón o clic: de la demo al menú, a jugar.
+                self.salir_demo()
             elif self.segunda is not None and evento.type == getattr(pygame, "WINDOWCLOSE", -1):
                 # Con dos ventanas, cerrar la principal (Alt+F4) ya no manda
                 # QUIT (queda la otra abierta): se sale igual.
@@ -1908,7 +2177,11 @@ class Game:
             elif self.carga is not None:
                 continue        # cargando: no se toca nada mientras el otro hilo arma la partida
             elif evento.type == pygame.KEYDOWN:
-                self._manejar_tecla(evento.key)
+                self.texto_tecla = getattr(evento, "unicode", "") or ""   # (lo que escribe: el nombre del ranking)
+                try:
+                    self._manejar_tecla(evento.key)
+                finally:
+                    self.texto_tecla = ""
             elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 self._manejar_click(evento.pos)
             elif (evento.type == pygame.MOUSEMOTION and self.current_screen == "menu"
@@ -2039,6 +2312,16 @@ class Game:
                                             else NOMBRE_CONTROLES[jugador.esquema])
 
     def _manejar_tecla(self, key):
+        if key == pygame.K_F12:
+            # La tecla escondida de la feria: F12 dos veces seguidas vuelve al
+            # menú desde donde sea (sin resultados ni logros).
+            ahora = pygame.time.get_ticks()
+            if ahora - self._f12 < 1500:
+                self._f12 = 0
+                self.volver_al_menu("Reiniciado (F12 F12).")
+            else:
+                self._f12 = ahora
+            return
         if key == pygame.K_F11:
             self.alternar_pantalla_completa()
             return
@@ -2146,10 +2429,16 @@ class Game:
             if key in (pygame.K_RETURN, pygame.K_BACKSPACE, pygame.K_ESCAPE):
                 self.transitions.request(self, self.pantalla_anterior)
 
+        elif self.current_screen == "ranking":
+            if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_BACKSPACE, pygame.K_ESCAPE, pygame.K_e):
+                self.transitions.request(self, "menu")
+
     # -- Pantalla de resultados ------------------------------------------------------
 
     def _reiniciar_resultados(self):
-        self.resultados_vista = "resumen"     # o "logros": el árbol completo
+        self.resultados_vista = "resumen"     # o "logros": el árbol completo, o "album" (screens/album.py)
+        self.album_sel = 0
+        self.album_rects = []
         self.resultados_sel = 0
         self.resultados_nodo = None
         self.resultados_rects = []
@@ -2160,13 +2449,24 @@ class Game:
         from screens import resultados as pantalla_resultados
         if self.resultados_vista == "resumen" and pantalla_resultados.saltar_intro():
             return
+        if self.iniciales is not None and not self.iniciales.hecho and self.resultados_vista == "resumen":
+            self.iniciales.teclear(key, getattr(self, "texto_tecla", ""), self, TECLAS_INICIALES)
+            return
         if self.resultados_vista == "logros":
             if key in (pygame.K_ESCAPE, pygame.K_BACKSPACE, pygame.K_RETURN, pygame.K_KP_ENTER):
                 self.resultados_vista = "resumen"
             else:
                 self.resultados_nodo = mover_en_logros(self.logros.arbol, self.resultados_nodo, key)
             return
-        opciones = opciones_resultados(self.logros)
+        if self.resultados_vista == "album":
+            from screens import album
+            if key in (pygame.K_ESCAPE, pygame.K_BACKSPACE, pygame.K_RETURN, pygame.K_KP_ENTER):
+                self.resultados_vista = "resumen"
+            else:
+                self.album_sel = album.mover(self.album_sel, key, len(album.fotos_del_equipo(self.nexus)),
+                                             album.columnas_para(self.screen.get_size()))
+            return
+        opciones = opciones_resultados(self.logros, self.nexus)
         if key in (pygame.K_LEFT, pygame.K_UP, pygame.K_a, pygame.K_w):
             self.resultados_sel = (self.resultados_sel - 1) % len(opciones)
         elif key in (pygame.K_RIGHT, pygame.K_DOWN, pygame.K_d, pygame.K_s):
@@ -2180,6 +2480,9 @@ class Game:
         if accion == "logros" and self.logros is not None:
             self.resultados_vista = "logros"
             self.resultados_nodo = self.logros.arbol.raiz
+        elif accion == "album":
+            self.resultados_vista = "album"
+            self.album_sel = 0
         elif accion == "menu":
             self.transitions.request(self, "menu")
 
@@ -2187,15 +2490,22 @@ class Game:
         from screens import resultados as pantalla_resultados
         if self.resultados_vista == "resumen" and pantalla_resultados.saltar_intro():
             return
+        if self.iniciales is not None and not self.iniciales.hecho:
+            return          # (primero las iniciales: con el teclado o el mando)
         if self.resultados_vista == "logros":
             for nodo, rect in self.resultados_rects_logros.items():
                 if rect.collidepoint(pos):
                     self.resultados_nodo = nodo
             return
+        if self.resultados_vista == "album":
+            for i, rect in self.album_rects:
+                if rect.collidepoint(pos):
+                    self.album_sel = i
+            return
         for i, rect in enumerate(self.resultados_rects):
             if rect.collidepoint(pos):
                 self.resultados_sel = i
-                self._activar_resultados(opciones_resultados(self.logros)[i][1])
+                self._activar_resultados(opciones_resultados(self.logros, self.nexus)[i][1])
                 return
 
     def cambiar_idioma(self, signo=1):
@@ -2275,6 +2585,10 @@ class Game:
             jugador.panel["cursor_mapa"] = [punto[0], punto[1]]
 
     def _manejar_click(self, pos):
+        if self.current_screen == "ranking":
+            if not self.transitions.active:
+                self.transitions.request(self, "menu")
+            return
         if self.current_screen == "partida":
             if self.admin is not None:
                 i = self.admin.opcion_en(pos)
@@ -2346,6 +2660,8 @@ class Game:
             lanzador.abrir(self)
         elif accion == "logros":
             self.abrir_catalogo_logros()
+        elif accion == "ranking":
+            self.abrir_ranking()
         elif accion == "opciones":
             # Las mismas opciones de la pausa (sin las de prueba), encima del menú.
             self.opciones_menu = MenuPausa(self, desde_menu=True)
@@ -2369,6 +2685,17 @@ class Game:
             render_menu(self.screen, self.menu_buttons, self.menu_selected)
             if self.opciones_menu is not None:
                 render_pausa(self.screen, self.opciones_menu)
+            if self.aviso_menu is not None:
+                texto, hasta = self.aviso_menu
+                if pygame.time.get_ticks() < hasta:
+                    from screens import estilo
+                    estilo.pie(self.screen, texto, 30)
+                else:
+                    self.aviso_menu = None
+        elif self.current_screen == "ranking":
+            from screens.ranking import render_ranking
+            render_ranking(self.screen, self.ranking_entradas, self.ranking_resaltar,
+                           pie=self.demo is None)
         elif self.current_screen == "cantidad":
             self.rects_opciones = render_cantidad(self.screen, self.cantidad_seleccionada)
         elif self.current_screen == "dificultad":
@@ -2408,12 +2735,19 @@ class Game:
             if self.resultados_vista == "logros" and self.logros is not None:
                 self.resultados_rects_logros = render_arbol_logros(
                     self.screen, self.logros.arbol, self.resultados_nodo)
+            elif self.resultados_vista == "album":
+                from screens.album import render_album
+                self.album_rects = render_album(self.screen, self.nexus, self.album_sel)
             else:
                 self.resultados_rects = render_resultados(
                     self.screen, self.jugadores, self.font, self.small_font, self.mision,
                     self.equipo, self.infiltrado, self.logros, self.resultados_sel,
                     self.nexus, self.cambiaformas, self.npcs, self.dificultad,
                     self.tiempo_jugado_ms)
+                from screens import resultados as pantalla_resultados
+                if self.iniciales is not None and not pantalla_resultados.en_intro():
+                    from screens.ranking import render_iniciales
+                    render_iniciales(self.screen, self.iniciales)
         elif self.current_screen == "logros" and self.catalogo_logros is not None:
             self.catalogo_rects = render_arbol_logros(self.screen, self.catalogo_logros,
                                                       self.catalogo_nodo, self.catalogo_veces)
@@ -2422,6 +2756,8 @@ class Game:
         elif self.current_screen == "creditos":
             self.credit_scroll = render_creditos(self.screen, self.small_font, self.credit_scroll)
 
+        if self.demo is not None and self.current_screen in ("partida", "ranking", "cargando"):
+            demo_feria.letrero(self.screen, pygame.time.get_ticks())
         self.transitions.draw(self.screen)
         self._dibujar_segunda()
 

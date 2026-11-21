@@ -69,7 +69,7 @@ def sin_luz(juego):
     return bool(getattr(juego, "sin_luz", False))
 
 
-SIN_ENERGIA = "Sin energía: enciendan la caja de fusibles."
+SIN_ENERGIA = "Sin energía: hay que encender la caja de fusibles."
 
 
 def _distancia(a, b):
@@ -175,7 +175,7 @@ def _usar_terminal(juego, jugador, terminal):
         jugador.avisar("La terminal está apagada. " + SIN_ENERGIA, COLOR_MAL)
         return
     if terminal["recarga_ms"] > 0:
-        jugador.avisar(f"La terminal se reinicia: {math.ceil(terminal['recarga_ms'] / 1000)} s",
+        jugador.avisar(f"La terminal se está reiniciando: {math.ceil(terminal['recarga_ms'] / 1000)} s",
                        COLOR_MAL)
         return
     # Conexión digital (la base): el mapa de la nave con los aliens.
@@ -183,7 +183,7 @@ def _usar_terminal(juego, jugador, terminal):
     terminal["recarga_ms"] = RECARGA_TERMINAL_MS
 
     if not jugador.arbol.tiene("HACKEO"):
-        jugador.avisar("Conectado: estado de la nave en pantalla.", COLOR_AVISO)
+        jugador.avisar("Me conecté: veo el estado de la nave en pantalla.", COLOR_AVISO)
         return
     apagados = [a for a in juego.aliens
                 if _distancia(a.centro, terminal["rect"].center) <= RADIO_HACKEO]
@@ -195,25 +195,25 @@ def _usar_terminal(juego, jugador, terminal):
         logro(juego, "apagado", jugador)
         _sonar(juego, "hackeo", 0.8)
         jugador.sumar_puntos(PUNTOS_HACKEO)
-        jugador.avisar(f"Hackeo: {len(apagados)} alien(s) apagados. +{PUNTOS_HACKEO}", COLOR_BIEN)
+        jugador.avisar(f"Hackeé la terminal: {len(apagados)} alien(s) apagados. +{PUNTOS_HACKEO}", COLOR_BIEN)
     else:
-        jugador.avisar("Hackeo: no había aliens cerca de esta terminal.", COLOR_AVISO)
+        jugador.avisar("Hackeé la terminal, pero no había aliens cerca.", COLOR_AVISO)
 
 
 def _reparar_panel(juego, jugador, panel):
     if not jugador.arbol.tiene("REPARACION"):
-        jugador.avisar(f"Necesitas Reparación básica ([{jugador.nombre_tecla('habilidades')}])",
+        jugador.avisar(f"Necesito Reparación básica ([{jugador.nombre_tecla('habilidades')}])",
                        COLOR_MAL)
         return
     if jugador.recarga_ms > 0:
-        jugador.avisar(f"Reparación: {math.ceil(jugador.recarga_ms / 1000)} s", COLOR_MAL)
+        jugador.avisar(f"Todavía no puedo reparar: {math.ceil(jugador.recarga_ms / 1000)} s", COLOR_MAL)
         return
     if jugador.piezas <= 0:
-        jugador.avisar("Te falta una pieza para repararlo.", COLOR_MAL)
+        jugador.avisar("Me falta una pieza para repararlo.", COLOR_MAL)
         return
     sello = panel.get("sello_rect")
     if sello is not None and any(a.hitbox.colliderect(sello) for a in juego.aliens):
-        jugador.avisar("Hay un alien en el paso del sello: espera a que se mueva.", COLOR_MAL)
+        jugador.avisar("Hay un alien en el paso del sello: tengo que esperar a que se mueva.", COLOR_MAL)
         return
     jugador.piezas -= 1
     panel["reparado"] = True
@@ -227,13 +227,13 @@ def _reparar_panel(juego, jugador, panel):
         # aliens (no pasan ni ven a través) y a los jugadores no. Es de
         # energía: en un apagón se cae y vuelve con la luz (_actualizar_sellos).
         if sin_luz(juego):
-            jugador.avisar(f"Panel reparado: el sello se levanta cuando vuelva la luz. "
+            jugador.avisar(f"Reparé el panel: el sello se levanta cuando vuelva la luz. "
                            f"+{PUNTOS_REPARACION}", COLOR_AVISO)
             _sonar(juego, "encajar", 0.6)
             return
         panel["sello_on"] = True
         _actualizar_sellos(juego)
-        jugador.avisar(f"¡Sello activado! Los aliens no pasan por ahí. +{PUNTOS_REPARACION}",
+        jugador.avisar(f"¡Activé el sello! Los aliens no pasan por ahí. +{PUNTOS_REPARACION}",
                        COLOR_BIEN)
         _sonar(juego, "sello", 0.8)
         if hasattr(juego, "decir"):
@@ -241,7 +241,7 @@ def _reparar_panel(juego, jugador, panel):
         return
     _sonar(juego, "encajar", 0.6)
     hechos = sum(p["reparado"] for p in juego.paneles)
-    jugador.avisar(f"Panel reparado ({hechos}/{len(juego.paneles)}). +{PUNTOS_REPARACION}",
+    jugador.avisar(f"Reparé el panel ({hechos}/{len(juego.paneles)}). +{PUNTOS_REPARACION}",
                    COLOR_BIEN)
 
 
@@ -252,13 +252,13 @@ def usar_habilidad(juego, jugador):
     nodo = habilidad_activa(jugador)
     if nodo is None:
         if len(jugador.arbol.desbloqueadas()) <= 1:
-            jugador.avisar(f"Escoge una habilidad con [{jugador.nombre_tecla('habilidades')}]",
+            jugador.avisar(f"Primero tengo que escoger una habilidad con [{jugador.nombre_tecla('habilidades')}]",
                            COLOR_AVISO)
         else:
-            jugador.avisar("Tu habilidad se usa en el mapa, no con esta tecla.", COLOR_AVISO)
+            jugador.avisar("Mi habilidad se usa en el mapa, no con esta tecla.", COLOR_AVISO)
         return False
     if jugador.recarga_ms > 0:
-        jugador.avisar(f"{nodo.nombre}: {math.ceil(jugador.recarga_ms / 1000)} s", COLOR_MAL)
+        jugador.avisar(f"{nodo.nombre} todavía se recarga: {math.ceil(jugador.recarga_ms / 1000)} s", COLOR_MAL)
         return False
 
     if nodo.clave == "EMISION":
@@ -282,22 +282,22 @@ def usar_habilidad(juego, jugador):
 
 def _escaneo(juego, jugador):
     if sin_luz(juego):
-        jugador.avisar("Escaneo: no hay sistemas que escanear sin luz.", COLOR_MAL)
+        jugador.avisar("No puedo escanear: sin luz no hay sistemas.", COLOR_MAL)
         return False   # no gasta la recarga
     jugador.efectos["mapa"] = DURACION_ESCANEO_MS
     jugador.efectos["escaneo"] = DURACION_ESCANEO_MS
-    jugador.avisar("Escaneo: aliens y sus conos en el mapa.", COLOR_AVISO)
+    jugador.avisar("Escaneé la nave: veo a los aliens y sus conos en el mapa.", COLOR_AVISO)
     return True
 
 
 def _fabricar_senuelo(juego, jugador):
     if jugador.piezas <= 0:
-        jugador.avisar("Necesitas una pieza para el señuelo.", COLOR_MAL)
+        jugador.avisar("Necesito una pieza para el señuelo.", COLOR_MAL)
         return False
     jugador.piezas -= 1
     juego.senuelos.append({"pos": jugador.hitbox.center, "ms": DURACION_SENUELO_MS,
                            "duracion": DURACION_SENUELO_MS})
-    jugador.avisar("Señuelo armado: los aliens vendrán por el ruido.", COLOR_BIEN)
+    jugador.avisar("Armé un señuelo: los aliens van a venir por el ruido.", COLOR_BIEN)
     _sonar(juego, "senal", 0.7)
     return True
 
@@ -310,7 +310,7 @@ def _regeneracion(juego, jugador):
         for otro in companeros_cerca(juego, jugador):
             if otro.preso is None and otro.curar(1):
                 curados.append(otro)
-                otro.avisar("La Biomante te devolvió una vida.", COLOR_BIEN)
+                otro.avisar("La Biomante me devolvió una vida.", COLOR_BIEN)
         if curados:
             from misiones.logros import logro
             logro(juego, "medico", jugador)
@@ -324,7 +324,7 @@ def _regeneracion(juego, jugador):
         otro.pulso = max(0.0, otro.pulso - CALMA_REGENERACION)
         if otro is not jugador:
             ayudados += 1
-            otro.avisar("La Biomante te calmó.", COLOR_BIEN)
+            otro.avisar("La Biomante me calmó.", COLOR_BIEN)
     # Si alguien está escondido cerca y un alien lo revisa, le baja la amenaza.
     for otro in juego.jugadores:
         juego_escondite = otro.minijuego
@@ -335,12 +335,12 @@ def _regeneracion(juego, jugador):
     if ayudados:
         jugador.sumar_puntos(PUNTOS_AYUDA * ayudados)
     if curados:
-        jugador.avisar(f"Regeneración: +1 vida a {len(curados)} compañero(s).", COLOR_BIEN)
+        jugador.avisar(f"Curé a {len(curados)} compañero(s): +1 vida.", COLOR_BIEN)
     elif jugador.curacion_ms > 0:
-        jugador.avisar(f"Pulso calmado. Curar vidas: {math.ceil(jugador.curacion_ms / 1000)} s",
+        jugador.avisar(f"Los calmé. Para curar vidas me faltan {math.ceil(jugador.curacion_ms / 1000)} s",
                        COLOR_AVISO)
     else:
-        jugador.avisar(f"Regeneración: {ayudados} compañero(s) más tranquilos.", COLOR_BIEN)
+        jugador.avisar(f"Calmé a {ayudados} compañero(s).", COLOR_BIEN)
     return True
 
 
@@ -356,7 +356,7 @@ def _impulso(juego, jugador):
         return False   # no gasta la recarga
     for otro in recargados:
         otro.recarga_ms = 0
-        otro.avisar("Impulso: tu habilidad está lista otra vez.", COLOR_BIEN)
+        otro.avisar("¡Me dieron un impulso: mi habilidad está lista otra vez!", COLOR_BIEN)
     for terminal in terminales:
         terminal["recarga_ms"] = 0
     _sonar(juego, "impulso", 0.7)
@@ -367,13 +367,13 @@ def _impulso(juego, jugador):
         partes.append(f"{len(recargados)} compañero(s)")
     if terminales:
         partes.append(f"{len(terminales)} terminal(es)")
-    jugador.avisar(f"Impulso: {' y '.join(partes)} listos. +{PUNTOS_AYUDA * ayudas}", COLOR_BIEN)
+    jugador.avisar(f"Les di un impulso: {' y '.join(partes)} listos. +{PUNTOS_AYUDA * ayudas}", COLOR_BIEN)
     return True
 
 
 def _intercepcion(juego, jugador):
     jugador.efectos["intercepcion"] = DURACION_INTERCEPCION_MS
-    jugador.avisar("Interceptando: rutas y decisiones de los aliens.", COLOR_AVISO)
+    jugador.avisar("Estoy interceptando las rutas y decisiones de los aliens.", COLOR_AVISO)
     return True
 
 
@@ -424,7 +424,7 @@ def poner_emision(juego, jugador, punto=None):
         from misiones.logros import logro
         logro(juego, "titiritero", jugador)
         jugador.sumar_puntos(PUNTOS_AYUDA)
-    jugador.avisar(f"Señal falsa: {len(atraidos)} alien(s) van a revisarla.", COLOR_AVISO)
+    jugador.avisar(f"Mandé una señal falsa: {len(atraidos)} alien(s) van a revisarla.", COLOR_AVISO)
     nodo = habilidad_activa(jugador)
     jugador.recarga_ms = int(getattr(nodo, "recarga_s", 0) * 1000)
     return punto
@@ -488,7 +488,7 @@ def actualizar(juego, dt):
                     pieza["recogida"] = True
                     _sonar(juego, "recoger", 0.6)
                     jugador.piezas += 1
-                    jugador.avisar(f"Pieza recogida ({jugador.piezas})", COLOR_BIEN)
+                    jugador.avisar(f"Recogí una pieza ({jugador.piezas})", COLOR_BIEN)
 
         jugador.estacion_cerca = (None if jugador.escondido or jugador.zona_cerca
                                   else estacion_bajo(juego, jugador))

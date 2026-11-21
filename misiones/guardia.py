@@ -184,7 +184,7 @@ class GuardiaYPlanta:
         # soltarla (tecla de soltar) para que otro se la lleve al Guardia.
         jugador.sumar_puntos(PUNTOS_FRUTA // 2)
         logro(self.juego, "jardinero", jugador)
-        jugador.avisar("¡La planta dio una fruta! Arráncala para llevársela al Guardia.", COLOR_BIEN)
+        jugador.avisar("¡La planta dio una fruta! Voy a arrancarla para llevársela al Guardia.", COLOR_BIEN)
         for j in self.juego.jugadores:
             if j is not jugador:
                 j.avisar(f"¡La planta del {jugador.rol} dio una fruta!", COLOR_BIEN)
@@ -196,7 +196,7 @@ class GuardiaYPlanta:
         p = self.planta
         p["fruta"] = False
         jugador.objetos.add("fruta")
-        jugador.avisar("Tienes la fruta: llévasela al Guardia.", COLOR_BIEN)
+        jugador.avisar("Tengo la fruta: se la llevo al Guardia.", COLOR_BIEN)
         for j in self.juego.jugadores:
             if j is not jugador:
                 j.avisar(f"El {jugador.rol} arrancó la fruta.", COLOR_BIEN)
@@ -223,13 +223,13 @@ class GuardiaYPlanta:
                 and _distancia(jugador.hitbox.center, g.centro) <= RADIO_SINTONIA):
             falta = self.recarga_ms.get(jugador, 0)
             if falta > 0:
-                jugador.avisar(f"Tu Sintonía se está recargando: {int(falta // 1000) + 1} s.", COLOR_MAL)
+                jugador.avisar(f"Mi Sintonía se está recargando: {int(falta // 1000) + 1} s.", COLOR_MAL)
                 return True
             g.distraer(DISTRACCION_MS, jugador)
             self.recarga_ms[jugador] = RECARGA_SINTONIA_MS
             jugador.sumar_puntos(PUNTOS_DISTRAER)
             for j in self.juego.jugadores:
-                j.avisar(f"¡El Guardia se distrajo! Tienen {DISTRACCION_MS // 1000} s.", COLOR_AVISO)
+                j.avisar(f"¡El Guardia se distrajo! Tenemos {DISTRACCION_MS // 1000} s.", COLOR_AVISO)
             self._sonar("senal", 0.8)
             self._decir("guardia_distraido", jugador.rol)
             return True
@@ -238,9 +238,9 @@ class GuardiaYPlanta:
             return True
         if self._cerca_planta(jugador):
             if self.puede_cultivar(jugador):
-                jugador.avisar("Mantén la tecla para hacer crecer la planta.", COLOR_AVISO)
+                jugador.avisar("Tengo que mantener la tecla para hacer crecer la planta.", COLOR_AVISO)
             else:
-                jugador.avisar("Solo el Biomante la hace crecer... o alguien con abono.", COLOR_MAL)
+                jugador.avisar("Solo el Biomante la hace crecer... o yo, si tuviera abono.", COLOR_MAL)
             return True
         return False
 

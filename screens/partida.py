@@ -42,6 +42,7 @@ from screens.panel_habilidades import render_panel_habilidades
 from screens import roles as dibujo_roles
 from screens import mision_dibujo
 from screens import celular as dibujo_celular
+from screens import foto
 
 
 COLOR_SEPARADOR = (18, 16, 30)
@@ -204,6 +205,7 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=None,
             from juego import tareas
             tareas.dibujar(screen, vista, jugador)
         render_tutorial(screen, vista, jugador, extras.get("tutorial"))
+        foto.dibujar(screen, vista, jugador)
         dibujar_susto(screen, vista, jugador)
         render_eliminado(screen, vista, jugador)
         screen.set_clip(clip_previo)
@@ -436,6 +438,10 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         # pantalla pero no ve (detrás de una pared o a oscuras).
         dibujo_roles.dibujar_pasos(screen, offset, camara, dueño, todos_los_aliens, aliens,
                                    a_oscuras, tiempo_ms)
+
+    # Si acaba de tomar una foto: lo que se ve, sin el HUD ni las flechas y
+    # letreros de guía (screens/foto.py; sale en la polaroid y en NEXUS).
+    foto.capturar(screen, vista, dueño)
 
     if extras:
         mision_dibujo.dibujar_encima(screen, offset, camara, extras.get("mision"), tiempo_ms)

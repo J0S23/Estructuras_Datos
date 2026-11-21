@@ -158,12 +158,33 @@ try:
     assert teclado.error_dibujo is None and mandos.error_dibujo is None
     pygame.image.save(pantallas[0], os.path.join(CARPETA, "red_resultados_laptop1.png"))
     pygame.image.save(pantallas[1], os.path.join(CARPETA, "red_resultados_laptop2.png"))
-    # Enter vuelve al menú (el primero salta la escena del final, screens/final.py).
-    enter = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="\r", mod=0, scancode=0)
-    teclado.paso(pantallas[0], eventos=[enter])
-    if teclado.motivo != "terminada":
-        teclado.paso(pantallas[0], eventos=[enter])
-    assert teclado.motivo == "terminada"
+    # Los resultados se manejan como en el modo local: el primer Enter salta la
+    # escena del final (screens/final.py); el botón escogido es "Ver logros"
+    # (antes cualquier Enter sacaba de la partida y no se podían ver).
+    def tecla(k):
+        return pygame.event.Event(pygame.KEYDOWN, key=k, unicode="", mod=0, scancode=0)
+    from screens import resultados as pantalla_resultados
+    # (las dos sesiones están en este proceso y la escena del final es una
+    # sola, screens/resultados._entrada: que la última que dibujó sea esta)
+    teclado.paso(pantallas[0], eventos=[])
+    assert pantalla_resultados.en_intro()
+    teclado.paso(pantallas[0], eventos=[tecla(pygame.K_RETURN)])
+    assert teclado.motivo is None and not pantalla_resultados.en_intro()
+    gr = teclado.espejo.g
+    assert pantalla_resultados.opciones_resultados(gr.logros)[gr.resultados_sel][1] == "logros"
+    teclado.paso(pantallas[0], eventos=[tecla(pygame.K_RETURN)])
+    assert teclado.motivo is None, "Enter en \"Ver logros\" sacó de la partida"
+    assert gr.resultados_vista == "logros", gr.resultados_vista
+    antes = gr.resultados_nodo
+    teclado.paso(pantallas[0], eventos=[tecla(pygame.K_DOWN)])
+    assert gr.resultados_nodo is not antes, "las flechas no se mueven por el árbol de logros"
+    pygame.image.save(pantallas[0], os.path.join(CARPETA, "red_resultados_logros.png"))
+    assert gr.resultados_rects_logros, "no se dibujó el árbol de logros"
+    teclado.paso(pantallas[0], eventos=[tecla(pygame.K_ESCAPE)])
+    assert gr.resultados_vista == "resumen" and teclado.motivo is None, "Esc no volvió al resumen"
+    teclado.paso(pantallas[0], eventos=[tecla(pygame.K_RIGHT)])
+    teclado.paso(pantallas[0], eventos=[tecla(pygame.K_RETURN)])
+    assert teclado.motivo == "terminada", "\"Volver al menú\" no terminó la sesión"
     for s in (teclado, mandos):
         s.cerrar()
     proceso.wait(15)

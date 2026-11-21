@@ -385,7 +385,8 @@ pub2.viral_ms = red.limite_viral() - 5
 frames(juego, 2)
 assert pub2.viral and red.virales == 0
 assert sum(red.color(n) == ROJO for n in red._presos()) <= rojos
-assert "viral" in j1.mensaje, j1.mensaje
+# (sin arreglar, empeora: el aviso es el de redes/nexus._empeorar)
+assert "viral" in j1.mensaje or "nadie lo arregló" in j1.mensaje, j1.mensaje
 
 # Reportar a quien la publicó: es un prisionero de verdad.
 texto, puntos = red.reportar(j1, pub2.autor, pub2)
@@ -426,6 +427,10 @@ print(f"3d. a Misiones llegan rumores y noticias ({tipos.count('rumor')} y {tipo
 juego = nueva_partida()
 red = juego.nexus
 j1 = juego.jugadores[0]
+juego.mision.abrir_puerta()            # (las noticias solo salen de donde se puede llegar)
+for puerta in juego.puertas_dobles:
+    puerta["abierta"] = True
+    juego._puerta_doble_abierta(puerta)
 normal = red.publicar_normal()
 assert normal is not None
 verdes = sum(red.color(n) == VERDE for n in red._presos())
@@ -471,5 +476,88 @@ assert j1.panel is None and j1.escondido
 juego._manejar_tecla(j1.teclas["interactuar"][0])
 assert not j1.escondido, "con el celular guardado, interactuar sale del casillero"
 print("5. el celular se saca en el casillero (y se guarda si un alien revisa): OK")
+
+# -- 6. Barras de progreso: la puerta para dos sí, lo de los minijuegos no -------------------
+juego = nueva_partida()
+assert juego.minijuegos
+j1, j2 = juego.jugadores
+puerta = next(p for p in juego.puertas_dobles if not p["abierta"])
+apretadas = Teclas()
+pygame.key.get_pressed = lambda: apretadas
+parar_en(j1, puerta["paneles"][0].center)
+parar_en(j2, puerta["paneles"][1].center)
+apretadas[j1.teclas["interactuar"][0]] = True
+frames(juego, 3)
+assert j1.progreso and j1.progreso[0] == "Esperando al otro panel...", j1.progreso
+apretadas[j2.teclas["interactuar"][0]] = True
+frames(juego, 20)
+assert j1.progreso and j1.progreso[0] == "Abriendo la puerta" and j1.progreso[1] > 0, j1.progreso
+assert j2.progreso and j2.progreso[0] == "Abriendo la puerta"
+foto(juego, "i_barra_puerta")
+# Mantener la tecla en la consola ya no pone barra (es un minijuego).
+apretadas.clear()
+juego.mision.abrir_puerta()
+frames(juego, 2)
+parar_en(j1, juego.mision.consolas[0]["rect"].center)
+j1.objetos.add("decodificador")
+apretadas[j1.teclas["interactuar"][0]] = True
+frames(juego, 30)
+assert not j1.progreso, f"mantener en la consola puso barra: {j1.progreso}"
+apretadas.clear()
+pygame.key.get_pressed = lambda: Teclas()
+# El encerrado que sale solo (dificultades fáciles) ve cuánto le falta.
+juego.admin_invencible = False
+assert juego.mision.encarcelar(j2)
+celda = j2.preso
+if celda.get("fuga_ms") is None:
+    frames(juego, 2)
+    assert not j2.progreso, "sin fuga (esta dificultad) no hay barra"
+    celda["fuga_ms"] = celda["fuga_total"] = 20000       # (como en Normal)
+frames(juego, 60)
+assert j2.progreso and j2.progreso[0] == "Forzando la reja", j2.progreso
+assert 0 < j2.progreso[1] < 1, j2.progreso
+foto(juego, "j_barra_reja")
+print("6. barras: la puerta para dos (los dos paneles), forzar la reja; la consola no: OK")
+
+# -- 7. Rumores y noticias solo de lugares a los que se puede llegar --------------------------
+# (Diego: "hay misiones, los puntos azules, que no se activan al llegar": eran
+# lugares detrás de una puerta con código todavía cerrada; los puntos llevaban
+# hasta la puerta y ahí no pasaba nada.)
+from juego import navegacion
+juego = nueva_partida()
+red = juego.nexus
+nav = navegacion.de_mundo(juego.mundo, 34, 20)
+assert juego.mision.fase == "prision"
+TIPOS = ("capsula", "consola", "celda", "fusibles", "escondite", "terminal", "panel", "puerta_doble")
+
+
+def se_llega(punto):
+    return any(nav.conectados(j.hitbox.center, q, sellos=False)
+               for q in red._de_pie(punto) for j in juego.jugadores)
+
+
+cerrada = {t: red._lugares(t) for t in TIPOS}
+todos = {t: red._todos_los_lugares(t) for t in TIPOS}
+assert sum(map(len, cerrada.values())) < sum(map(len, todos.values())), \
+    "con la puerta de la prisión cerrada no quitó ningún lugar"
+for tipo, puntos in cerrada.items():
+    for punto in puntos:
+        assert se_llega(punto), f"{tipo} {punto}: no se llega y se puede escoger"
+for _ in range(12):
+    pub = red.lanzar_rumor() or red.lanzar_noticia()
+    if pub is None:
+        break
+    assert se_llega(pub.lugar), f"salió {pub.rumor['lugar']} {pub.lugar} sin poder llegar"
+    red.publicaciones.remove(pub)
+    red.propagaciones = [p for p in red.propagaciones if p.pub is not pub]
+    if pub.efecto.get("escondite"):
+        pub.efecto["escondite"]["candado"] = False
+juego.mision.abrir_puerta()
+abierta = {t: red._lugares(t) for t in TIPOS}
+assert sum(map(len, abierta.values())) > sum(map(len, cerrada.values())), \
+    "al abrir la puerta no aparecieron más lugares"
+print(f"7. rumores y noticias solo donde se puede llegar ({sum(map(len, cerrada.values()))} lugares "
+      f"con la prisión cerrada, {sum(map(len, abierta.values()))} abierta, "
+      f"{sum(map(len, todos.values()))} en total): OK")
 
 print("\nTODO OK")

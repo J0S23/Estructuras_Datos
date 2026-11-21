@@ -16,6 +16,8 @@ from data.dificultad import (DIFICULTADES, AJUSTES, RITMO_MISION_S, VIDAS, UMBRA
                              VIDAS_INFINITAS, PRESENTAR_ALIENS, NIVEL_INICIAL, NIVEL_MIN, NIVEL_MAX, REVISAR_CADA_MS,
                              PASO_MAX, VENTANA_CAPTURAS_MS, NOMBRES_NIVEL)
 
+from data.feria import AJUSTES_FERIA
+
 NIVEL_FIJO = {"facil": 0.0, "normal": 1.0, "dificil": 2.0}
 
 
@@ -51,6 +53,7 @@ class Dificultad:
             raise ValueError(f"dificultad desconocida: {clave}")
         self.clave = clave
         self.nombre = nombre_de(clave)
+        self.feria = False                      # el modo feria lo prende (juego/feria.aplicar)
         self.inteligente = clave == "inteligente"
         self.nivel = NIVEL_INICIAL if self.inteligente else NIVEL_FIJO.get(clave)
         self.nivel_max = self.nivel or 0.0      # hasta dónde llegó (para los resultados)
@@ -61,6 +64,8 @@ class Dificultad:
     # -- Lo que preguntan los demás -----------------------------------------------------
 
     def valor(self, nombre):
+        if self.feria and nombre in AJUSTES_FERIA:
+            return AJUSTES_FERIA[nombre]          # (modo feria: juego/feria.py)
         return _interpolar(AJUSTES[nombre], self.nivel)
 
     @property

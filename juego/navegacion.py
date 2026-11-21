@@ -38,15 +38,23 @@ PRESUPUESTO_ALIEN = 4000   # lo mismo para los aliens (tienen más prisa)
 # MINIMO_CELDAS por cuadro para no quedarse quieta si hay varias.
 LIMITE_MS_CUADRO = 3.0
 MINIMO_CELDAS = 200
-_gasto_cuadro = {"cuadro": None, "ms": 0.0}
+# Los caminos de las flechas guía (screens/flechas.py) se buscan mientras se
+# DIBUJA, después de que los aliens ya gastaron lo suyo: tienen su propia
+# bolsa, más chica (nov 21: una flecha nueva con 3-4 jugadores daba ~4-6 ms
+# en el dibujo de ese cuadro). El camino sale unos cuadros más tarde;
+# mientras, la flecha sigue con el de antes.
+LIMITES_MS = {"juego": LIMITE_MS_CUADRO, "guia": 1.2}
+_gasto_cuadro = {}
 
 
-def _gastado(ms=0.0):
-    """Los ms que ya usaron este cuadro las búsquedas por partes (sumando `ms`)."""
-    if _gasto_cuadro["cuadro"] != Navegacion.cuadro:
-        _gasto_cuadro["cuadro"], _gasto_cuadro["ms"] = Navegacion.cuadro, 0.0
-    _gasto_cuadro["ms"] += ms
-    return _gasto_cuadro["ms"]
+def _gastado(ms=0.0, bolsa="juego"):
+    """Los ms que ya usaron este cuadro las búsquedas por partes de esa bolsa
+    (sumando `ms`)."""
+    gasto = _gasto_cuadro.get(bolsa)
+    if gasto is None or gasto[0] != Navegacion.cuadro:
+        gasto = _gasto_cuadro[bolsa] = [Navegacion.cuadro, 0.0]
+    gasto[1] += ms
+    return gasto[1]
 
 
 class Navegacion:
@@ -239,6 +247,27 @@ class Navegacion:
         guardadas[clave] = respuesta
         return respuesta
 
+    def zona_de(self, punto, sellos=True, extra=None, estado=None):
+        """Número del pedazo conectado donde cae `punto` con lo que está
+        cerrado ahora (None si no hay celda libre cerca). Dos puntos se
+        conectan si tienen la misma zona: para preguntar por muchos puntos a
+        la vez (los lugares de los rumores contra todos los jugadores) es
+        mucho más barato que un `conectados` por pareja. Se guarda por celda
+        en el estado (que cambia si se abre o cierra algo)."""
+        if estado is None:
+            estado = self._estado(sellos, extra)
+        guardadas = estado.setdefault("zona_de", {})
+        celda = self._celda_de(punto)
+        if celda in guardadas:
+            return guardadas[celda]
+        tapadas, libre = estado["tapadas"], self.libre
+        cerca = self._mas_cercana(punto, lambda c: c in libre and c not in tapadas)
+        zona = None if cerca is None else self._zona(estado, cerca)
+        if len(guardadas) > 4000:
+            guardadas.clear()
+        guardadas[celda] = zona
+        return zona
+
     def _vecinos(self):
         """Lista de adyacencia del grafo de la nave (se arma una vez): para
         cada celda libre, sus vecinas libres en 8 direcciones con lo que cuesta
@@ -277,7 +306,7 @@ class Navegacion:
         return tapadas
 
     def camino(self, desde, hasta, parcial=False, puede_esperar=False, sellos=True, por_partes=False,
-               quien=None):
+               quien=None, bolsa="juego"):
         """Lista de puntos (centros) de `desde` a `hasta`, o None si no hay.
 
         Con `parcial=True`, si no se puede llegar (por ejemplo, el ruido está
@@ -320,18 +349,31 @@ class Navegacion:
         if por_partes:
             pendientes = self.__dict__.setdefault("_pendientes", {})
             clave_pendiente = clave if quien is None else ("de", quien) + clave[1:]
+            if bolsa != "juego" and _gastado(0.0, bolsa) > LIMITES_MS.get(bolsa, LIMITE_MS_CUADRO):
+                # Las de las flechas no tienen prisa: si su bolsa ya se gastó
+                # en este cuadro, esperan al siguiente (con 4 jugadores y un
+                # apagón eran 8 a la vez, cada una con su mínimo de celdas).
+                self.ocupada = True
+                return None
             busqueda = pendientes.pop(clave_pendiente, None)
             if busqueda is None:
                 if len(pendientes) > 30:      # pedidos que nadie volvió a pedir
                     pendientes.clear()
                 presupuesto = PRESUPUESTO_CUADRO if por_partes is True else int(por_partes)
-                busqueda = self._busqueda(desde, hasta, parcial, extra, presupuesto)
+                busqueda = self._busqueda(desde, hasta, parcial, extra, presupuesto, bolsa)
             Navegacion.ultimo_cuadro = Navegacion.cuadro
+            # Se cuenta TODO lo que tarda este pedazo (también lo de armar la
+            # búsqueda y lo de rehacer el camino al terminar, que antes no
+            # entraba en la cuenta del tope por cuadro).
+            reloj = time.perf_counter
+            inicio = reloj()
             try:
                 next(busqueda)
             except StopIteration as fin:
                 resultado, self.ultimo_parcial, self._explorados = fin.value
+                _gastado((reloj() - inicio) * 1000, bolsa)
             else:
+                _gastado((reloj() - inicio) * 1000, bolsa)
                 pendientes[clave_pendiente] = busqueda
                 self.ocupada = True
                 return None
@@ -355,7 +397,7 @@ class Navegacion:
             resultado, self.ultimo_parcial, self._explorados = fin.value
         return resultado
 
-    def _busqueda(self, desde, hasta, parcial, extra, presupuesto=None):
+    def _busqueda(self, desde, hasta, parcial, extra, presupuesto=None, bolsa="juego"):
         """El A*, como generador: con `presupuesto`, cada `next()` revisa a lo
         más esa cantidad de celdas (así se reparte en varios cuadros). Al
         terminar devuelve (camino o None, si es parcial, celdas exploradas)."""
@@ -403,14 +445,15 @@ class Navegacion:
         peso, resta = PESO_ESTIMADO / p, diag - 2
         reloj = time.perf_counter
         desde_ms = reloj()
+        limite = LIMITES_MS.get(bolsa, LIMITE_MS_CUADRO)
+        minimo = MINIMO_CELDAS if bolsa == "juego" else 64
         while abiertos and len(previo) < MAX_NODOS:
             if presupuesto is not None:
                 cuenta += 1
-                if cuenta >= presupuesto or (cuenta >= MINIMO_CELDAS and not cuenta & 63 and
-                                              _gastado() + (reloj() - desde_ms) * 1000 > LIMITE_MS_CUADRO):
-                    _gastado((reloj() - desde_ms) * 1000)
+                if cuenta >= presupuesto or (cuenta >= minimo and not cuenta & 63 and
+                                              _gastado(0.0, bolsa) + (reloj() - desde_ms) * 1000 > limite):
                     cuenta = 0
-                    yield
+                    yield            # (lo que tardó lo anota `camino`)
                     desde_ms = reloj()
             _, _, c = heappop(abiertos)
             if c in cerradas:

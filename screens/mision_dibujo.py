@@ -39,6 +39,13 @@ def _en_pantalla(rect, offset):
     return rect.move(-offset[0], -offset[1])
 
 
+def _con_minijuegos(mision):
+    """Con minijuegos (juego/tareas.py) la consola y la cápsula se hacen de una
+    vez al ganar el suyo: la barra debajo de ellas se quedaba vacía (de 0 pasa
+    a lista), así que no se dibuja. Era de cuando se mantenía la tecla."""
+    return getattr(getattr(mision, "juego", None), "minijuegos", False)
+
+
 def _barra(screen, x, y, ancho, valor, color):
     pygame.draw.rect(screen, (30, 32, 48), (x, y, ancho, 8))
     pygame.draw.rect(screen, color, (x, y, int(ancho * max(0, min(1, valor))), 8))
@@ -139,10 +146,11 @@ def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
         _texto(screen, "Cápsula de escape", r.centerx, arriba - 40, COLOR_CAPSULA)
         if mision.fase in ("capsula", "huida"):
             from misiones.mision import PIEZAS_NECESARIAS
-            estado = (f"Piezas {mision.piezas_entregadas}/{PIEZAS_NECESARIAS}"
-                      if mision.piezas_entregadas < PIEZAS_NECESARIAS else "Reparación")
+            necesarias = getattr(mision, "piezas_necesarias", PIEZAS_NECESARIAS)
+            estado = (f"Piezas {mision.piezas_entregadas}/{necesarias}"
+                      if mision.piezas_entregadas < necesarias else "Reparación")
             _texto(screen, estado, r.centerx, arriba - 20, (230, 235, 250))
-            if mision.piezas_entregadas >= PIEZAS_NECESARIAS:
+            if mision.piezas_entregadas >= necesarias and not _con_minijuegos(mision):
                 _barra(screen, r.x + 10, r.bottom + 6, r.width - 20, mision.reparacion, COLOR_LISTO)
 
     for nota in mision.notas:
@@ -197,10 +205,13 @@ _naves = {}
 
 
 def etapa_nave(mision):
-    """0 (rota), 1 (en partes) o 2 (completa)."""
+    """0 (rota), 1 (en partes) o 2 (completa). "En partes" desde la primera
+    pieza que le ponen (o el primer tercio de la barra de reparación, sin
+    minijuegos): con los minijuegos la barra pasa de 0 a lista de una (al
+    ganar los cables) y la nave saltaba de rota a completa sin la del medio."""
     if mision.fase == "huida" or mision.reparacion >= 2 / 3:
         return 2
-    if mision.reparacion >= 1 / 3:
+    if mision.reparacion >= 1 / 3 or getattr(mision, "piezas_entregadas", 0) > 0:
         return 1
     return 0
 
@@ -275,7 +286,7 @@ def _dibujar_consola(screen, offset, consola, mision, brillo):
         pygame.draw.rect(screen, tuple(int(c * (1 if lista else brillo)) for c in color),
                          r.inflate(-14, -14), border_radius=4)
         pygame.draw.rect(screen, color, r, 2, border_radius=6)
-    if mision.fase == "sabotaje" and not lista:
+    if mision.fase == "sabotaje" and not lista and not _con_minijuegos(mision):
         _barra(screen, r.x, r.bottom + 4, r.width, consola["progreso"], COLOR_CONSOLA)
 
 def dibujar_encima(screen, offset, camara, mision, tiempo_ms):

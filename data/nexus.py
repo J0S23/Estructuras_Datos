@@ -101,6 +101,45 @@ RUMORES = [
      "texto": "La puerta del pasillo de control está soldada. Ni lo intenten.",
      "foto": "La puerta no está soldada: se abre con dos personas.",
      "desmentido": "La puerta del pasillo NO está soldada: se abre entre dos. Foto."},
+    # Rumores que suenan a noticia de verdad (cosas chicas y concretas, como
+    # las de NOTICIAS): por cómo suena ya no se sabe si es falso; hay que ir a
+    # ver o fijarse en quién lo publicó (Diego, nov 20).
+    {"lugar": "capsula",
+     "texto": "Anoche le sacaron el motor a la cápsula de escape, la vi vacía por dentro.",
+     "foto": "El motor sigue en la cápsula. Solo le faltan piezas.",
+     "desmentido": "Fui a la cápsula: el motor está en su lugar. Nadie se lo llevó.",
+     "viral": "Los prisioneros se rindieron: ya nadie quiere ir a la cápsula contigo."},
+    {"lugar": "consola",
+     "texto": "Ya alguien apagó las consolas de navegación del otro lado. No hace falta ir.",
+     "foto": "La consola sigue prendida: nadie la ha apagado.",
+     "desmentido": "Las consolas siguen prendidas, nadie las apagó. Hay que ir a apagarlas."},
+    {"lugar": "celda",
+     "texto": "Le cambiaron la cerradura a las celdas: ya no se abren desde afuera.",
+     "foto": "La reja abre normal desde afuera.",
+     "desmentido": "Las celdas se abren normal desde afuera. Si encierran a alguien, se le puede sacar.",
+     "viral": "Nadie se acerca a las celdas: el que caiga preso tarda el doble en forzar la reja."},
+    {"lugar": "fusibles",
+     "texto": "La caja de fusibles de este pasillo tiene los breakers botados, por eso falla la luz.",
+     "foto": "Los breakers están todos arriba. La caja está bien.",
+     "desmentido": "Revisé la caja de fusibles: los breakers están arriba. No le pasa nada."},
+    {"lugar": "escondite",
+     "texto": "Un casillero quedó con la puerta trabada, ya no abre.",
+     "foto": "El casillero abre bien. Se puede usar.",
+     "desmentido": "Probé el casillero: abre perfecto, no está trabado.",
+     "viral": "Los prisioneros corrieron a meterse en los casilleros que quedan: hay menos escondites para ustedes."},
+    {"lugar": "terminal",
+     "texto": "Una terminal se quedó colgada mostrando ruido. Mejor ni la toquen.",
+     "foto": "La terminal responde normal.",
+     "desmentido": "La terminal funciona bien, no estaba colgada.",
+     "viral": "Los prisioneros desconectaron una terminal NEXUS por miedo: quedó fuera de servicio."},
+    {"lugar": "panel",
+     "texto": "Un panel de reparación se quedó sin corriente. Ya no sirve aunque le pongan piezas.",
+     "foto": "El panel tiene corriente. Se puede reparar con piezas.",
+     "desmentido": "El panel tiene corriente: con una pieza se repara. Era mentira."},
+    {"lugar": "puerta_doble",
+     "texto": "El lector de la puerta para dos está desconectado, por más que lo intenten no abre.",
+     "foto": "El lector tiene luz y responde: se abre entre dos.",
+     "desmentido": "El lector de la puerta funciona: entre dos se abre. Foto."},
 ]
 
 # -- Noticias verdaderas --------------------------------------------------------------
@@ -110,7 +149,13 @@ RUMORES = [
 # misiones/minijuegos.py; sin minijuegos, se arregla solo al llegar). Con la foto se
 # publica `confirmacion`. "efecto" = lo que pasa en la nave mientras nadie lo
 # arregla ("candado": ese casillero no se puede usar). "viral" es lo que se
-# avisa si se riega por toda la nave antes de que alguien la verifique.
+# avisa si se riega por toda la nave antes de que alguien la verifique, y
+# "empeora", lo que pasa entonces si nadie lo arregló (Diego, nov 21: que lo
+# verdadero también tenga consecuencias; redes/nexus._empeorar): los breakers
+# terminan en un apagón, el panel en corto baja una compuerta, la terminal se
+# desconecta, las celdas cuestan el doble y la puerta para dos se queda sin
+# corriente (hasta que alguien lo arregle). Y la gente ve que nadie hace nada:
+# cada verde deja de confiar con PROB_DESCONFIAR.
 NOTICIAS = [
     {"lugar": "escondite",
      "texto": "Ojo: le pusieron candado a un casillero. Ya no sirve para esconderse.",
@@ -118,43 +163,60 @@ NOTICIAS = [
      "confirmacion": "Era cierto: un casillero tenía candado. Lo forcé y ya se puede usar.",
      "arreglo": "ganzua", "titulo_arreglo": "El casillero tiene candado: fuérzalo",
      "pista": "Revisar el casillero", "efecto": "candado",
-     "viral": "Toda la nave sabe lo del candado: nadie usa ese casillero."},
+     "viral": "Toda la nave sabe lo del candado: nadie usa ese casillero.",
+     "empeora": "El casillero sigue con candado y nadie hace nada."},
     {"lugar": "fusibles",
      "texto": "La caja de fusibles de mi pasillo tiene los breakers botados. Por eso parpadea la luz.",
      "foto": "Los breakers sí estaban abajo. Ya están arriba.",
      "confirmacion": "Era cierto lo de los breakers de la caja de fusibles. Ya los subí.",
      "arreglo": "interruptores", "titulo_arreglo": "Breakers botados: sube las palancas",
      "pista": "Revisar la caja de fusibles",
-     "viral": "Toda la nave sabe lo de la caja de fusibles."},
+     "viral": "Toda la nave sabe lo de la caja de fusibles.",
+     "empeora": "Nadie subió los breakers: la caja se quemó y ¡se fue la luz de la nave!"},
     {"lugar": "panel",
      "texto": "Un panel de reparación está echando chispas: tiene los cables cruzados.",
      "foto": "Los cables del panel sí estaban cruzados. Ya están en su lugar.",
      "confirmacion": "Era cierto: el panel tenía los cables cruzados. Ya lo arreglé.",
      "arreglo": "cables", "titulo_arreglo": "Panel en corto: conecta los cables",
      "pista": "Revisar el panel",
-     "viral": "Toda la nave sabe lo del panel en corto."},
+     "viral": "Toda la nave sabe lo del panel en corto.",
+     "empeora": "Nadie arregló el panel en corto: saltó el cierre de emergencia y bajó una compuerta."},
     {"lugar": "terminal",
      "texto": "Una terminal se quedó colgada mostrando puro ruido. Que alguien la reinicie.",
      "foto": "La terminal sí estaba colgada. Ya responde.",
      "confirmacion": "Era cierto: la terminal estaba colgada. La resintonicé y ya funciona.",
      "arreglo": "senal", "titulo_arreglo": "Terminal colgada: sintoniza la señal",
      "pista": "Revisar la terminal",
-     "viral": "Toda la nave sabe lo de la terminal colgada."},
+     "viral": "Toda la nave sabe lo de la terminal colgada.",
+     "empeora": "Nadie reinició la terminal: se desconectó del todo hasta que alguien la arregle."},
     {"lugar": "celda",
      "texto": "La cerradura de una celda quedó trabada. Si encierran a alguien ahí, va a costar sacarlo.",
      "foto": "La cerradura sí estaba trabada. Ya abre bien.",
      "confirmacion": "Era cierto lo de la cerradura de la celda. La destrabé.",
      "arreglo": "ganzua", "titulo_arreglo": "Cerradura trabada: destrábala",
      "pista": "Revisar la cerradura de la celda",
-     "viral": "Toda la nave sabe lo de la cerradura trabada."},
+     "viral": "Toda la nave sabe lo de la cerradura trabada.",
+     "empeora": "Nadie destrabó la cerradura: ahora cuesta el doble salir de las celdas."},
     {"lugar": "puerta_doble",
      "texto": "El lector de la puerta del pasillo tiene los cables sueltos, se apaga a ratos.",
      "foto": "Los cables del lector sí estaban sueltos. Ya están conectados.",
      "confirmacion": "Era cierto: el lector de la puerta tenía cables sueltos. Ya los conecté.",
      "arreglo": "cables", "titulo_arreglo": "Lector de la puerta: conecta los cables",
      "pista": "Revisar el lector de la puerta",
-     "viral": "Toda la nave sabe lo del lector de la puerta."},
+     "viral": "Toda la nave sabe lo del lector de la puerta.",
+     "empeora": "Nadie arregló el lector: la puerta para dos se quedó sin corriente hasta que alguien conecte sus cables."},
 ]
+# Noticias verdaderas que suenan alarmantes, como los rumores (Diego: que no
+# se note cuál es verdad por cómo suena). Lo demás es igual a la de su lugar.
+_ALARMANTES = {
+    "escondite": "¡Le pusieron candado a un casillero! ¡Ya no hay dónde meterse!",
+    "fusibles": "¡La caja de fusibles está echando chispas! ¡Se va a ir la luz de toda la nave!",
+    "panel": "¡Un panel explotó en el pasillo, salen chispas por todos lados!",
+    "terminal": "¡Una terminal se volvió loca, solo muestra estática! ¡Algo le hicieron!",
+    "celda": "¡Una celda quedó trabada! ¡Si te encierran ahí no sales nunca!",
+    "puerta_doble": "¡La puerta para dos se apaga sola! ¡Nos van a dejar encerrados!",
+}
+NOTICIAS += [dict(n, texto=_ALARMANTES[n["lugar"]]) for n in list(NOTICIAS) if n["lugar"] in _ALARMANTES]
 PROB_NOTICIA = 0.4              # de lo que va a Misiones, qué parte es verdad
 PUNTOS_ARREGLAR = 10            # al arreglarlo en el lugar (antes de publicar)
 PUNTOS_CONFIRMAR = 15           # al publicar la foto
@@ -221,6 +283,7 @@ PROB_CREER_VIRAL = 0.3          # (antes 0.5)
 VIRAL_GENERICO = "Ya casi toda la nave se lo cree."
 ESCONDITES_VIRAL = 3            # casilleros que ocupan los prisioneros (rumor de casilleros)
 FUGA_VIRAL = 0.5                # rumor de las celdas: la fuga avanza a esta velocidad
+PROB_DESCONFIAR = 0.35          # noticia verdadera que nadie arregló a tiempo: cada verde vuelve a gris
 
 # Llegar tarde convence menos: con la barra de "se vuelve viral" por encima de
 # TARDE_DESDE, el desmentido convence cada vez menos, hasta CONVENCE_TARDE (la

@@ -594,8 +594,11 @@ def _imagen_huella(angulo_idx, nivel):
     if img is None:
         base = pygame.Surface((16, 16), pygame.SRCALPHA)
         alfa = int(150 * nivel / 6)
-        pygame.draw.ellipse(base, (14, 14, 26, alfa), (2, 5, 11, 6))        # planta del pie
-        pygame.draw.ellipse(base, (14, 14, 26, alfa), (11, 5, 5, 5))        # punta
+        # Mirando a +x (hacia donde camina): el talón chico atrás y la parte
+        # de adelante más ancha, separados (antes era un óvalo con una bolita
+        # adelante y se leía al revés, como si la bolita fuera el talón).
+        pygame.draw.ellipse(base, (14, 14, 26, alfa), (1, 5, 5, 6))         # talón
+        pygame.draw.ellipse(base, (14, 14, 26, alfa), (7, 4, 8, 8))         # planta y dedos
         img = pygame.transform.rotate(base, -angulo_idx * 22.5)
         # Del mismo tamaño siempre (16x16 centrada), así dibujar_piso no mide nada.
         centrada = pygame.Surface((16, 16), pygame.SRCALPHA)

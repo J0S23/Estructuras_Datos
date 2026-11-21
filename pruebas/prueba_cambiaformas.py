@@ -343,7 +343,8 @@ poner(j1, (npc.centro[0] + 60, npc.centro[1]))
 if g.mundo.colisiona(j1.hitbox):
     poner(j1, (npc.centro[0], npc.centro[1] + 50))
 frames(g, 2)
-assert npc.burbuja and npc.usuario in j1.mensaje, "un verde te da una pista"
+assert npc.burbuja and j1.mensaje and (j1.mensaje_quien or [None])[0] == npc.usuario, \
+    "un verde te da una pista (en el recuadro, con su nombre y su foto)"
 from data.npcs import FRASE_PIDE_RESCATE
 assert npc.burbuja == FRASE_PIDE_RESCATE and "[" in j1.mensaje, "la primera vez te pide que lo rescates"
 npc.charla_ms = 0

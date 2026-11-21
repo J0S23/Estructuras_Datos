@@ -299,7 +299,18 @@ def dibujar_ojos_escalados(screen, ojos, rect):
         x, y = rect.x + int(cx * escala), rect.y + int(cy * escala)
         screen.blit(brillo, (x - brillo.get_width() // 2, y - brillo.get_height() // 2),
                     special_flags=pygame.BLEND_RGB_ADD)
-    screen.blit(pygame.transform.scale(ojos, rect.size), rect)
+    clave = (id(ojos), tuple(rect.size))
+    img = _ojos_escalados.get(clave)
+    if img is None:
+        # (Antes se agrandaba en cada cuadro del susto: la capa llega a ~1.8
+        # veces el alto de la vista, varios ms por cuadro.)
+        if len(_ojos_escalados) > 40:
+            _ojos_escalados.clear()
+        img = _ojos_escalados[clave] = pygame.transform.scale(ojos, rect.size)
+    screen.blit(img, rect)
+
+
+_ojos_escalados = {}
 
 
 def figura_de_frente():

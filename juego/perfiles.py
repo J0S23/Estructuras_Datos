@@ -91,6 +91,37 @@ _logos = {}       # (archivo, alto) -> Surface o None
 CARPETA_UI = os.path.join(_RAIZ, "Imagenes", "UI")
 
 
+def _logo_original(archivo):
+    """El archivo del logo cargado UNA vez (antes se leía del disco con cada
+    tamaño nuevo: ~5 ms el completo, la primera vez que se abría el celular)."""
+    llave = ("original", archivo)
+    if llave not in _logos:
+        original = pygame.image.load(os.path.join(CARPETA_UI, archivo))
+        try:
+            original = original.convert_alpha()
+        except pygame.error:
+            pass
+        _logos[llave] = original
+    return _logos[llave]
+
+
+def precargar():
+    """Lee del disco las fotos y los logos (lo llama la carga de la partida:
+    si no, la primera vez que salen en el celular o en un diálogo es un
+    tirón de unos ms)."""
+    try:
+        claves = [n[:-4] for n in os.listdir(CARPETA) if n.lower().endswith(".png")]
+    except OSError:
+        claves = []
+    for clave in claves:
+        _original(clave)
+    for archivo in ("nexus_logo.png", "nexus_icono.png"):
+        try:
+            _logo_original(archivo)
+        except (pygame.error, OSError, FileNotFoundError):
+            pass
+
+
 def logo(alto, completo=False):
     """El logo de NEXUS de ese alto (el planeta, o completo con el letrero), o None."""
     archivo = "nexus_logo.png" if completo else "nexus_icono.png"
@@ -98,11 +129,7 @@ def logo(alto, completo=False):
     if llave not in _logos:
         imagen = None
         try:
-            original = pygame.image.load(os.path.join(CARPETA_UI, archivo))
-            try:
-                original = original.convert_alpha()
-            except pygame.error:
-                pass
+            original = _logo_original(archivo)
             ancho = max(1, round(original.get_width() * alto / original.get_height()))
             imagen = pygame.transform.smoothscale(original, (ancho, int(alto)))
         except (pygame.error, OSError, FileNotFoundError, ValueError):

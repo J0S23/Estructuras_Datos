@@ -107,6 +107,14 @@ class Minijuego:
     # el saco ya no estaba donde el jugador lo soltó.
 
     NO_VIAJA = ("rng", "al_acertar")
+    # Lo que el cliente puede hacer él mismo apenas se presiona, sin esperar
+    # la vuelta del servidor (cliente_servidor/eco.py): solo lo que da lo
+    # mismo aquí y allá (mover el cursor, girar una pieza, mover una palanca).
+    # Lo que depende del momento (el saco, el pin) o del azar, no.
+    PREDECIBLE = False
+
+    def predecible(self, accion):
+        return self.PREDECIBLE and not self.ganado
 
     def a_red(self):
         datos = {}
@@ -360,11 +368,14 @@ class Cables(Minijuego):
     titulo = "Conecta los cables"
     color = (255, 170, 70)
 
+    PREDECIBLE = True
+
     def __init__(self, facil=False, rng=None, titulo=None):
         super().__init__(facil, rng)
         if titulo:
             self.titulo = titulo
-        self.cols, self.filas = (4, 3) if facil else (5, 4)
+        # (Diego: "muy rápido"; antes 4x3 y 5x4)
+        self.cols, self.filas = (5, 3) if facil else (6, 4)
         self._giros = {}            # pieza -> cuándo se giró (para animar el giro)
         self._armar()
 
@@ -381,7 +392,8 @@ class Cables(Minijuego):
         entra = O
         for col in range(cols):
             x = col
-            pasos_vert = r.choice((0, 0, 1, 2)) if col < cols - 1 else r.choice((0, 1))
+            # (más vueltas que antes, que subía o bajaba con 0, 0, 1, 2)
+            pasos_vert = r.choice((0, 1, 1, 2)) if col < cols - 1 else r.choice((0, 1))
             direccion = r.choice((-1, 1))
             celdas = [(x, y)]
             for _ in range(pasos_vert):
@@ -407,8 +419,12 @@ class Cables(Minijuego):
             for y in range(filas):
                 if (x, y) not in self.base:
                     self.base[(x, y)] = r.choice((N | S, N | E, N | E, N | S))
-        # Todas giradas al azar, y que no empiece resuelto.
+        # Todas giradas al azar, y que no empiece resuelto: las del camino,
+        # TODAS mal puestas (antes podían salir ya bien y casi no había que girar).
         self.rot = {c: r.randrange(4) for c in self.base}
+        for (c, _, _) in camino:
+            while girar(self.base[c], self.rot[c]) == self.base[c]:
+                self.rot[c] = r.randrange(4)
         while self._conectado():
             c = r.choice(list(self.base))
             self.rot[c] = (self.rot[c] + 1) % 4
@@ -634,6 +650,8 @@ class Interruptores(Minijuego):
     titulo = "Sube todas las palancas"
     color = (255, 214, 64)
 
+    PREDECIBLE = True
+
     def __init__(self, facil=False, rng=None, titulo=None):
         super().__init__(facil, rng)
         if titulo:
@@ -761,6 +779,8 @@ class Senal(Minijuego):
     FRECUENCIAS = 6
     AMPLITUDES = 5
 
+    PREDECIBLE = True
+
     def __init__(self, facil=False, rng=None, titulo=None):
         super().__init__(facil, rng)
         if titulo:
@@ -780,6 +800,12 @@ class Senal(Minijuego):
     @property
     def igual(self):
         return (self.f, self.a) == self.objetivo
+
+    def predecible(self, accion):
+        # (acertar una ronda sortea la siguiente: eso lo dice el servidor)
+        if accion == "ok" and self.igual and self.ronda + 1 < self.rondas:
+            return False
+        return super().predecible(accion)
 
     def _tecla(self, accion):
         if accion == "izquierda":
@@ -934,7 +960,9 @@ class Abono(Minijuego):
         super().__init__(facil, rng)
         if titulo:
             self.titulo = titulo
-        self.necesarios = 2 if facil else 3
+        # (Diego: "muy rápido"; antes 2 y 3 aciertos con ±0.2 de margen)
+        self.necesarios = 3 if facil else 4
+        self.ventana = 0.18 if facil else 0.14      # qué tan cerca del centro cuenta
         self.aciertos = 0
         self.caida = None           # (x relativa, ms) del abono que va cayendo
         self.fase = self.rng.uniform(0, 6.28)
@@ -982,19 +1010,24 @@ class Abono(Minijuego):
         recorte = img.get_bounding_rect()
         return caja.y + recorte.y
 
+    def rapidez(self):
+        """Radianes por segundo del saco: más rápido con cada acierto (antes
+        2.1 + 0.55 por acierto)."""
+        return (2.5 + 0.6 * self.aciertos) * self.velocidad
+
     def x_saco(self):
         """Dónde está el saco (de -1 a 1; 0 = sobre la maceta)."""
         return math.sin(self.fase)
 
     def _actualizar(self, dt):
-        self.fase += dt / 1000 * (2.1 + 0.55 * self.aciertos) * self.velocidad
+        self.fase += dt / 1000 * self.rapidez()
         if self.caida is not None:
             x, ms = self.caida
             ms += dt
             if ms >= self.CAIDA_MS:
                 self.caida = None
-                self._golpes = self._golpes[-3:] + [(x, self.t, abs(x) <= 0.2)]
-                if abs(x) <= 0.2:
+                self._golpes = self._golpes[-3:] + [(x, self.t, abs(x) <= self.ventana)]
+                if abs(x) <= self.ventana:
                     self.aciertos += 1
                     self._acierto_t = self.t
                     self.ultimo = "bien"
@@ -1015,7 +1048,7 @@ class Abono(Minijuego):
         return None
 
     def _animar(self, dt):
-        self.fase += dt / 1000 * (2.1 + 0.55 * self.aciertos) * self.velocidad
+        self.fase += dt / 1000 * self.rapidez()
         if self.caida is not None:
             # (cae hasta casi llegar: si acertó o no lo dice el servidor)
             self.caida = (self.caida[0], min(self.CAIDA_MS - 1, self.caida[1] + dt))
@@ -1076,7 +1109,7 @@ class Abono(Minijuego):
             px = tierra.x + 6 + azar.random() * (tierra.w - 12)
             pygame.draw.circle(screen, (90, 62, 40), (int(px), int(tierra.centery + azar.uniform(-2, 2))), 1)
         # La zona buena: donde el abono cae dentro (late en verde).
-        zona = pygame.Rect(0, 0, int(mitad * 0.4), 10)
+        zona = pygame.Rect(0, 0, int(mitad * 2 * self.ventana), 10)
         zona.center = tierra.center
         late = 0.5 + 0.5 * math.sin(self.t / 220)
         pygame.draw.ellipse(screen, _mezcla((40, 90, 50), (120, 240, 140), late), zona, 2)
@@ -1120,7 +1153,7 @@ class Abono(Minijuego):
         pygame.draw.circle(screen, (130, 220, 130), (int(centro_hoja[0]) - 1, int(centro_hoja[1]) - 1), max(1, int(2 * e)))
         boca = girado(0, largo + 50)
         # La guía: dónde caería si lo suelta ahora.
-        dentro = abs(self.x_saco()) <= 0.2
+        dentro = abs(self.x_saco()) <= self.ventana
         for yy in range(int(boca[1]) + 8, tierra.y - 4, 10):
             pygame.draw.line(screen, (110, 230, 140) if dentro else (80, 90, 110), (sx, yy), (sx, yy + 4), 2)
         # El abono cayendo (granitos con algo de dispersión).

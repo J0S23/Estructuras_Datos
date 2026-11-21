@@ -68,7 +68,7 @@ from data.nexus import (
     NIVELES_COMPARTIR_CIERTO, UMBRAL_PLANOS, DIFERENCIA_POTENCIA_MAX,
     RADIO_FOTO, PUNTOS_DESMENTIR, PROB_RECAPACITAR, OLVIDO_CADA_S, PROB_OLVIDAR,
     PUNTOS_REPORTAR_BOT, PUNTOS_PLANOS, PROB_CREER_RUMOR, PROB_CONVENCER,
-    PUNTOS_SUPLANTACION, VIRAL_S, PROB_CREER_VIRAL, VIRAL_GENERICO, ESCONDITES_VIRAL,
+    PUNTOS_SUPLANTACION, VIRAL_S, PROB_CREER_VIRAL, VIRAL_GENERICO, ESCONDITES_VIRAL, PROB_DESCONFIAR,
     TARDE_DESDE, CONVENCE_TARDE, SEGUIDORES_PARA_CONSEJO, BOT_GANA_SEGUIDOR_S, BOT_MAX_SEGUIDORES, AVISOS_SEGUIDORES,
     NOTICIAS, PROB_NOTICIA, PUNTOS_ARREGLAR, PUNTOS_CONFIRMAR,
 )
@@ -145,6 +145,8 @@ class RedNexus:
         self.tiempo_celular_ms = {}
         self.reloj_rumor_ms = PRIMER_RUMOR_S * 1000
         self.umbral_planos = UMBRAL_PLANOS     # la dificultad lo cambia (App.iniciar_partida)
+        self.convencer = None       # cuánto convence la verdad (None: lo de la dificultad, "convencer")
+        self.tick_verde_ms = TICK_PROPAGACION_MS    # cada cuánto avanza un nivel la verdad (la feria, más rápido)
         self.reloj_normal_ms = self.rng.uniform(*NORMAL_CADA_S) * 1000
         self.reloj_bot_ms = NUEVO_BOT_CADA_S * 1000
         self.reloj_olvido_ms = OLVIDO_CADA_S * 1000
@@ -156,6 +158,8 @@ class RedNexus:
         self.pestanas = {}           # jugador -> pestaña del celular que dejó abierta
         self.virales = 0             # rumores que se volvieron virales (resultados)
         self.creyeron_tarde = 0      # gente que se lo creyó antes de que llegara el desmentido
+        self.empeoradas = 0          # noticias verdaderas que nadie arregló a tiempo (`_empeorar`)
+        self.desconfiaron = 0        # verdes que dejaron de confiar por eso
         self.seguidores_ganados = 0  # seguidores que ganaron los bots mientras nadie los reportaba
         self.con_noticias = True     # noticias verdaderas (False: solo rumores)
         self._armar_red()
@@ -300,8 +304,9 @@ class RedNexus:
                     self._volverse_viral(pub)
         for prop in list(self.propagaciones):
             prop.reloj_ms += dt
-            while prop.reloj_ms >= TICK_PROPAGACION_MS and not prop.terminada:
-                prop.reloj_ms -= TICK_PROPAGACION_MS
+            tick = self.tick_verde_ms if prop.color == VERDE else TICK_PROPAGACION_MS
+            while prop.reloj_ms >= tick and not prop.terminada:
+                prop.reloj_ms -= tick
                 self._avanzar(prop)
             if prop.terminada:
                 self.propagaciones.remove(prop)
@@ -311,6 +316,14 @@ class RedNexus:
         potencia = self.potencia_aliens()
         for alien in getattr(juego, "aliens", ()):
             alien.potencia_nexus = potencia
+
+    def factor_convencer(self):
+        """Qué tanto convence la verdad: multiplica la prob. de cada
+        prisionero al que le llega (data/dificultad.AJUSTES "convencer"; en
+        la feria, data/feria.AJUSTES_FERIA). Sin dificultad (pruebas), 1."""
+        if self.convencer is not None:
+            return self.convencer
+        return dificultad.valor(self.juego, "convencer", 1.0)
 
     def _avanzar(self, prop):
         """Un tick: la publicación llega al siguiente nivel del BFS."""
@@ -347,7 +360,7 @@ class RedNexus:
                     g.datos[nodo]["color"] = ROJO
                     if prop.pub.tipo == "rumor":
                         prop.pub.creyentes.add(nodo)
-                elif prop.color == VERDE and self.rng.random() < prop.prob:
+                elif prop.color == VERDE and self.rng.random() < prop.prob * self.factor_convencer():
                     g.datos[nodo]["color"] = VERDE
             elif tipo == "jugador":
                 self._llego_a_jugador(nodo, prop.pub)
@@ -368,19 +381,19 @@ class RedNexus:
         if pub.tipo in ("rumor", "noticia"):
             # (lo mismo para los dos: no se sabe cuál es verdad hasta ir a ver)
             lugar = NOMBRE_LUGAR.get(pub.rumor.get("lugar"), "la nave")
-            jugador.avisar(f"NEXUS [{tecla}] · Por verificar: dicen algo de {lugar}", COLOR_NEXUS)
+            jugador.avisar(f"Me llegó algo a NEXUS [{tecla}]: dicen algo de {lugar}", COLOR_NEXUS)
             self._sonar("senal", 0.25)
         elif pub.tipo == "trampa":
             lugar = getattr(pub, "nombre_lugar", None) or "la nave"
-            jugador.avisar(f"NEXUS [{tecla}] · {self.usuario(pub.autor)} pide ayuda en {lugar}",
+            jugador.avisar(f"Me llegó a NEXUS [{tecla}]: {self.usuario(pub.autor)} pide ayuda en {lugar}",
                            COLOR_NEXUS)
             self._sonar("senal", 0.25)
         elif pub.tipo == "desmentido":
-            jugador.avisar(f"NEXUS · Equipo: {self.usuario(pub.autor)} desmintió un rumor", COLOR_BIEN)
+            jugador.avisar(f"Veo en NEXUS que {self.usuario(pub.autor)} desmintió un rumor", COLOR_BIEN)
         elif pub.tipo == "confirmacion":
-            jugador.avisar(f"NEXUS · Equipo: {self.usuario(pub.autor)} confirmó algo y lo arregló", COLOR_BIEN)
+            jugador.avisar(f"Veo en NEXUS que {self.usuario(pub.autor)} confirmó algo y lo arregló", COLOR_BIEN)
         elif pub.tipo == "testimonio":
-            jugador.avisar(f"NEXUS · {self.usuario(pub.autor)}: ¡me rescataron!", COLOR_BIEN)
+            jugador.avisar(f"Veo en NEXUS que rescataron a {self.usuario(pub.autor)}", COLOR_BIEN)
 
     def _sonar(self, nombre, volumen):
         if hasattr(self.juego, "sonar"):
@@ -393,6 +406,61 @@ class RedNexus:
     # -- Publicaciones de los demás -------------------------------------------------------
 
     def _lugares(self, tipo):
+        """Puntos del mundo donde se puede verificar un rumor de ese lugar Y a
+        los que algún jugador puede llegar ahora (`_alcanzable`). Antes salían
+        rumores de la Prisión o de Gestación con su puerta de código todavía
+        cerrada: los puntos azules llevaban hasta la puerta y "al llegar" no
+        pasaba nada (Diego: "hay misiones que no se activan al llegar")."""
+        return [p for p in self._todos_los_lugares(tipo) if self._alcanzable(p)]
+
+    def _alcanzable(self, punto):
+        """¿Algún jugador que sigue en la partida puede caminar hasta quedar a
+        RADIO_FOTO de `punto` con lo que está cerrado ahora (puertas con código
+        y puertas para dos)? El punto suele estar dentro de algo sólido (las
+        patas de una consola, un casillero, una caja en la pared): se mira
+        desde dónde se puede estar parado alrededor (`_de_pie`)."""
+        mundo = getattr(self.juego, "mundo", None)
+        if mundo is None or not hasattr(mundo, "paredes_base"):
+            return True               # (las pruebas con un mundo falso)
+        from juego import navegacion
+        nav = navegacion.de_mundo(mundo, 34, 20)
+        desde = [j.hitbox.center for j in self.juego.jugadores
+                 if not getattr(j, "eliminado", False) and not getattr(j, "desconectado", False)
+                 and not j.preso]
+        if not desde:
+            desde = [j.hitbox.center for j in self.juego.jugadores]
+        # (Antes un `conectados` por cada punto de pie y cada jugador: ~600-850
+        # preguntas, 7-22 ms de un cuadro al lanzar un rumor o la trampa. Ahora
+        # la zona de cada uno, con UN estado de las puertas y guardada.)
+        estado = nav._estado(sellos=False)
+        zonas = {nav.zona_de(d, estado=estado) for d in desde}
+        zonas.discard(None)
+        return any(nav.zona_de(q, estado=estado) in zonas for q in self._de_pie(punto))
+
+    def _de_pie(self, punto):
+        """Dónde puede estar parado un jugador a menos de RADIO_FOTO de `punto`
+        (unos pocos puntos; se guardan por punto)."""
+        guardados = self.__dict__.setdefault("_puntos_de_pie", {})
+        clave = (int(punto[0]), int(punto[1]))
+        if clave in guardados:
+            return guardados[clave]
+        import pygame
+        mundo = self.juego.mundo
+        ancho, alto = 47, 18                  # (la hitbox de un jugador)
+        choca = getattr(self.juego, "_colisiona_jugador", None) or mundo.colisiona
+        puntos = []
+        for radio in (0, RADIO_FOTO * 0.45, RADIO_FOTO * 0.8):
+            for k in range(1 if radio == 0 else 12):
+                a = k * math.pi / 6
+                q = (int(clave[0] + radio * math.cos(a)), int(clave[1] + radio * math.sin(a)))
+                r = pygame.Rect(0, 0, ancho, alto)
+                r.center = q
+                if not choca(r):
+                    puntos.append(q)
+        guardados[clave] = puntos
+        return puntos
+
+    def _todos_los_lugares(self, tipo):
         """Puntos del mundo donde se puede verificar un rumor de ese lugar."""
         j = self.juego
         mision = getattr(j, "mision", None)
@@ -493,7 +561,7 @@ class RedNexus:
             # Un casillero libre (ni ocupado ni con un prisionero adentro).
             libres = [e for e in getattr(self.juego, "escondites", [])
                       if e.get("ocupante") is None and e.get("npc") is None and not e.get("candado")]
-            lugares = [e["rect"].center for e in libres]
+            lugares = [e["rect"].center for e in libres if e["rect"].center in lugares]
         if not lugares:
             return None
         autor = autor or self.rng.choice(presos)
@@ -539,6 +607,7 @@ class RedNexus:
         if pub.arreglada:
             return
         pub.arreglada = True
+        self._deshacer_empeora(pub)
         escondite = pub.efecto.pop("escondite", None)
         if escondite is not None:
             escondite["candado"] = False
@@ -547,9 +616,10 @@ class RedNexus:
         for quien in [j for j, p in self.investigando.items() if p is pub]:
             del self.investigando[quien]      # (los demás que iban ya no tienen nada que ver)
         jugador.sumar_puntos(PUNTOS_ARREGLAR)
-        jugador.avisar(f"¡Era verdad, y ya lo arreglaste! +{PUNTOS_ARREGLAR}. Foto tomada: "
-                       "confírmalo en NEXUS.", COLOR_BIEN)
+        jugador.avisar(f"¡Era verdad, y ya lo arreglé! +{PUNTOS_ARREGLAR}. Tomé una foto: "
+                       "voy a confirmarlo en NEXUS.", COLOR_BIEN)
         self._sonar("reparar", 0.6)
+        self._tomar_foto(jugador, pub)
 
     def confirmar(self, jugador, noticia, con_ubicacion):
         """Publica la foto de lo que arregló: era verdad y ya está resuelto.
@@ -577,7 +647,7 @@ class RedNexus:
             alien = self._alertar_alien(jugador)
             if alien is not None:
                 texto += f" Pero en la foto se ve dónde estás: el {alien.nombre} viene por ti."
-                jugador.avisar(f"¡Tu foto te delató! El {alien.nombre} viene", COLOR_MAL)
+                jugador.avisar(f"¡Mi foto me delató! El {alien.nombre} viene", COLOR_MAL)
         else:
             st["fotos_recortadas"] += 1
             logro(self.juego, "perfil_bajo", jugador)
@@ -629,7 +699,7 @@ class RedNexus:
         if n in AVISOS_SEGUIDORES:
             usuario = self.usuario(bot)
             for jugador in self.juego.jugadores:
-                jugador.avisar(f"NEXUS · {usuario} no para de ganar seguidores: ya le llega a "
+                jugador.avisar(f"Veo en NEXUS que {usuario} no para de ganar seguidores: ya le llega a "
                                f"{n} personas.", COLOR_MAL)
             if hasattr(self.juego, "decir"):
                 self.juego.decir("bot_crece")
@@ -651,8 +721,11 @@ class RedNexus:
         return max(0.0, min(1.0, pub.viral_ms / max(1, self.limite_viral())))
 
     def efecto_activo(self, lugar):
-        """¿Hay un rumor de ese lugar viral y sin desmentir? (la nave actúa como si fuera verdad)"""
-        return any(p.viral and p.rumor and p.rumor.get("lugar") == lugar for p in self.rumores_activos())
+        """¿Hay un rumor de ese lugar viral y sin desmentir (la nave actúa como si
+        fuera verdad) o una noticia verdadera de ahí que empeoró porque nadie la
+        arregló (`_empeorar`)?"""
+        return (any(p.viral and p.rumor and p.rumor.get("lugar") == lugar for p in self.rumores_activos())
+                or any(p.efecto.get("empeoro") == lugar for p in self.noticias_activas()))
 
     def _volverse_viral(self, pub):
         """Nadie lo desmintió a tiempo: les llega a todos los grises (se lo creen
@@ -661,9 +734,27 @@ class RedNexus:
         pub.viral = True
         if pub.tipo == "noticia":
             lugar = NOMBRE_LUGAR.get(pub.rumor.get("lugar"), "la nave")
+            if pub.arreglada:
+                for jugador in self.juego.jugadores:
+                    jugador.avisar(f"¡Lo de {lugar} se volvió viral! {pub.rumor.get('viral', VIRAL_GENERICO)}",
+                                   COLOR_NEXUS)
+                return
+            # Era verdad y nadie fue a arreglarlo: empeora, y la gente ve que
+            # nadie hace nada.
+            texto = self._empeorar(pub)
+            perdidos = 0
+            for nodo in self._presos():
+                if self.color(nodo) == VERDE and self.rng.random() < PROB_DESCONFIAR:
+                    self.grafo.datos[nodo]["color"] = GRIS
+                    perdidos += 1
+            self.empeoradas += 1
+            self.desconfiaron += perdidos
+            if perdidos:
+                texto += (f" La gente ve que nadie hace nada: {perdidos} "
+                          f"{'persona dejó' if perdidos == 1 else 'personas dejaron'} de confiar en ustedes.")
             for jugador in self.juego.jugadores:
-                jugador.avisar(f"¡Lo de {lugar} se volvió viral! {pub.rumor.get('viral', VIRAL_GENERICO)}",
-                               COLOR_NEXUS)
+                jugador.avisar(f"¡Lo de {lugar} era verdad y nadie lo arregló! {texto}", COLOR_MAL)
+            self._sonar("fallo", 0.7)
             return
         self.virales += 1
         for nodo in self._presos():
@@ -705,6 +796,54 @@ class RedNexus:
                 texto = VIRAL_GENERICO
         return texto
 
+    def _empeorar(self, pub):
+        """Una noticia verdadera que nadie arregló a tiempo: el problema
+        empeora (data/nexus.NOTICIAS "empeora"). Lo que dura se deshace al
+        arreglarla (`_deshacer_empeora`); el apagón y la compuerta son eventos
+        de la nave (el apagón se arregla en la caja de fusibles, como siempre).
+        Devuelve el texto de lo que pasó."""
+        juego = self.juego
+        lugar = pub.rumor.get("lugar")
+        texto = pub.rumor.get("empeora", "")
+        eventos = getattr(juego, "eventos", None)
+        pub.efecto["empeoro"] = lugar
+        if lugar == "fusibles":
+            if eventos is None or eventos.apagon or eventos.lanzar("apagon") is None:
+                texto = "Nadie subió los breakers y la luz de la nave sigue fallando."
+        elif lugar == "panel":
+            if eventos is None or eventos.lanzar("compuerta") is None:
+                texto = "Nadie arregló el panel en corto: sigue echando chispas."
+        elif lugar == "terminal":
+            zonas = [z for z in getattr(juego, "zonas", ()) if z.get("tipo") == "nexus"
+                     and not z.get("desconectada")]
+            if zonas and pub.lugar is not None:
+                zona = min(zonas, key=lambda z: math.dist(z["rect"].center, pub.lugar))
+                zona["desconectada"] = True
+                pub.efecto["zona"] = zona
+            else:
+                texto = "Nadie reinició la terminal colgada."
+        elif lugar == "puerta_doble":
+            cerradas = [p for p in getattr(juego, "puertas_dobles", ()) if not p.get("abierta")]
+            if cerradas and pub.lugar is not None:
+                puerta = min(cerradas, key=lambda p: math.dist(p["rect"].center, pub.lugar))
+                puerta["sin_corriente"] = True
+                pub.efecto["lector"] = puerta
+            else:
+                texto = "Nadie arregló el lector de la puerta."
+        # (celda: `efecto_activo("celda")` hace que la fuga vaya a FUGA_VIRAL;
+        # escondite: el candado ya estaba y sigue.)
+        return texto
+
+    def _deshacer_empeora(self, pub):
+        """Lo arreglaron: lo que había empeorado y dura, vuelve a estar bien."""
+        zona = pub.efecto.pop("zona", None)
+        if zona is not None:
+            zona["desconectada"] = False
+        puerta = pub.efecto.pop("lector", None)
+        if puerta is not None:
+            puerta["sin_corriente"] = False
+        pub.efecto.pop("empeoro", None)
+
     def _quitar_efecto(self, pub):
         """Ya saben la verdad: la gente vuelve a lo de antes."""
         npcs = getattr(self.juego, "npcs", None)
@@ -739,7 +878,7 @@ class RedNexus:
             elif pub is not None and jugador not in pub.avisados:
                 pub.avisados.add(jugador)
                 lugar = NOMBRE_LUGAR.get(pub.rumor.get("lugar"), "la nave")
-                jugador.avisar(f"¡Lo de {lugar} es verdad! Arréglalo: "
+                jugador.avisar(f"¡Lo de {lugar} es verdad! Tengo que arreglarlo: "
                                f"[{jugador.nombre_tecla('interactuar')}] {pub.rumor.get('pista', '')}.",
                                COLOR_NEXUS)
                 self._sonar("senal", 0.4)
@@ -752,8 +891,17 @@ class RedNexus:
                     self.evidencias[jugador].append(pub)
                     if self.investigando.get(jugador) is pub:
                         del self.investigando[jugador]
-                    jugador.avisar("Foto tomada. Abre NEXUS para desmentir el rumor.", COLOR_BIEN)
-                    self._sonar("recoger", 0.6)
+                    jugador.avisar("Tomé la foto. Ahora la publico en NEXUS para desmentir el rumor.", COLOR_BIEN)
+                    self._tomar_foto(jugador, pub)
+
+    def _tomar_foto(self, jugador, pub):
+        """El clic de la cámara: el flash y la foto que vuela al celular
+        (screens/foto.py, que la dibuja cuando `foto_n` sube: los atributos
+        del jugador viajan en red, así que el cliente la ve igual) y el sonido."""
+        jugador.foto_n = getattr(jugador, "foto_n", 0) + 1
+        jugador.foto_pub = pub.id      # (de qué rumor o noticia: la foto sale en lo que se publique)
+        jugador.foto_lugar = NOMBRE_LUGAR.get(pub.rumor.get("lugar"), "la nave")
+        self._sonar("foto", 0.8)
 
     # -- Acciones del jugador ---------------------------------------------------------------
 
@@ -971,7 +1119,7 @@ class RedNexus:
             alien = self._alertar_alien(jugador)
             if alien is not None:
                 texto += f" Pero en la foto se ve dónde estás: el {alien.nombre} viene por ti."
-                jugador.avisar(f"¡Tu foto te delató! El {alien.nombre} viene", COLOR_MAL)
+                jugador.avisar(f"¡Mi foto me delató! El {alien.nombre} viene", COLOR_MAL)
         else:
             st["fotos_recortadas"] += 1
             logro(self.juego, "perfil_bajo", jugador)
@@ -1013,7 +1161,7 @@ class RedNexus:
             return
         self.planos = True
         for jugador in self.juego.jugadores:
-            jugador.avisar("¡La tripulación confía en ustedes! Les pasaron los planos de la cápsula.",
+            jugador.avisar("¡La tripulación confía en nosotros! Nos pasaron los planos de la cápsula.",
                            COLOR_BIEN)
         equipo = getattr(self.juego, "equipo", None)
         if equipo is not None:
@@ -1035,8 +1183,12 @@ class RedNexus:
         total["virales"] = self.virales
         total["creyeron_tarde"] = self.creyeron_tarde
         total["seguidores_bots"] = self.seguidores_ganados
+        total["empeoradas"] = self.empeoradas
         if total.get("compartidos_falsos", 0) > total.get("desmentidos", 0):
             consejo = "Compartieron más rumores de los que desmintieron: antes de compartir, verifiquen."
+        elif self.empeoradas > 0 and self.virales == 0:
+            consejo = ("Algo que era verdad se quedó sin arreglar y empeoró: verificar también es "
+                       "actuar cuando la noticia es cierta.")
         elif self.virales > 0:
             consejo = ("Dejaron que rumores se volvieran virales y la gente actuó como si fueran "
                        "ciertos: la desinformación cambia lo que hacemos. Verifiquen rápido.")

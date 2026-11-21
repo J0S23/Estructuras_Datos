@@ -56,6 +56,12 @@ AJUSTES = {
     "prob_creer":        [0.15,   0.20,  0.25,  0.30],    # prob. de que un gris se crea un rumor
     "viral_cada":        [1.50,   1.25,  1.10,  1.00],    # multiplica el tiempo para que un rumor se vuelva viral
     "bot_crece_cada":    [1.60,   1.35,  1.15,  1.00],    # multiplica el tiempo entre seguidores nuevos de un bot
+    # Qué tanto convence la verdad (desmentidos, confirmaciones, testimonios):
+    # multiplica la prob. de que un prisionero al que le llega se convenza.
+    # Antes (1.0) un desmentido con foto dejaba en verde a casi todos (~85-90 %)
+    # y los planos salían con uno (Diego, nov 21). Con 0.45 en Normal hacen
+    # falta ~4 (2-7; redes/nexus._avanzar, pruebas/prueba_feria.py sección 6).
+    "convencer":         [0.55,   0.45,  0.40,  0.35],
     # La Sombra (sale en los apagones): si alcanza a alguien le apaga la
     # linterna. ¿Hasta que vuelva la luz? (>= 0.5 sí; si no, `sombra_apaga_ms`).
     "sombra_hasta_luz":  [0,      0,     0,     1],
@@ -94,3 +100,4 @@ REVISAR_CADA_MS = 4000
 PASO_MAX = 0.07              # lo más que cambia en una revisión (~1 nivel por minuto)
 VENTANA_CAPTURAS_MS = 90000  # cuenta las capturas de este último rato
 NOMBRES_NIVEL = [(0.5, "Fácil"), (1.5, "Normal"), (2.5, "Difícil"), (99, "Pesadilla")]
+

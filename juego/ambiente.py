@@ -364,7 +364,7 @@ def _a_alto(img, alto):
     alto = max(8, int(alto) // 6 * 6)
     clave = (id(img), alto)
     if clave not in _escalados:
-        if len(_escalados) > 60:
+        if len(_escalados) > 160:          # (60 se llenaba en un solo susto y se vaciaba)
             _escalados.clear()
         ancho = max(1, int(img.get_width() * alto / img.get_height()))
         _escalados[clave] = pygame.transform.scale(img, (ancho, alto))
@@ -470,6 +470,19 @@ def _velo(screen, vista, color, alfa):
 
 
 _con_alfas = {}
+_capas_vista = {}
+
+
+def _capa_vista(tamano):
+    """Una capa transparente del tamaño de la vista, reusada (quien la usa
+    limpia lo que va a dibujar)."""
+    import pygame
+    capa = _capas_vista.get(tuple(tamano))
+    if capa is None:
+        if len(_capas_vista) > 8:
+            _capas_vista.clear()
+        capa = _capas_vista[tuple(tamano)] = pygame.Surface(tamano, pygame.SRCALPHA)
+    return capa
 
 
 def _con_alfa(img, alfa):
@@ -610,13 +623,19 @@ def _susto_vigia(screen, vista, t, puesto):
     angulo = math.sin(t * 15) * 0.55 * barrido
     origen = (cx, vista.top - h * 0.15)
     largo, medio = h * 1.4, 0.17
-    haz = pygame.Surface(vista.size, pygame.SRCALPHA)
     puntos = [(origen[0] - vista.left, origen[1] - vista.top)]
     for lado in (-1, 1):
         a = angulo + lado * medio
         puntos.append((puntos[0][0] + largo * math.sin(a), puntos[0][1] + largo * math.cos(a)))
+    # (La capa del haz se reusa y solo se limpia y pega el pedazo donde cae:
+    # antes era una capa nueva del tamaño de la vista en cada cuadro.)
+    haz = _capa_vista(vista.size)
+    xs, ys = [p[0] for p in puntos], [p[1] for p in puntos]
+    caja = pygame.Rect(int(min(xs)) - 2, int(min(ys)) - 2, int(max(xs) - min(xs)) + 5,
+                       int(max(ys) - min(ys)) + 5).clip(haz.get_rect())
+    haz.fill((0, 0, 0, 0), caja)
     pygame.draw.polygon(haz, (*azul, 95 if fijado else 60), puntos)
-    screen.blit(haz, vista.topleft)
+    screen.blit(haz, (vista.x + caja.x, vista.y + caja.y), caja)
     figura = _figura_alien("vigia")
     if not fijado:
         k = t / 0.45

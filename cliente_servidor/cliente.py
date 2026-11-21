@@ -157,6 +157,7 @@ class Conexion:
         self.n = 0                    # número de la última intención mandada
         self.enviadas = {}            # n -> cuándo se mandó (para medir la respuesta)
         self.respuesta_ms = None      # intención -> instantánea que la incluye
+        self.acks = []                # [(instantánea, acks de todos)] de las últimas
         self.ultima = None            # (mantener, cuándo) de la última mandada
         self.reconexiones = 0
         self.token = None
@@ -246,6 +247,7 @@ class Conexion:
                 self.sonidos.extend(mensaje.get("snd") or ())
                 del self.sonidos[:-20]
                 self.interpolador.agregar(mensaje.get("c", 0), secciones, ahora)
+                self.acks = self.acks[-3:] + [(secciones, list(ack))]
                 if self.jugador < len(ack) and ack[self.jugador] in self.enviadas:
                     ms = (ahora - self.enviadas.pop(ack[self.jugador])) * 1000
                     previo = self.respuesta_ms
@@ -299,6 +301,15 @@ class Conexion:
             self.situacion = "jugando"
             return True
         return False
+
+    def acks_de(self, secciones):
+        """Las intenciones que el servidor ya había usado en esa instantánea
+        (una por jugador), o None si ya no se sabe."""
+        with self.candado:
+            for estado, acks in reversed(self.acks):
+                if estado is secciones:
+                    return acks
+        return None
 
     def ultimo_estado(self):
         with self.candado:
@@ -624,6 +635,10 @@ class Sesion:
         # apaga y la prende (para comparar); F3 muestra cómo va la red.
         self.prediccion = PREDICCION
         self.predicciones = {}      # número de jugador -> Prediccion
+        # Lo demás que se presiona (minijuegos, el cursor de los menús), sin
+        # esperar la vuelta del servidor: eco.py.
+        from cliente_servidor.eco import Eco
+        self.eco = Eco()
         self._mantener = []         # lo que tiene presionado cada jugador local, este cuadro
         self._t_prediccion = None
         self._ultima_prediccion = None
@@ -637,6 +652,8 @@ class Sesion:
         self._previa = None         # lo último de la espera / carga (para taparlo con el glitch)
         self._entro = False         # ya empezó a dibujar la partida
         self._fin_visto = False     # ya vio el resultado (para el iris / destello)
+        self.iniciales = None       # las del ranking (modo feria, laptop anfitriona)
+        self._iniciales_vistas = False
 
     def conectar(self, pantalla=None):
         for i in range(len(self.esquemas)):
@@ -906,6 +923,11 @@ class Sesion:
         for ev in eventos:
             if ev.type == pygame.QUIT:
                 self.motivo = "salir"
+            elif self._en_resultados():
+                # La pantalla de resultados se maneja como en el modo local
+                # ("Ver logros" / "Volver al menú"). Antes cualquier Enter
+                # sacaba de la partida y los logros no se podían ver.
+                self._evento_resultado(ev)
             elif (ev.type == pygame.KEYDOWN and ev.key in (pygame.K_ESCAPE, pygame.K_RETURN,
                                                             pygame.K_KP_ENTER, pygame.K_SPACE)
                   and self._presentacion_abierta()):
@@ -934,6 +956,11 @@ class Sesion:
         self._mantener = [set(m) for m, _ in entradas]
         for conexion, (mantener, pulsar) in zip(self.conexiones, entradas):
             conexion.mandar(mantener, pulsar, self._extra(conexion, pulsar))
+            if pulsar and conexion.situacion == "jugando" and self.espejo is not None \
+                    and self.espejo.listo and self.espejo.error is None:
+                self.eco.activo = self.prediccion
+                for accion in pulsar:
+                    self.eco.presionar(self.espejo.g, conexion.jugador, accion, conexion.n)
         vivas = [c for c in self.conexiones if c.viva]
         if not vivas:
             c = self.conexiones[0]
@@ -977,7 +1004,7 @@ class Sesion:
             quedan = max(0, int(RECONECTAR_S - (time.time() - desde)))
             self._cartel(pantalla, f"Se cortó la conexión: reconectando... ({quedan} s)  ·  Esc Esc sale")
         if glob.get("resultado") and not saliendo:
-            self._resultado(pantalla, glob["resultado"], eventos)
+            self._resultado(pantalla, glob["resultado"])
         elif time.time() - getattr(self, "_esc", 0) < 2.5:
             self._cartel(pantalla, "Pulsa Esc otra vez para salir de la partida en red")
         self._dibujar_transicion(pantalla)
@@ -1094,6 +1121,7 @@ class Sesion:
                     interpolado = conexion.interpolador.ahora()
                 t0 = time.perf_counter()
                 self.espejo.aplicar(secciones, interpolado)
+                self.eco.reaplicar(self.espejo.g, self.espejo.completos, conexion.acks_de(secciones))
                 self.espejo.controles(getattr(self, "controles", {}))
                 self._predecir(secciones)
                 self.espejo.sonar(conexion.sacar_sonidos())
@@ -1168,7 +1196,12 @@ class Sesion:
             if pred is not None and pred.activa:
                 linea += f"  ·  corrección {pred.ultimo_error:.0f} px ({pred.saltos} saltos)"
             lineas.append(linea)
-        lineas.append(f"[F4] predicción: {'sí' if self.prediccion else 'no'}  ·  "
+        if self.conexiones:
+            it = self.conexiones[0].interpolador
+            secos = 100 * it.secos / max(1, it.dibujados)
+            lineas.append(f"interpolación: {it.retraso * 1000:.0f} ms atrás (se ajusta al wifi)  ·  "
+                          f"sin instantánea {secos:.1f} % de los cuadros")
+        lineas.append(f"[F4] predicción y eco: {'sí' if self.prediccion else 'no'}  ·  "
                       "respuesta = tecla -> servidor -> de vuelta (wifi + servidor)")
         f = fuente_de_tamano(15)
         imgs = [f.render(t, True, (235, 238, 250)) for t in lineas]
@@ -1191,22 +1224,146 @@ class Sesion:
         pygame.draw.rect(pantalla, (240, 200, 90), caja, 2)
         pantalla.blit(imagen, imagen.get_rect(center=caja.center))
 
-    def _resultado(self, pantalla, resultado, eventos):
-        """La pantalla de resultados del modo local (con el espejo); Enter vuelve al menú."""
+    def _resultado(self, pantalla, resultado):
+        """La pantalla de resultados del modo local (con el espejo): el resumen
+        con "Ver logros" y "Volver al menú", y el árbol de logros. Las teclas,
+        `_evento_resultado`."""
         try:
             if self.espejo.error is not None:
                 raise RuntimeError("sin espejo")
             self.espejo.dibujar_resultados(pantalla)
+            self._resultado_ok = True
+            self._dibujar_iniciales(pantalla)
         except Exception:
+            self._resultado_ok = False
             aviso(pantalla, ["¡ESCAPARON!" if resultado == "victoria" else "DERROTA"])
-        self._cartel(pantalla, "Partida en red terminada: Enter para volver al menú")
+            self._cartel(pantalla, "Partida en red terminada: Enter para volver al menú")
+
+    def _dibujar_iniciales(self, pantalla):
+        """Modo feria en red: las iniciales del ranking (juego/ranking.py), como
+        en el modo local, pero solo en la laptop anfitriona (la del servidor):
+        su ranking es el de la feria. Se arman con el espejo ya al día (el
+        puntaje sale del equipo, el resultado y el reloj que llegaron)."""
         from screens import resultados as pantalla_resultados
-        for ev in eventos:
-            pulsa = ((ev.type == pygame.KEYDOWN and ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER))
-                     or ev.type in (pygame.JOYBUTTONDOWN, getattr(pygame, "CONTROLLERBUTTONDOWN", -1)))
-            # La primera pulsación salta la escena del final (screens/final.py).
-            if pulsa and not pantalla_resultados.saltar_intro():
+        g = self.espejo.g
+        if self.iniciales is None and not self._iniciales_vistas:
+            self._iniciales_vistas = True
+            if self.anfitrion and getattr(g, "modo_feria", False) and g.mision is not None \
+                    and getattr(g.mision, "resultado", None) is not None:
+                from juego import ranking
+                self.iniciales = ranking.Iniciales(g)
+        if self.iniciales is not None and not pantalla_resultados.en_intro() \
+                and g.resultados_vista == "resumen":
+            from screens.ranking import render_iniciales
+            render_iniciales(pantalla, self.iniciales)
+
+    def _en_resultados(self):
+        """¿Se está viendo la pantalla de resultados (ya entró)?"""
+        if not self._fin_visto or self.motivo:
+            return False
+        t = self.transicion
+        return t is None or t.is_idle() or t._phase != "fade_out"
+
+    # Lo que hace cada botón del mando en los resultados (como en el modo local:
+    # Game._tecla_mando los vuelve flechas, Enter y Esc).
+    TECLA_MANDO = {"arriba": pygame.K_UP, "abajo": pygame.K_DOWN, "izquierda": pygame.K_LEFT,
+                   "derecha": pygame.K_RIGHT, "interactuar": pygame.K_RETURN,
+                   "volver": pygame.K_ESCAPE, "pausa": pygame.K_RETURN}
+
+    def _evento_resultado(self, ev):
+        from screens import logros as dibujo_logros
+        g = self.espejo.g if self.espejo is not None else None
+        if g is None or not getattr(self, "_resultado_ok", True):
+            # (sin espejo: el aviso de texto; Enter sale)
+            if ev.type == pygame.KEYDOWN and ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_ESCAPE):
                 self.motivo = "terminada"
+            return
+        viendo_logros = g.resultados_vista == "logros"
+        if ev.type == pygame.KEYDOWN:
+            self._tecla_resultado(ev.key, getattr(ev, "unicode", "") or "")
+        elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+            self._click_resultado(ev.pos)
+        elif ev.type == pygame.MOUSEMOTION and viendo_logros:
+            for nodo, rect in g.resultados_rects_logros.items():
+                if rect.collidepoint(ev.pos):
+                    g.resultados_nodo = nodo
+        elif ev.type == getattr(pygame, "MOUSEWHEEL", -1) and viendo_logros:
+            dibujo_logros.rueda(ev.y)
+        elif ev.type in EVENTOS_MANDO and self.entrada is not None:
+            for _, accion in self.entrada.mandos.evento(ev):
+                tecla = self.TECLA_MANDO.get(accion)
+                if tecla is not None:
+                    self._tecla_resultado(tecla)
+
+    def _tecla_resultado(self, key, texto=""):
+        """Lo mismo que Game._tecla_resultados del modo local, salvo "Volver
+        al menú", que aquí termina la sesión."""
+        from screens import resultados as pantalla_resultados
+        from juego.pausa import mover_en_logros
+        g = self.espejo.g
+        if g.resultados_vista == "resumen" and pantalla_resultados.saltar_intro():
+            return
+        if self.iniciales is not None and not self.iniciales.hecho and g.resultados_vista == "resumen":
+            from juego.app import TECLAS_INICIALES
+            self.iniciales.teclear(key, texto, g, TECLAS_INICIALES)
+            return
+        if g.resultados_vista == "logros":
+            if key in (pygame.K_ESCAPE, pygame.K_BACKSPACE, pygame.K_RETURN, pygame.K_KP_ENTER):
+                g.resultados_vista = "resumen"
+            else:
+                g.resultados_nodo = mover_en_logros(g.logros.arbol, g.resultados_nodo, key)
+            return
+        if g.resultados_vista == "album":
+            from screens import album
+            if key in (pygame.K_ESCAPE, pygame.K_BACKSPACE, pygame.K_RETURN, pygame.K_KP_ENTER):
+                g.resultados_vista = "resumen"
+            else:
+                g.album_sel = album.mover(getattr(g, "album_sel", 0), key, len(album.fotos_del_equipo(g.nexus)),
+                                          album.columnas_para(g.screen.get_size()))
+            return
+        opciones = pantalla_resultados.opciones_resultados(g.logros, g.nexus)
+        if key in (pygame.K_LEFT, pygame.K_UP, pygame.K_a, pygame.K_w):
+            g.resultados_sel = (g.resultados_sel - 1) % len(opciones)
+        elif key in (pygame.K_RIGHT, pygame.K_DOWN, pygame.K_d, pygame.K_s):
+            g.resultados_sel = (g.resultados_sel + 1) % len(opciones)
+        elif key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+            self._activar_resultado(opciones[g.resultados_sel % len(opciones)][1])
+        elif key == pygame.K_ESCAPE:
+            self._activar_resultado("menu")
+
+    def _activar_resultado(self, accion):
+        g = self.espejo.g
+        if accion == "logros" and g.logros is not None:
+            g.resultados_vista = "logros"
+            g.resultados_nodo = g.logros.arbol.raiz
+        elif accion == "album":
+            g.resultados_vista = "album"
+            g.album_sel = 0
+        elif accion == "menu":
+            self.motivo = "terminada"
+
+    def _click_resultado(self, pos):
+        from screens import resultados as pantalla_resultados
+        g = self.espejo.g
+        if g.resultados_vista == "resumen" and pantalla_resultados.saltar_intro():
+            return
+        if self.iniciales is not None and not self.iniciales.hecho:
+            return          # (primero las iniciales: con el teclado o el mando)
+        if g.resultados_vista == "logros":
+            for nodo, rect in g.resultados_rects_logros.items():
+                if rect.collidepoint(pos):
+                    g.resultados_nodo = nodo
+            return
+        if g.resultados_vista == "album":
+            for i, rect in getattr(g, "album_rects", []):
+                if rect.collidepoint(pos):
+                    g.album_sel = i
+            return
+        for i, rect in enumerate(g.resultados_rects):
+            if rect.collidepoint(pos):
+                g.resultados_sel = i
+                self._activar_resultado(pantalla_resultados.opciones_resultados(g.logros, g.nexus)[i][1])
+                return
 
     def jugar(self, pantalla):
         reloj = pygame.time.Clock()

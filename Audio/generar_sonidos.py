@@ -48,6 +48,9 @@ con el mismo nombre (.ogg, .wav o .mp3) y el juego lo usa (audio_manager.py).
                      más seguidos y un acorde eléctrico
     captura_sombra   te alcanzó la Sombra: un susurro que crece, silencio y un
                      chasquido de dientes con un golpe grave
+    foto        obturador de cámara: el flash que carga, clic-clac y el
+                motor que pasa el rollo (al tomar la foto de un rumor o de lo
+                que arreglaste; generar_foto)
 """
 
 import math
@@ -627,6 +630,67 @@ def generar_extras():
     guardar("musica_tension", tension, 0.6)
 
 
+def generar_foto():
+    """El obturador (redes/nexus.py, al tomar la foto). Con su propio azar,
+    para no cambiar los otros sonidos.
+
+        python -c "import sys; sys.path.insert(0, 'Audio'); import generar_sonidos as g; g.generar_foto()"
+    """
+    azar = random.Random(91)
+    F = FRECUENCIA
+    dos_pi = 2 * math.pi
+
+    def pasa_bajos(muestras, corte):
+        a = 1 - math.exp(-dos_pi * corte / F)
+        salida, y = [], 0.0
+        for v in muestras:
+            y += a * (v - y)
+            salida.append(y)
+        return salida
+
+    def banda(muestras, bajo, alto):
+        altos = pasa_bajos(muestras, alto)
+        return [v - b for v, b in zip(altos, pasa_bajos(altos, bajo))]
+
+    def clic(dur, bajo, alto, caida, f_cuerpo, vol_cuerpo):
+        n = int(dur * F)
+        ruido_ = banda([azar.uniform(-1, 1) for _ in range(n)], bajo, alto)
+        return [ruido_[i] * math.exp(-i / F / caida) * 2.2
+                + math.sin(dos_pi * f_cuerpo * i / F) * math.exp(-i / F / (caida * 1.6)) * vol_cuerpo
+                for i in range(n)]
+
+    pista = [0.0] * int(0.62 * F)
+
+    def poner(muestras, en_s, vol=1.0):
+        inicio = int(en_s * F)
+        for i, v in enumerate(muestras):
+            if inicio + i < len(pista):
+                pista[inicio + i] += v * vol
+
+    # El flash que carga: un silbido agudo que sube, bajito.
+    n = int(0.11 * F)
+    fase = 0.0
+    silbido = []
+    for i in range(n):
+        fase += dos_pi * (2600 + 2600 * i / n) / F
+        silbido.append(math.sin(fase) * min(1.0, i / (0.03 * F)) * 0.12)
+    poner(silbido, 0.0)
+    # Clic (se abre) y clac (se cierra), más grave.
+    poner(clic(0.03, 1800, 7000, 0.004, 1900, 0.35), 0.11, 1.0)
+    poner(clic(0.05, 600, 3200, 0.009, 210, 0.6), 0.175, 0.9)
+    # El motor que pasa el rollo: un zumbido que sube y se corta.
+    n = int(0.2 * F)
+    motor, fase = [], 0.0
+    for i in range(n):
+        fase += dos_pi * (95 + 40 * i / n) / F
+        v = 2 * ((fase / dos_pi) % 1) - 1
+        motor.append(v * min(1.0, i / (0.02 * F), (n - i) / (0.03 * F)) * 0.25)
+    poner(pasa_bajos(motor, 1400), 0.27)
+    poner(clic(0.025, 900, 4000, 0.005, 600, 0.2), 0.47, 0.5)
+    guardar("foto", pista, 0.75)
+
+
 if __name__ == "__main__":
     generar()
     generar_extras()
+    generar_foto()

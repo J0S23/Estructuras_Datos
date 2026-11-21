@@ -36,13 +36,30 @@ def caja(screen, rect, color=(120, 132, 190), alfa=215, radio=8):
     screen.blit(img, rect.topleft)
 
 
+_columnas = {}
+
+
+def _columna(h, alfa):
+    clave = (h, alfa)
+    col = _columnas.get(clave)
+    if col is None:
+        if len(_columnas) > 120:
+            _columnas.clear()
+        col = pygame.Surface((1, h), pygame.SRCALPHA)
+        arriba, abajo = (26, 26, 52), (12, 12, 26)
+        for y in range(h):
+            col.set_at((0, y), (*_mezclar(arriba, abajo, y / max(1, h - 1)), alfa))
+        _columnas[clave] = col
+    return col
+
+
 def _armar_caja(tam, color, alfa, radio):
     w, h = tam
-    img = pygame.Surface((max(1, w), max(1, h)), pygame.SRCALPHA)
-    arriba, abajo = (26, 26, 52), (12, 12, 26)
-    for y in range(h):
-        c = _mezclar(arriba, abajo, y / max(1, h - 1))
-        pygame.draw.line(img, (*c, alfa), (0, y), (w, y))
+    # El degradado se dibuja en una columna de 1 px (guardada por alto y
+    # alfa) y se estira a lo ancho: igual píxel a píxel que una línea por
+    # renglón, pero cada recuadro nuevo (un mensaje de otro largo) ya no
+    # cuesta ~1-3 ms en ese cuadro.
+    img = pygame.transform.scale(_columna(max(1, h), alfa), (max(1, w), max(1, h)))
     mascara = pygame.Surface((max(1, w), max(1, h)), pygame.SRCALPHA)
     pygame.draw.rect(mascara, (255, 255, 255, 255), mascara.get_rect(), border_radius=radio)
     img.blit(mascara, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
