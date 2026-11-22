@@ -103,9 +103,9 @@ Para la feria: **Menu > Opciones > Modo feria** (queda guardado en
 `Guardado/opciones.json`). Con el modo feria, la partida (en la dificultad que
 escojan) dura ~7 minutos (`juego/feria.py`, numeros en `data/feria.py`): un solo
 codigo (la puerta de la salida), las consolas mas cercanas caminando (una con 2
-jugadores, dos con 3 y tres con 4), dos piezas,
-con el Guardia, la planta y la puerta para dos (como siempre), sin el caso del
-Cambiaformas, el primer rumor a los 20 s, la confianza sube mas rapido (la verdad corre
+jugadores, dos con 3 y tres con 4), las tres piezas,
+el Guardia, la planta, la puerta para dos y el caso del Cambiaformas (como
+siempre; el caso no hace falta para ganar), el primer rumor a los 20 s, la confianza sube mas rapido (la verdad corre
 tres veces mas rapido y convence a mas gente), los planos piden el 80 % (hacen
 falta unos 3 desmentidos), las cuentas falsas no ganan
 seguidores y un **reloj** de 12 minutos en el HUD (avisa a los 2 minutos y a 1, y al

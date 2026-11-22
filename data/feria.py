@@ -13,13 +13,16 @@ FERIA = {
     # más cercanas caminando; Diego, nov 21: "con 2 jugadores una consola, con
     # 3 dos y con 4 tres"; antes una siempre).
     "consolas": {2: 1, 3: 2, 4: 3},
-    "piezas": 2,                    # las que pide la cápsula (si no, 3)
+    "piezas": 3,                    # las que pide la cápsula (nov 22, Diego: de 2 a 3, como el juego normal)
     # El Guardia de la Bahía con la planta y su fruta, y las puertas para dos
     # (cada uno en un panel): van, como en el juego normal (Diego, nov 21: "que
     # vuelvan"; hasta entonces se quitaban). True los quita.
     "sin_guardia": False,
     "sin_puertas_dobles": False,
-    "sin_caso": True,               # sin las pruebas del caso del Cambiaformas en el mapa
+    # El caso del Cambiaformas (las 3 pruebas, subirlas y acusar): Diego, nov
+    # 22: "que vuelva todo el caso, igual no es necesario completarlo para
+    # ganar, pero ahí está" (hasta entonces se quitaba; True lo quita).
+    "sin_caso": False,
     "primer_rumor_s": 20,           # el primer rumor de NEXUS (si no, data/nexus.PRIMER_RUMOR_S)
     # Los planos: NEXUS es el centro del juego. Con un desmentido la verdad
     # llegaba a casi todos (~90 %) y bastaban 1 o 2 para los planos, así que
