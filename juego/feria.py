@@ -12,9 +12,10 @@ dificultad que se escoja (los aliens, las vidas y la fuga son los de ella):
 - `recortar_objetos`: antes de armar nada, se quita del mapa lo que no va:
   las otras puertas con código (solo queda la de la salida), las consolas
   de más (se dejan las más cercanas caminando: 1 con 2 jugadores, 2 con 3, 3
-  con 4; `recortar_consolas`, después de sellar las salas), el Guardia y la planta, las
-  puertas para dos (quedan abiertas) y las pruebas del caso.
-- `aplicar`: con la partida ya armada, la cápsula pide menos piezas, el
+  con 4; `recortar_consolas`, después de sellar las salas). Lo demás (el
+  Guardia y la planta, las puertas para dos, las pruebas del caso) se puede
+  quitar con `FERIA`, pero desde nov 21-22 va como en el juego normal.
+- `aplicar`: con la partida ya armada, la cápsula pide `FERIA["piezas"]`, el
   primer rumor de NEXUS sale pronto (los planos piden la confianza de la
   dificultad: NEXUS es el centro del juego), las
   cuentas falsas no ganan seguidores (`AJUSTES_FERIA`) y arranca el reloj.

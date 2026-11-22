@@ -3,9 +3,9 @@
     python pruebas/prueba_feria.py
 
 1. Modo feria (Menú > Opciones; juego/feria.py), en la dificultad que se
-   escoja: un solo código, una consola (la más cercana CAMINANDO), dos piezas,
-   con el Guardia, la planta y las puertas para dos (como en el juego normal),
-   sin las pruebas del caso,
+   escoja: un solo código, una consola (la más cercana CAMINANDO), tres
+   piezas, con el Guardia, la planta, las puertas para dos y el caso del
+   Cambiaformas (como en el juego normal),
    el primer rumor pronto, los planos con más confianza (80 %), la
    confianza que sube más rápido (la verdad avanza cada 0.6 s) y un reloj (12 min) en
    el HUD; avisa a los 2 minutos y a 1, y al llegar a 0 termina ("Se acabó el
@@ -99,12 +99,18 @@ for roles, esperadas in ((("Tecnomante", "Forjador", "Biomante"), 2),
         assert len(gx.mision.consolas) == esperadas, (len(roles), semilla, len(gx.mision.consolas))
         sellos = getattr(gx.mundo.sellado, "rects", ())
         assert not any(r.colliderect(c["base"]) for r in sellos for c in gx.mision.consolas)
-assert m.piezas_necesarias == FERIA["piezas"] == 2 and normal.mision.piezas_necesarias == 3
+assert m.piezas_necesarias == FERIA["piezas"] == 3 == normal.mision.piezas_necesarias
 # El Guardia, la planta con su fruta y las puertas para dos van como en el juego normal.
 assert len(g.puertas_dobles) == len(normal.puertas_dobles) > 0, "faltan las puertas para dos en la Feria"
 assert g.guardia_planta.guardia is not None and g.guardia_planta.planta is not None, \
     "falta el Guardia o la planta en la Feria"
-assert not g.infiltrado.pruebas and normal.infiltrado.pruebas
+# El caso del Cambiaformas también (nov 22): las pruebas en el mapa y en la Terminal NEXUS.
+assert g.infiltrado.pruebas and normal.infiltrado.pruebas, "faltan las pruebas del caso en la Feria"
+from redes import celular as _cel_feria
+_j = g.jugadores[0]
+_panel = _cel_feria.panel_ayuda(g, _j, None) if hasattr(_cel_feria, "panel_ayuda") else None
+if _panel is not None:
+    assert any(a == ("infiltrado", None) for a in _panel.get("acciones", [])), "la Terminal NEXUS no muestra el caso"
 assert g.nexus.reloj_rumor_ms == FERIA["primer_rumor_s"] * 1000
 # Los planos piden más confianza (al menos el 80 %), la verdad convence menos que
 # sin dificultad y corre más rápido que en el juego normal.
@@ -141,7 +147,7 @@ m.abrir_puerta(i=0)
 assert m.fase == "sabotaje"
 g._actualizar_partida(16)
 print(f"1. modo feria (Menú > Opciones): 1 código, 1 consola con 2 jugadores, 2 con 3 y 3 con 4 (la de 2, a {largos[0][0]:.0f} px caminando; la más "
-      f"cercana en línea recta queda más lejos), 2 piezas, con Guardia/planta/puerta para dos, sin caso, rumor a los "
+      f"cercana en línea recta queda más lejos), 3 piezas, con Guardia/planta/puerta para dos y el caso, rumor a los "
       f"{FERIA['primer_rumor_s']} s, planos y vidas de la dificultad: OK")
 
 # El reloj: en el HUD, los avisos y el final.
@@ -408,7 +414,7 @@ assert len(gs.mision.puertas) == len(gc.mision.puertas) == 1
 assert gs.mision.consolas[0]["base"].center == gc.mision.consolas[0]["base"].center
 assert len(gc.puertas_dobles) == len(gs.puertas_dobles) > 0
 assert gc.guardia_planta.guardia is not None and gs.guardia_planta.guardia is not None
-assert gs.mision.piezas_necesarias == 2
+assert gs.mision.piezas_necesarias == 3
 gs.saltar_tutorial()
 for _ in range(30):
     gs._actualizar_partida(16)
