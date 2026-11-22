@@ -783,7 +783,8 @@ def _dialogo(screen, jugador, f, centro_x, arriba, disponible):
     # Entra deslizándose y la foto "salta" (solo con los efectos visuales).
     from entidades.jugador import DURACION_MENSAJE_MS
     vidrio = _vidrio()
-    desde = DURACION_MENSAJE_MS - (getattr(jugador, "mensaje_ms", 0) or 0)
+    total = getattr(jugador, "mensaje_total_ms", None) or DURACION_MENSAJE_MS
+    desde = total - (getattr(jugador, "mensaje_ms", 0) or 0)
     k = 1.0 if vidrio is None else max(0.0, min(1.0, desde / 180))
     caja.y -= int(10 * (1 - k) ** 2)
     if vidrio is not None:

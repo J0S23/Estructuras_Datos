@@ -15,6 +15,14 @@ de fusibles con los breakers botados se arregla con las palancas, etc.
 El minijuego va en el panel del jugador ({"tipo": "tarea", "mini": ...}; no
 "juego": esa clave no viaja por la red, cliente_servidor/estado.SALTAR):
 mientras lo juega no camina, y si un alien llega, lo atrapa.
+
+Un minijuego que se deja a medias (se cierra, lo atrapan, se va a hacer otra
+cosa) queda guardado por su tarea (`Game.minis_guardados`, {(clave, fácil):
+minijuego}; Diego, nov 21: "cuando me salgo y vuelvo a entrar todo cambia y mi
+progreso se borra"): al volver a la misma consola, caja, cápsula, planta,
+noticia o candado sigue igual, con lo que ya llevaba (también si vuelve otro
+jugador con la misma dificultad del minijuego). Si alguien lo tiene abierto,
+el otro no puede entrar ("Alguien ya está con esto"). Al ganarlo se borra.
 """
 
 from misiones import minijuegos
@@ -36,10 +44,40 @@ def de(jugador):
     return panel.get("mini") if panel.get("tipo") == "tarea" else None
 
 
-def empezar(juego, jugador, tipo, al_ganar, facil=False, titulo=None):
-    juego_mini = minijuegos.crear(tipo, facil, titulo=titulo)
+def _guardados(juego):
+    guardados = getattr(juego, "minis_guardados", None)
+    if guardados is None:
+        guardados = juego.minis_guardados = {}
+    return guardados
+
+
+def _en_uso(juego, mini, jugador):
+    """¿Otro jugador tiene abierto este mismo minijuego?"""
+    return any(otro is not jugador and de(otro) is mini for otro in getattr(juego, "jugadores", ()))
+
+
+def empezar(juego, jugador, tipo, al_ganar, facil=False, titulo=None, clave=None):
+    """Abre el minijuego de la tarea `clave` (sigue el que había a medias, si
+    lo hay). Devuelve el minijuego, o None si otro lo está jugando."""
+    guardados = _guardados(juego)
+    juego_mini, nuevo = None, True
+    if clave is not None:
+        juego_mini = guardados.get((clave, bool(facil)))
+        if juego_mini is not None and (juego_mini.ganado or type(juego_mini).__name__.lower() != tipo):
+            guardados.pop((clave, bool(facil)), None)
+            juego_mini = None
+        # Si otro está con esta misma tarea (aunque con la otra dificultad), no.
+        if any(c == clave and _en_uso(juego, m, jugador) for (c, _), m in guardados.items()):
+            jugador.avisar("Alguien ya está con esto: hay que esperar a que termine.", COLOR_MAL)
+            return None
+        nuevo = juego_mini is None
+    if juego_mini is None:
+        juego_mini = minijuegos.crear(tipo, facil, titulo=titulo)
+        if clave is not None:
+            guardados[(clave, bool(facil))] = juego_mini
     jugador.abrir_panel({"tipo": "tarea", "mini": juego_mini, "al_ganar": al_ganar})
     juego.sonar("menu_ok", 0.5)
+    juego_mini.retomado = not nuevo
     return juego_mini
 
 
@@ -54,7 +92,8 @@ def intentar(juego, jugador):
     eventos = getattr(juego, "eventos", None)
     if eventos is not None and eventos.caja_cerca(jugador) is not None:
         empezar(juego, jugador, "interruptores", lambda: eventos.restaurar_luz(jugador),
-                facil=rol == "Tecnomante", titulo="Caja de fusibles: sube las palancas")
+                facil=rol == "Tecnomante", titulo="Caja de fusibles: sube las palancas",
+                clave=("fusibles", id(eventos.caja)))
         return True
 
     mision = getattr(juego, "mision", None)
@@ -65,7 +104,8 @@ def intentar(juego, jugador):
             return True
         if consola is not None:
             empezar(juego, jugador, "senal", lambda: _apagar(mision, consola, jugador),
-                    facil=rol == "Tecnomante", titulo="Consola: sintoniza la señal para apagarla")
+                    facil=rol == "Tecnomante", titulo="Consola: sintoniza la señal para apagarla",
+                    clave=("consola", id(consola)))
             return True
         lista, aviso = mision.capsula_para(jugador)
         if aviso:
@@ -73,7 +113,8 @@ def intentar(juego, jugador):
             return True
         if lista:
             empezar(juego, jugador, "cables", lambda: mision.terminar_reparacion(jugador),
-                    facil=rol == "Forjador", titulo="Cápsula: conecta los cables")
+                    facil=rol == "Forjador", titulo="Cápsula: conecta los cables",
+                    clave=("capsula",))
             return True
 
     planta = getattr(juego, "guardia_planta", None)
@@ -81,11 +122,17 @@ def intentar(juego, jugador):
         from misiones.guardia import es_biomante
         biomante = es_biomante(jugador)
         mini = empezar(juego, jugador, "abono", lambda: _crecer(planta, jugador, biomante), facil=biomante,
-                       titulo="Haz crecer la planta" if biomante else "Echa el abono en la maceta")
+                       titulo="Haz crecer la planta" if biomante else "Echa el abono en la maceta",
+                       clave=("planta",))
+        if mini is None:
+            return True
         # La planta de verdad crece con cada acierto (la ven todos) y, si lo
-        # deja a medias, el minijuego sigue desde donde iba.
+        # deja a medias, el minijuego sigue desde donde iba (el mismo, si lo
+        # dejó guardado; si no, uno nuevo desde el progreso de la planta: p.
+        # ej. lo empezó otro rol con la otra dificultad).
         p = planta.planta
-        mini.empezar_en(p["progreso"])
+        if not getattr(mini, "retomado", False):
+            mini.empezar_en(p["progreso"])
         mini.al_acertar = lambda avance: p.__setitem__("progreso", max(p["progreso"], min(0.99, avance)))
         return True
 
@@ -96,14 +143,14 @@ def intentar(juego, jugador):
         if pub is not None:
             datos = pub.rumor
             empezar(juego, jugador, datos["arreglo"], lambda: red.arreglar(jugador, pub),
-                    titulo=datos.get("titulo_arreglo"))
+                    titulo=datos.get("titulo_arreglo"), clave=("noticia", pub.id))
             return True
 
     # Un casillero con candado (aunque no haya leído la noticia).
     for escondite in getattr(juego, "escondites", ()):
         if escondite.get("candado") and escondite["rect"].colliderect(jugador.hitbox):
             empezar(juego, jugador, "ganzua", lambda e=escondite: _abrir_candado(juego, jugador, e),
-                    titulo="El casillero tiene candado: fuérzalo")
+                    titulo="El casillero tiene candado: fuérzalo", clave=("candado", id(escondite)))
             return True
     return False
 
@@ -152,6 +199,9 @@ def actualizar(juego, dt):
         if mini.listo:
             al_ganar = jugador.panel.get("al_ganar")
             jugador.cerrar_panel()
+            guardados = _guardados(juego)
+            for clave in [c for c, m in guardados.items() if m is mini]:
+                del guardados[clave]
             if al_ganar is not None:
                 al_ganar()
 

@@ -94,12 +94,21 @@ def ruta(dueño, destino, color, tiempo_ms):
     puntos = r["puntos"]
     viejo = r["desde"] is None or tiempo_ms - r["ms"] > RECALCULAR_MS or tiempo_ms < r["ms"] \
         or (puntos and _distancia_a_tramo(pie, r["previo"], puntos[0]) > RECALCULAR_PX) \
-        or (not puntos and math.dist(r["desde"], pie) > RECALCULAR_PX)
+        or (not puntos and math.dist(r["desde"], pie) > RECALCULAR_PX) \
+        or (puntos and not _se_ve(pie, puntos[0]))
     if viejo:
         nuevo = nav.camino(pie, destino, parcial=True, sellos=False, por_partes=True,
                            quien=("guia",) + clave, bolsa="guia")
         if nuevo is not None:
-            r.update(desde=pie, previo=pie, ms=tiempo_ms, puntos=nuevo)
+            # La búsqueda va de a pedazos y sigue desde donde EMPEZÓ aunque
+            # el jugador ya caminó: el camino puede empezar atrás (Diego, nov
+            # 21: el camino subía, daba la vuelta y bajaba por el otro lado).
+            # Se empalma desde el punto más adelantado al que llega derecho.
+            empalmado = _empalmar(nav, pie, nuevo)
+            if empalmado is None:
+                r.update(desde=None)            # se busca de nuevo desde aquí
+            else:
+                r.update(desde=pie, previo=pie, ms=tiempo_ms, puntos=empalmado)
         elif not nav.ocupada:
             r.update(desde=pie, previo=pie, ms=tiempo_ms, puntos=None)    # no se llega
         # (si sigue buscando, mientras tanto el camino de antes)
@@ -110,10 +119,48 @@ def ruta(dueño, destino, color, tiempo_ms):
     # se ve de frente el siguiente.
     while len(puntos) > 1 and math.dist(puntos[0], pie) < 20:
         r["previo"] = puntos.pop(0)
-    if len(puntos) > 1 and nav.libre_entre(pie, puntos[1]):    # (una por cuadro)
+    if len(puntos) > 1 and _derecho(nav, pie, puntos[1]):    # (una por cuadro)
         puntos.pop(0)
         r["previo"] = pie
     return [pie] + puntos
+
+
+def _se_ve(a, b):
+    """¿Hay línea recta de `a` a `b` sin paredes en medio? (una línea fina:
+    para saber si el camino que se dibuja empieza donde se puede ir derecho)."""
+    mundo = _mundo[0]
+    paredes = getattr(mundo, "paredes", None)
+    if not paredes:
+        return True
+    caja = pygame.Rect(min(a[0], b[0]) - 1, min(a[1], b[1]) - 1, abs(b[0] - a[0]) + 2, abs(b[1] - a[1]) + 2)
+    return not any(paredes[i].clipline(a, b) for i in caja.collidelistall(paredes))
+
+
+def _derecho(nav, a, b):
+    """¿Se puede ir derecho de `a` a `b`? Como `nav.libre_entre`, pero si el
+    jugador está pegado a algo (un panel, la pared: el rect de la guía, más
+    alto que el suyo, ya choca donde está) basta con que se vea y que desde
+    unos pasos más allá sí quepa. Si no, pegado a un panel nunca se recortaba
+    el camino."""
+    if nav.libre_entre(a, b):
+        return True
+    d = math.dist(a, b)
+    if d <= 30 or not _se_ve(a, b):
+        return False
+    k = 30 / d
+    return nav.libre_entre((a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k), b)
+
+
+def _empalmar(nav, pie, puntos):
+    """El camino desde donde está el jugador: si `puntos` empieza lejos (la
+    búsqueda empezó antes de que caminara), desde el punto más adelantado al
+    que puede ir derecho. None si no llega derecho a ninguno."""
+    if not puntos or math.dist(pie, puntos[0]) <= RECALCULAR_PX:
+        return puntos
+    for i in range(len(puntos) - 1, -1, -1):
+        if math.dist(pie, puntos[i]) < 900 and _derecho(nav, pie, puntos[i]):
+            return puntos[i:]
+    return None
 
 
 def punto_a(camino, distancia):
