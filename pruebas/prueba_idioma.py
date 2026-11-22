@@ -121,6 +121,17 @@ g._manejar_tecla(pygame.K_RETURN); avanzar(); foto("roles")
 g.seleccion_roles[0]["cursor"] = 0; g._manejar_tecla(pygame.K_e)
 g.seleccion_roles[1]["cursor"] = 1; g._manejar_tecla(pygame.K_RETURN); avanzar()
 foto("tutorial")
+# Cada paso del tutorial (las tarjetas, el casillero y la nota marcados, "¡Bien!", "¡Listo!").
+from juego.tutorial import PASOS as _PASOS
+_j1 = g.jugadores[0]
+_j1.personaje.moviendose = True
+g.tutorial.actualizar(16)                       # (lo hizo: sale "¡Bien!")
+for _k in range(len(_PASOS)):
+    g._dibujar()
+    g.tutorial.siguiente(g.jugadores[1])
+    if _k < len(_PASOS) - 1:
+        g.tutorial.siguiente(_j1)
+g._dibujar()
 g.saltar_tutorial()
 g.presentacion = None
 assert g.current_screen == "partida"

@@ -131,7 +131,9 @@ try:
     pantallas[a2] = pygame.Surface((960, 540))
     assert correr([a2, b], 6, hasta=lambda: not j1_en_b.desconectado and j1_en_b.puede_moverse), \
         "al volver se puede mover otra vez"
-    correr([a2, b], 0.5)
+    # (si todavía se lee el "¡Hay que recogerlo!", el aviso sale después:
+    # entidades/jugador.INSTRUCCION_PROTEGIDA_MS)
+    correr([a2, b], 7, hasta=lambda: "volvió" in gb.jugadores[1].mensaje)
     assert "volvió" in gb.jugadores[1].mensaje, gb.jugadores[1].mensaje
     assert len(decodificadores()) > antes, "lo que soltó sigue en el piso"
     otra[:] = ["abajo"]

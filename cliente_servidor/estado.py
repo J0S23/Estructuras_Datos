@@ -22,7 +22,8 @@ NADA = object()          # "esto no se manda" (un objeto, una función...)
 # Atributos que nunca se mandan: son de cada lado (las teclas de este puesto,
 # el spawn) o son referencias a otros objetos grandes.
 SALTAR = {"juego", "mundo", "equipo", "arbol", "personaje", "linterna", "teclas",
-          "controles", "animaciones", "rng", "aleatorio", "ruta_config"}
+          "controles", "animaciones", "rng", "aleatorio", "ruta_config",
+          "mensajes_pendientes"}      # (los avisos que esperan: solo del servidor)
 
 
 def _es_rect(valor):

@@ -15,6 +15,9 @@ recta (screens/flechas.py).
    forma de llegar, no sale.
 6. De varias cosas iguales (consolas, terminales...) escoge la más cercana
    CAMINANDO, no en línea recta.
+7. Si el jugador camina mientras el camino se busca (va de a pedazos), el
+   camino que sale empieza donde está AHORA (Diego, nov 21: el camino subía,
+   daba la vuelta y bajaba por el otro lado: era el de donde estaba antes).
 """
 
 import math
@@ -230,4 +233,54 @@ for _ in range(120):
     elegida = m._elegir(j1, cosas, lambda x: x["p"])
 assert elegida["p"] == c, "escoge la que queda más cerca caminando"
 print(f"6. en línea recta ganaba {b}, caminando gana {c}: OK")
+# -- 7. Camina mientras se busca: el camino sale desde donde está ahora ---------------------------
+# La búsqueda va de a pedazos y sigue desde donde EMPEZÓ: cuando termina, el
+# jugador ya caminó (en el PC de Diego, ~3 veces más lento, son más cuadros).
+# Se simula: el A* devuelve el camino desde A (donde estaba al empezar a
+# buscar) y el jugador ya está en B, a unos pasos; a veces pegado a algo.
+rng = random.Random(4)
+probados = 0
+camino_real = nav.camino
+for _ in range(4000):
+    if probados >= 25:
+        break
+    b = rng.choice(libres)
+    b = (b[0] + 17 + rng.randint(-8, 8), b[1] + 10 + rng.randint(-8, 8))
+    hb = pygame.Rect(0, 0, 48, 19)
+    hb.center = b
+    if mundo.colisiona(hb):
+        continue
+    cerca = [c for c in libres if 250 < math.dist((c[0] + 17, c[1] + 10), b) < 500]
+    lejos = [c for c in libres if math.dist((c[0] + 17, c[1] + 10), b) > 1500]
+    if not cerca or not lejos:
+        continue
+    a = rng.choice(cerca)
+    a = (a[0] + 17, a[1] + 10)
+    destino = rng.choice(lejos)
+    destino = (destino[0] + 17, destino[1] + 10)
+    if not nav.conectados(a, b, sellos=False):
+        continue
+    desde_a = camino_real(a, destino, sellos=False, parcial=True)
+    desde_b = camino_real(b, destino, sellos=False, parcial=True)
+    if not desde_a or not desde_b or math.dist(desde_a[-1], destino) > 40:
+        continue
+    flechas._rutas.clear()
+    j1.hitbox.center = b
+    flechas.empezar(mundo)
+    nav.camino = lambda *x, _c=list(desde_a), **k: list(_c)     # "terminó la búsqueda empezada en A"
+    try:
+        r = None
+        for t in range(0, 6 * 16, 16):                 # (unos cuadros quieto, como en la captura)
+            r = flechas.ruta(j1, destino, (90, 160, 255), t)
+    finally:
+        nav.camino = camino_real
+    if r is None:
+        continue
+    probados += 1
+    largo = sum(math.dist(p, q) for p, q in zip(r, r[1:]))
+    largo_b = sum(math.dist(p, q) for p, q in zip([b] + desde_b, desde_b))
+    assert largo <= largo_b * 1.1 + 150, \
+        f"el camino vuelve a donde estaba: {round(largo)} contra {round(largo_b)} desde aquí ({a} -> {b}: {r[:3]})"
+assert probados >= 15, probados
+print(f"7. el camino de una búsqueda que empezó antes de caminar sale desde donde está ({probados} casos): OK")
 print("\nTODO OK")

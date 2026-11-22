@@ -452,9 +452,14 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         flechas.empezar(extras.get("mundo"))
         dibujar_flecha_caja(screen, vista, camara, dueño, extras.get("eventos"), tiempo_ms)
         dibujo_celular.dibujar_lugar(screen, vista, camara, dueño, extras.get("nexus"), tiempo_ms)
-        mision_dibujo.dibujar_flecha_objetivo(screen, vista, camara, dueño, extras.get("mision"),
-                                              extras.get("dificultad"), extras.get("nexus"),
-                                              tiempo_ms)
+        # En el tutorial, el casillero o la nota del paso (screens/tutorial.py)
+        # en vez de la flecha amarilla.
+        from screens import tutorial as dibujo_tutorial
+        if not dibujo_tutorial.dibujar_objetivo(screen, vista, camara, dueño, extras.get("tutorial"),
+                                                tiempo_ms):
+            mision_dibujo.dibujar_flecha_objetivo(screen, vista, camara, dueño, extras.get("mision"),
+                                                  extras.get("dificultad"), extras.get("nexus"),
+                                                  tiempo_ms)
 
     screen.set_clip(clip_previo)
 
@@ -612,69 +617,12 @@ def render_escolta(screen, vista, jugador, escoltado, tapado=None, red=None):
 
 
 def render_tutorial(screen, vista, jugador, tutorial):
-    """El paso del tutorial de este jugador: una caja angosta abajo al centro,
-    entre el pulso y el inventario (antes iba ancha en medio de la vista).
-    Anota su borde de arriba en `jugador.hud_tutorial` para que la pista de
-    "[E] ..." y la barra de progreso queden encima (paneles.tope_abajo)."""
-    jugador.hud_tutorial = None
-    if tutorial is None or not tutorial.activo or not getattr(jugador, "puede_moverse", True):
-        return   # los puestos sin mando todavía no se mueven: no hay qué enseñarles
-    datos = tutorial.texto(jugador)
-    if datos is None:
-        return
-    paso, total, texto = datos
-    from screens.paneles import rect_pulso, ancho_inventario
-    pulso = rect_pulso(screen, vista, jugador)
-    pequena = vista.height < 500
-    f = fuente_de_tamano(15 if pequena else 17)
-    f_chica = fuente_de_tamano(12 if pequena else 13)
-    # Lo que queda entre el pulso (izquierda) y el inventario (derecha, si
-    # lleva algo): si es muy poco, va encima del pulso.
-    inventario = ancho_inventario(vista, jugador)
-    libre = vista.right - 12 - (inventario + 12 if inventario else 0) - (pulso.right + 16)
-    ancho = min(520, libre)
-    encima = ancho < 260
-    if encima:
-        ancho = min(520, vista.width - 32)
-    lineas = _envolver(texto, f, ancho - 28)
-    alto = 14 + f_chica.get_linesize() + len(lineas) * f.get_linesize() + 10
-    caja = pygame.Rect(0, 0, ancho, alto)
-    if encima:
-        caja.midbottom = (vista.centerx, pulso.top - 8)
-    else:
-        caja.bottomleft = (pulso.right + 16 + max(0, (libre - ancho) // 2), vista.bottom - 12)
-    from juego import efectos
-    if efectos.ACTIVOS:
-        from screens import vidrio
-        vidrio.caja(screen, caja, (90, 220, 230), 215, 8)
-    else:
-        fondo = pygame.Surface(caja.size, pygame.SRCALPHA)
-        fondo.fill((12, 14, 30, 215))
-        screen.blit(fondo, caja.topleft)
-        pygame.draw.rect(screen, (90, 220, 230), caja, 2, border_radius=6)
-    hechos, necesarios = tutorial.listos()
-    pie = None
-    if not tutorial.esta_listo(jugador):
-        ultimo = paso == total
-        pie = f_chica.render(f"[{jugador.nombre_tecla('habilidad')}] "
-                             + ("terminar" if ultimo else "siguiente"), True, (150, 156, 190))
-    sitio = caja.width - 28 - (pie.get_width() + 16 if pie is not None else 0)
-    # En una pantalla angosta (2 jugadores a 1024 px) el título largo y el
-    # "[tecla] siguiente" se montaban: primero se acorta el título.
-    for texto_titulo in (f"TUTORIAL  {paso}/{total}   ·   listos {hechos}/{necesarios}",
-                         f"TUTORIAL {paso}/{total} · {hechos}/{necesarios}",
-                         f"{paso}/{total}"):
-        titulo = f_chica.render(texto_titulo, True, (90, 220, 230))
-        if titulo.get_width() <= sitio:
-            break
-    screen.blit(titulo, (caja.x + 14, caja.y + 8))
-    if pie is not None:
-        screen.blit(pie, (caja.right - pie.get_width() - 12, caja.y + 8))
-    y = caja.y + 10 + f_chica.get_linesize()
-    for linea in lineas:
-        screen.blit(f.render(linea, True, (240, 242, 255)), (caja.x + 14, y))
-        y += f.get_linesize()
-    jugador.hud_tutorial = (tuple(vista), caja.top)
+    """El paso del tutorial de este jugador: la tarjeta de screens/tutorial.py
+    (abajo al centro, entre el pulso y el inventario). Anota su borde de
+    arriba en `jugador.hud_tutorial` para que la pista de "[E] ..." y la
+    barra de progreso queden encima (paneles.tope_abajo)."""
+    from screens import tutorial as dibujo_tutorial
+    dibujo_tutorial.render(screen, vista, jugador, tutorial)
 
 
 def _fuente_evento(ancho_max):

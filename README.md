@@ -59,6 +59,12 @@ uno escoge su rol desde su propia seccion de pantalla. Dos jugadores no pueden
 quedarse con el mismo rol. Ya en partida, cada uno se mueve por la nave en su
 trozo de pantalla y usa su tecla de interaccion con lo que tenga cerca.
 
+Al empezar hay un **tutorial que se aprende haciendo** (los aliens duermen hasta
+que todos terminan): caminar, caminar en sigilo, meterse al casillero marcado,
+leer la nota marcada, sacar el celular y abrir el arbol de habilidades; cada paso
+se completa solo al hacerlo ("¡Bien!"). Al final, dos tarjetas cortas: lo
+peligroso y la mision. La tecla de habilidad salta un paso si alguien se traba.
+
 | | Jugador 1 | Jugador 2 | Jugador 3 | Jugador 4 |
 |---|---|---|---|---|
 | Moverse | WASD | Flechas | mando: stick o cruceta | mando: stick o cruceta |
@@ -343,6 +349,7 @@ python pruebas/prueba_dificultad.py   # las 4 dificultades, la flecha, la fuga y
 python pruebas/prueba_feria.py        # modo feria, ranking, pantalla de atraccion y blindaje
 python pruebas/prueba_foto.py         # la foto al llegar al lugar de un rumor (flash, polaroid, sonido)
 python pruebas/prueba_album.py        # el album de fotos de los resultados
+python pruebas/prueba_tutorial.py     # el tutorial del principio, haciendo cada paso
 python pruebas/prueba_huellas.py      # las huellas miran hacia donde se camina
 python pruebas/prueba_noticias_empeoran.py  # lo verdadero que nadie arregla empeora
 python pruebas/prueba_red_eco.py      # en red: interpolacion que se adapta al wifi y eco local

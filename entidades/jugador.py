@@ -123,7 +123,36 @@ NOMBRE_ESQUEMA = ["WASD", "Flechas", "Mando 1", "Mando 2"]
 PUESTOS_SIN_MOVIMIENTO = (2, 3)
 
 # Cuánto dura el mensajito de feedback ("+15 puntos") sobre el personaje.
-DURACION_MENSAJE_MS = 2200
+# Nov 21, Diego: "los que te dicen qué hacer duran un poco más: '¡Lo de X es
+# verdad! [E] ...' se va muy rápido y no alcanzo a leer". Ahora depende de lo
+# largo (`duracion_mensaje`: MENSAJE_BASE_MS + MENSAJE_POR_LETRA_MS por letra,
+# hasta MENSAJE_MAX_MS) y lo que dice qué hacer (`es_instruccion`: trae una
+# [tecla] o "tengo que", "hay que"...) dura al menos INSTRUCCION_MIN_MS; y
+# otro aviso que no dice qué hacer no lo tapa antes de INSTRUCCION_PROTEGIDA_MS:
+# espera (`mensajes_pendientes`) y sale después.
+DURACION_MENSAJE_MS = 2200          # (lo mínimo: un aviso corto)
+MENSAJE_BASE_MS = 1600
+MENSAJE_POR_LETRA_MS = 55
+MENSAJE_MAX_MS = 9000
+INSTRUCCION_MIN_MS = 6500
+INSTRUCCION_PROTEGIDA_MS = 5000
+_PALABRAS_INSTRUCCION = ("tengo que", "hay que", "necesito", "primero", "arréglalo", "busquen",
+                         "ve a ", "vayan", "mantén", "presiona")
+
+
+def es_instruccion(texto):
+    """¿Le dice al jugador qué hacer? (una [tecla] o "tengo que", "hay que"...)"""
+    t = (texto or "").lower()
+    return "[" in t or any(p in t for p in _PALABRAS_INSTRUCCION)
+
+
+def duracion_mensaje(texto):
+    """Cuánto se queda un mensaje en pantalla (ms)."""
+    largo = len(texto or "")
+    ms = max(DURACION_MENSAJE_MS, min(MENSAJE_MAX_MS, MENSAJE_BASE_MS + largo * MENSAJE_POR_LETRA_MS))
+    if es_instruccion(texto):
+        ms = max(ms, INSTRUCCION_MIN_MS)
+    return ms
 
 # -- Pulso -------------------------------------------------------------------
 # El pulso va de 0 a 100 y decide cuánto ruido hace el jugador: un alien que
@@ -218,6 +247,8 @@ class Jugador:
         self.mensaje_color = (255, 255, 255)
         self.mensaje_quien = None     # quién lo dice si no es él: [nombre, foto] (un prisionero)
         self.mensaje_ms = 0
+        self.mensaje_total_ms = DURACION_MENSAJE_MS   # cuánto duraba al salir (para la animación)
+        self.mensajes_pendientes = []  # los que esperan a que se lea una instrucción
 
         # Zona del mapa sobre la que está parado, para la pista de "presiona E".
         self.zona_cerca = None
@@ -486,16 +517,34 @@ class Jugador:
         recuadro de diálogo con su foto, screens/paneles.render_mensaje).
         `quien` = [nombre, clave de su foto] si lo dice otro (un prisionero
         que le habla)."""
+        if (self.mensaje and self.mensaje_ms > 0 and texto != self.mensaje
+                and es_instruccion(self.mensaje) and not es_instruccion(texto)
+                and self.mensaje_total_ms - self.mensaje_ms < INSTRUCCION_PROTEGIDA_MS):
+            # Todavía no alcanzan a leer lo que tienen que hacer: este espera.
+            pendientes = getattr(self, "mensajes_pendientes", None)
+            if pendientes is None:
+                pendientes = self.mensajes_pendientes = []
+            pendientes[:] = [p for p in pendientes if p[0] != texto][-2:]
+            pendientes.append((texto, color, quien))
+            return
+        self._mostrar_mensaje(texto, color, quien)
+
+    def _mostrar_mensaje(self, texto, color, quien):
         self.mensaje = texto
         self.mensaje_color = color
         self.mensaje_quien = list(quien) if quien else None
-        self.mensaje_ms = DURACION_MENSAJE_MS
+        self.mensaje_ms = self.mensaje_total_ms = duracion_mensaje(texto)
 
     def actualizar_mensaje(self, dt):
+        pendientes = getattr(self, "mensajes_pendientes", None)
         if self.mensaje_ms > 0:
             self.mensaje_ms = max(0, self.mensaje_ms - dt)
             if self.mensaje_ms == 0:
                 self.mensaje = ""
+        if pendientes and (self.mensaje_ms == 0 or not es_instruccion(self.mensaje)
+                           or self.mensaje_total_ms - self.mensaje_ms >= INSTRUCCION_PROTEGIDA_MS):
+            # La instrucción ya se alcanzó a leer: sale lo que esperaba.
+            self._mostrar_mensaje(*pendientes.pop(0))
 
     # -- Paneles ----------------------------------------------------------------
 

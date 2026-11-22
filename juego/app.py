@@ -209,11 +209,12 @@ def _olvidar_partida_anterior():
     tamaño de la vista de cada jugador...), en una feria de 100 partidas se
     acababa la memoria. Ahora, al empezar cada una, se sueltan."""
     from juego import efectos as _efectos, cache_dibujo, vision, oscuridad, luces as _luces
-    from screens import flechas, foto
+    from screens import flechas, foto, tutorial as dibujo_tutorial
     for cache in (_efectos._contornos, cache_dibujo._recortes, vision._recientes, vision._de_dueño,
                   oscuridad._ultimo, oscuridad._luz_vista, flechas._rutas, _luces._filtrados):
         cache.clear()
     foto.olvidar()
+    dibujo_tutorial.olvidar()
 
 
 def _ordenar_memoria():
@@ -680,6 +681,9 @@ class Game:
     def _preparar_partida(self):
         """Carga el mapa, arma los árboles y crea a los jugadores."""
         _olvidar_partida_anterior()
+        # Los minijuegos que alguien dejó a medias (juego/tareas.py): al volver
+        # a la misma tarea siguen como estaban. Cada partida empieza sin ninguno.
+        self.minis_guardados = {}
         # (lo que diga Menú > Opciones al empezar; en red lo dice quien creó la
         # partida: el servidor y el espejo del cliente lo fuerzan)
         forzado = getattr(self, "modo_feria_forzado", None)
@@ -806,7 +810,7 @@ class Game:
             self.eventos = GestorEventos(self, cajas=crear_cajas(self.objetos, self.mundo))
             # Los pasos del principio salen en todas las dificultades.
             if TUTORIAL_ACTIVO:
-                self.tutorial = Tutorial(self.jugadores)
+                self.tutorial = Tutorial(self.jugadores, self)
                 for alien in self.aliens:
                     alien.accion, alien.aturdido = "DESCANSAR", True
                 self.decir("tutorial", forzar=True)
