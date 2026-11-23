@@ -1147,7 +1147,8 @@ class Game:
             return
         if (jugador.panel or {}).get("tipo") == "celular":
             jugador.cerrar_panel()      # ¡a calmar el pulso, no a mirar NEXUS!
-        jugador.minijuego = MinijuegoLatidos(jugador.pulso, alien, escondite)
+        jugador.minijuego = MinijuegoLatidos(jugador.pulso, alien, escondite,
+                                             ajustes=feria.ajustes_escondite(self))
         self.decir("escondite_revisado", jugador.rol)
         jugador.avisar(f"¡El {alien.nombre} está revisando mi escondite!", (236, 70, 60))
 

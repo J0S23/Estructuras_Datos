@@ -78,6 +78,14 @@ def activo(juego):
     return bool(getattr(juego, "modo_feria", False))
 
 
+def ajustes_escondite(juego):
+    """Los números del minijuego del casillero (entidades/minijuego_latidos.py)
+    en modo feria: más corto. None sin el modo feria."""
+    if not activo(juego):
+        return None
+    return FERIA.get("escondite")
+
+
 def recortar_objetos(juego, objetos, mundo=None):
     """Lo que no va en la Feria, fuera de los objetos del mapa (antes de armar
     los muebles, las salas selladas, la misión...)."""
