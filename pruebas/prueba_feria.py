@@ -104,6 +104,49 @@ assert m.piezas_necesarias == FERIA["piezas"] == 3 == normal.mision.piezas_neces
 assert len(g.puertas_dobles) == len(normal.puertas_dobles) > 0, "faltan las puertas para dos en la Feria"
 assert g.guardia_planta.guardia is not None and g.guardia_planta.planta is not None, \
     "falta el Guardia o la planta en la Feria"
+# El minijuego del casillero, más corto (nov 22): la barra del alien sube más
+# lento y baja más con cada acierto.
+_esc = next(e for e in g.escondites if not e.get("candado"))
+_alien = g.aliens[0]
+g._alien_revisa(g.jugadores[0], _alien, _esc)
+_mini = g.jugadores[0].minijuego
+assert (_mini.sube_por_s, _mini.por_acierto) == (FERIA["escondite"]["sube_por_s"], FERIA["escondite"]["por_acierto"])
+g.jugadores[0].minijuego = None
+_esc_n = next(e for e in normal.escondites if not e.get("candado"))
+normal._alien_revisa(normal.jugadores[0], normal.aliens[0], _esc_n)
+_mini_n = normal.jugadores[0].minijuego
+assert _mini.sube_por_s < _mini_n.sube_por_s and _mini.por_acierto > _mini_n.por_acierto
+normal.jugadores[0].minijuego = None
+# Simulado: un jugador que apunta al centro de la franja (con error) gana mucho antes.
+import random as _rl
+from entidades.minijuego_latidos import MinijuegoLatidos as _ML
+
+
+def _cuanto(ajustes, semilla):
+    rng = _rl.Random(semilla)
+    m = _ML(45, aleatorio=_rl.Random(semilla), ajustes=ajustes)
+
+    class _J:
+        pulso = 45
+    j, t, espera, apunta = _J(), 0, 400, None
+    while not m.terminado and t < 60000:
+        m.actualizar(16, j)
+        t += 16
+        espera -= 16
+        if espera <= 0:
+            if apunta is None:
+                apunta = rng.gauss(0, 0.08 * m.velocidad)
+            if abs(m.aguja - (m.centro_zona + apunta)) < m.velocidad * 0.016:
+                m.presionar(j)
+                apunta, espera = None, 350
+    return t if m.resultado == "calmado" else None
+
+
+_feria_t = sorted(x for x in (_cuanto(FERIA["escondite"], s) for s in range(40)) if x)
+_normal_t = sorted(x for x in (_cuanto(None, s) for s in range(40)) if x)
+assert _feria_t[len(_feria_t) // 2] * 2 < _normal_t[len(_normal_t) // 2], (_feria_t, _normal_t)
+print(f"   casillero: en la feria se calma en ~{_feria_t[len(_feria_t) // 2] / 1000:.1f} s "
+      f"(normal ~{_normal_t[len(_normal_t) // 2] / 1000:.1f} s)")
 # El caso del Cambiaformas también (nov 22): las pruebas en el mapa y en la Terminal NEXUS.
 assert g.infiltrado.pruebas and normal.infiltrado.pruebas, "faltan las pruebas del caso en la Feria"
 from redes import celular as _cel_feria

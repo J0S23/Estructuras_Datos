@@ -23,6 +23,14 @@ FERIA = {
     # 22: "que vuelva todo el caso, igual no es necesario completarlo para
     # ganar, pero ahí está" (hasta entonces se quitaba; True lo quita).
     "sin_caso": False,
+    # El minijuego del casillero (cuando un alien lo revisa;
+    # entidades/minijuego_latidos.py): Diego, nov 22: "que sea más rápido:
+    # que al acertar la barra del alien baje más o que suba más lento". Las
+    # dos: sube 5 por segundo (normal 7) y cada acierto la baja 22 (normal
+    # 14). Simulado (300 intentos, un jugador que apunta al centro de la
+    # franja con 60-110 ms de error): de ~15-21 s a ~4.5-5 s; se sigue
+    # perdiendo si se falla mucho (cada fallo la sube 7, igual que antes).
+    "escondite": {"sube_por_s": 5.0, "por_acierto": 22.0},
     "primer_rumor_s": 20,           # el primer rumor de NEXUS (si no, data/nexus.PRIMER_RUMOR_S)
     # Los planos: NEXUS es el centro del juego. Con un desmentido la verdad
     # llegaba a casi todos (~90 %) y bastaban 1 o 2 para los planos, así que

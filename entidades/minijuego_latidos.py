@@ -49,10 +49,15 @@ DURACION_DESTELLO_MS = 280
 
 
 class MinijuegoLatidos:
-    def __init__(self, pulso, alien=None, escondite=None, aleatorio=None):
+    def __init__(self, pulso, alien=None, escondite=None, aleatorio=None, ajustes=None):
         self.alien = alien
         self.escondite = escondite
         self.aleatorio = aleatorio or random.Random()
+        # Cuánto sube sola la barra del alien y cuánto baja con un acierto (el
+        # modo feria lo hace más corto: data/feria.FERIA["escondite"]).
+        ajustes = ajustes or {}
+        self.sube_por_s = ajustes.get("sube_por_s", AMENAZA_SUBE_POR_S)
+        self.por_acierto = ajustes.get("por_acierto", AMENAZA_POR_ACIERTO)
 
         self.amenaza = AMENAZA_INICIAL
         self.aguja = 0.0
@@ -111,7 +116,7 @@ class MinijuegoLatidos:
             self.aguja, self.sentido = -self.aguja, 1
 
         antes = self.amenaza
-        self.amenaza = min(100.0, self.amenaza + AMENAZA_SUBE_POR_S * segundos)
+        self.amenaza = min(100.0, self.amenaza + getattr(self, "sube_por_s", AMENAZA_SUBE_POR_S) * segundos)
         # El corazón se acelera a la par de la barra del alien.
         if jugador is not None:
             jugador.pulso = min(100.0, jugador.pulso + (self.amenaza - antes) * PULSO_POR_AMENAZA)
@@ -126,7 +131,7 @@ class MinijuegoLatidos:
         acierto = self.aguja_en_zona()
         if acierto:
             self.aciertos += 1
-            self.amenaza = max(0.0, self.amenaza - AMENAZA_POR_ACIERTO)
+            self.amenaza = max(0.0, self.amenaza - getattr(self, "por_acierto", AMENAZA_POR_ACIERTO))
             if jugador is not None:
                 jugador.pulso = max(0.0, jugador.pulso - PULSO_POR_ACIERTO)
         else:
