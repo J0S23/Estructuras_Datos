@@ -1013,6 +1013,10 @@ def _elegir_controles(juego, cantidad):
 
 def _jugar(juego, menu, resultado):
     """Crea o se une; juega; devuelve un aviso para la pantalla (o "")."""
+    # La música del menú (que siguió sonando en "Jugar en red") no va dentro
+    # de la partida en red: el cliente no tiene la de la nave.
+    from juego.audio_manager import audio_manager
+    audio_manager.parar_musica()
     # Como en el modo de una sola laptop: cada jugador de aquí presiona el
     # botón de su control (E, Enter o el de su mando) y así queda cuál es J1, J2...
     esquemas = _elegir_controles(juego, menu.locales)

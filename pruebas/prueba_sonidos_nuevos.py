@@ -165,7 +165,9 @@ g._sonido_de_fondo()
 assert audio_manager.sonando_musica == "musica_calma"
 g.current_screen = "menu"
 g._sonido_de_fondo()
-assert audio_manager.sonando_musica is None and audio_manager.sonando_bucle is None
-print("música: calma, tensión al perseguir (dura unos segundos más) y silencio en el menú")
+# En el menú ya no hay silencio: suena la del menú (Audio/SFX/musica_menu, si
+# está); el zumbido de la nave sí se apaga.
+assert audio_manager.sonando_musica in ("musica_menu", None) and audio_manager.sonando_bucle is None
+print("música: calma, tensión al perseguir (dura unos segundos más) y la del menú en el menú")
 
 print("\nTODO OK")
