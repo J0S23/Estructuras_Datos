@@ -136,6 +136,13 @@ TUTORIAL_ACTIVO = True
 # Teclas que suenan en los menús (menú, cantidad, roles y pausa).
 TECLAS_MOVER_MENU = {pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT, pygame.K_w, pygame.K_s}
 TECLAS_OK_MENU = {pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_e}
+VOLUMEN_MENU_MOVER = 0.5    # (los mismos de los otros menús)
+VOLUMEN_MENU_OK = 0.6
+# La música del menú suena fuera de la partida, salvo en los resultados (ahí
+# van la victoria / derrota). Al entrar a la partida se apaga de a poco y entra
+# la de la nave (musica_calma).
+VOLUMEN_MUSICA_MENU = 0.35
+SIN_MUSICA_MENU = {"resultados"}
 
 # Lo que cuesta que te atrape un alien.
 PUNTOS_POR_SER_ATRAPADO = 10
@@ -2138,8 +2145,14 @@ class Game:
         else:
             if audio_manager.sonando_bucle:
                 audio_manager.parar_bucle()
-            if audio_manager.sonando_musica:
-                audio_manager.parar_musica()
+            if self.current_screen in SIN_MUSICA_MENU:
+                if audio_manager.sonando_musica:
+                    audio_manager.parar_musica()
+            else:
+                # Menú, Opciones, cuántos juegan, dificultad, roles, ranking,
+                # logros, ayuda, créditos y la carga: la música del menú
+                # (Audio/SFX/musica_menu.ogg/.wav/.mp3; sin el archivo, nada).
+                audio_manager.musica("musica_menu", VOLUMEN_MUSICA_MENU)
 
     def _hay_tension(self):
         """¿Toca la música de tensión? Se queda unos segundos después de que
@@ -2189,9 +2202,8 @@ class Game:
                     self.texto_tecla = ""
             elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 self._manejar_click(evento.pos)
-            elif (evento.type == pygame.MOUSEMOTION and self.current_screen == "menu"
-                  and self.opciones_menu is not None):
-                self.opciones_menu.mover_mouse(evento.pos)
+            elif evento.type == pygame.MOUSEMOTION and self.current_screen == "menu":
+                self._mouse_en_menu(evento.pos)
             elif evento.type == getattr(pygame, "MOUSEWHEEL", -1):
                 if self._viendo_logros():
                     dibujo_logros.rueda(evento.y)       # desplaza el árbol de logros
@@ -2352,7 +2364,10 @@ class Game:
             return
         if self.transitions.active:
             return
-        if self.current_screen in ("menu", "cantidad", "dificultad", "roles", "resultados") or (
+        menu_principal = self.current_screen == "menu" and self.opciones_menu is None
+        if menu_principal:
+            pass                # (el menú principal suena abajo, solo si algo cambia)
+        elif self.current_screen in ("menu", "cantidad", "dificultad", "roles", "resultados") or (
                 self.current_screen == "partida" and self.pausa is not None):
             if key in TECLAS_MOVER_MENU:
                 self.sonar("menu_mover", 0.5)
@@ -2364,9 +2379,12 @@ class Game:
         elif self.current_screen == "menu":
             if key in (pygame.K_UP, pygame.K_w):
                 self.menu_selected = (self.menu_selected - 1) % len(self.menu_buttons)
+                self.sonar("menu_mover", VOLUMEN_MENU_MOVER)
             elif key in (pygame.K_DOWN, pygame.K_s):
                 self.menu_selected = (self.menu_selected + 1) % len(self.menu_buttons)
-            elif key == pygame.K_RETURN:
+                self.sonar("menu_mover", VOLUMEN_MENU_MOVER)
+            elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                self.sonar("menu_ok", VOLUMEN_MENU_OK)
                 self._activar_opcion_menu(self.menu_buttons[self.menu_selected].action)
             elif key == pygame.K_ESCAPE:
                 self.running = False
@@ -2632,12 +2650,35 @@ class Game:
         if self.current_screen != "menu" or self.transitions.active:
             return
         if self.opciones_menu is not None:
-            self._accion_pausa(self.opciones_menu.click(pos))
+            accion = self.opciones_menu.click(pos)
+            if accion is not None or any(r.collidepoint(pos) for r in self.opciones_menu.rects):
+                self.sonar("menu_ok", VOLUMEN_MENU_OK)
+            self._accion_pausa(accion)
             return
         for i, boton in enumerate(self.menu_buttons):
             if boton.contains(pos):
                 self.menu_selected = i
+                self.sonar("menu_ok", VOLUMEN_MENU_OK)
                 self._activar_opcion_menu(boton.action)
+                return
+
+    def _mouse_en_menu(self, pos):
+        """El mouse encima de un botón del menú principal (o de Menú > Opciones)
+        lo escoge y suena "menu_mover", solo al pasar a otro (no en cada
+        movimiento): igual que con las flechas."""
+        if self.transitions.active:
+            return
+        if self.opciones_menu is not None:
+            antes = (self.opciones_menu.vista, self.opciones_menu.seleccion)
+            self.opciones_menu.mover_mouse(pos)
+            if (self.opciones_menu.vista, self.opciones_menu.seleccion) != antes:
+                self.sonar("menu_mover", VOLUMEN_MENU_MOVER)
+            return
+        for i, boton in enumerate(self.menu_buttons):
+            if boton.contains(pos):
+                if i != self.menu_selected:
+                    self.menu_selected = i
+                    self.sonar("menu_mover", VOLUMEN_MENU_MOVER)
                 return
 
     def abrir_catalogo_logros(self):

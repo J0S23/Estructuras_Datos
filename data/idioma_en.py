@@ -1293,6 +1293,8 @@ TEXTOS = {
     "Gracias por jugar.": "Thanks for playing.",
     "Hecho con Python y Pygame": "Made with Python and Pygame",
     "Tipografía: Determination Mono": "Font: Determination Mono",
+    "Música del menú: \"Ominous Sci-Fi Menu\"": "Menu music: \"Ominous Sci-Fi Menu\"",
+    "de Eric Matyas · www.soundimage.org": "by Eric Matyas · www.soundimage.org",
     "[ENTER] volver": "[ENTER] back",
     # screens/grafo_vista.py
     "A* es un BFS que primero prueba las celdas que van hacia la meta: revisa muchas menos que un BFS normal y el camino sale igual de bueno.": "A* is a BFS that tries the cells heading toward the goal first: it checks far fewer than a normal BFS and the path is just as good.",

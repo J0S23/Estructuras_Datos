@@ -36,7 +36,10 @@ for sonidos, _minimo, _maximo in _ambiente.VOCES.values():
     pedidos |= set(sonidos)
 pedidos |= set(_ambiente.PASOS_PASTO) | {t[1] for t in _ambiente.TRABAJOS}
 hay = {os.path.splitext(os.path.basename(r))[0] for r in glob.glob("Audio/SFX/*")}
-faltan = pedidos - hay
+# La música del menú la escoge el equipo (no la genera generar_sonidos.py):
+# sin el archivo, el menú va callado.
+OPCIONALES = {"musica_menu"}
+faltan = pedidos - hay - OPCIONALES
 assert not faltan, f"el código pide sonidos que no existen: {sorted(faltan)}"
 sobran = hay - pedidos
 assert not sobran, f"sonidos que nadie usa: {sorted(sobran)}"
@@ -68,6 +71,38 @@ def avanzar():
 def sonaron():
     return {n for n, _ in g.ambiente.ultimos}
 
+
+# ---------- 3a: los botones del menú principal (Diego, nov 23) ----------
+g.current_screen = "menu"
+g.transitions = App.TransitionManager()
+g.ambiente.ultimos.clear()
+g.menu_selected = 0
+g._manejar_tecla(pygame.K_DOWN)
+assert g.menu_selected == 1 and sonaron() == {"menu_mover"}, sonaron()
+g.ambiente.ultimos.clear()
+g._manejar_tecla(pygame.K_LEFT)                     # no mueve nada: no suena
+assert not sonaron(), sonaron()
+centro = g.menu_buttons[3].rect.center
+g._mouse_en_menu(centro)
+assert g.menu_selected == 3 and sonaron() == {"menu_mover"}, "pasar el mouse por un botón no sonó"
+g.ambiente.ultimos.clear()
+g._mouse_en_menu((centro[0] + 3, centro[1]))       # el mismo botón: no vuelve a sonar
+assert not sonaron(), sonaron()
+g._mouse_en_menu((2, 2))                            # fuera de los botones: nada
+assert g.menu_selected == 3 and not sonaron()
+i_opciones = next(i for i, b in enumerate(g.menu_buttons) if b.action == "opciones")
+g._manejar_click(g.menu_buttons[i_opciones].rect.center)
+assert g.opciones_menu is not None and "menu_ok" in sonaron(), "el clic no sonó"
+g.ambiente.ultimos.clear()
+g._manejar_tecla(pygame.K_ESCAPE)                   # (cierra Opciones: lo de la pausa)
+g.opciones_menu = None
+g.ambiente.ultimos.clear()
+i_ok = next(i for i, b in enumerate(g.menu_buttons) if b.action == "creditos")
+g.menu_selected = i_ok
+g._manejar_tecla(pygame.K_RETURN)
+assert "menu_ok" in sonaron(), sonaron()
+avanzar(); g.current_screen = "menu"; g.ambiente.ultimos.clear()
+print("menú principal: flechas, mouse encima (solo al cambiar de botón), clic y Enter suenan")
 
 g._activar_opcion_menu("jugar"); avanzar(); g.current_screen = "cantidad"
 g._manejar_tecla(pygame.K_DOWN); g._manejar_tecla(pygame.K_UP)
@@ -118,6 +153,26 @@ if pygame.mixer.get_init() is not None:
     g._sonido_de_fondo()
     assert audio_manager.sonando_bucle is None
     print("zumbido de fondo: suena en la partida, se calla en el apagón y se apaga en el menú")
+    # La música del menú (con la de calma haciéndose pasar por ella, si no está el archivo).
+    if "musica_menu" not in hay:
+        audio_manager._sonidos["musica_menu"] = audio_manager._sonido("musica_calma")
+    g._sonido_de_fondo()
+    assert audio_manager.sonando_musica == "musica_menu", audio_manager.sonando_musica
+    for pantalla in ("cantidad", "roles", "ranking", "creditos", "cargando"):
+        g.current_screen = pantalla
+        g._sonido_de_fondo()
+        assert audio_manager.sonando_musica == "musica_menu", (pantalla, audio_manager.sonando_musica)
+    g.current_screen = "resultados"
+    g._sonido_de_fondo()
+    assert audio_manager.sonando_musica is None, "en los resultados no va la música del menú"
+    g.current_screen = "partida"
+    g._sonido_de_fondo()
+    assert audio_manager.sonando_musica in ("musica_calma", "musica_tension")
+    g.current_screen = "menu"
+    g._sonido_de_fondo()
+    assert audio_manager.sonando_musica == "musica_menu"
+    audio_manager._sonidos.pop("musica_menu", None)
+    print("música del menú: en el menú y sus pantallas, no en los resultados; en la partida, la de la nave")
 else:
     print("(sin mezclador de audio: no se prueba el zumbido)")
 print("\nTODO OK")

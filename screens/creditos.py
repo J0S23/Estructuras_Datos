@@ -41,6 +41,9 @@ LINEAS = [
     ("", "espacio"),
     ("Hecho con Python y Pygame", "tenue"),
     ("Tipografía: Determination Mono", "tenue"),
+    # CC-BY 3.0: hay que dar el crédito así (opengameart.org/content/ominous-sci-fi-menu-looping).
+    ("Música del menú: \"Ominous Sci-Fi Menu\"", "tenue"),
+    ("de Eric Matyas · www.soundimage.org", "tenue"),
     ("", "espacio"),
     ("", "espacio"),
     ("Gracias por jugar.", "titulo"),
