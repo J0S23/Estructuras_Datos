@@ -127,6 +127,7 @@ JUGADOR_NO = {"puesto", "esquema", "con_mando", "controles_nombre", "spawn", "te
 # director de la dificultad y cambia el largo del cono.
 ALIEN_SI = ("accion", "alerta", "aturdido", "confundido", "cansado", "moviendose", "oculta",
             "potencia_nexus", "descanso_ms", "comiendo", "disfrazado", "transformando_ms",
+            "disfrazando_ms",
             "oculta_ms", "distraido_ms", "ajuste_vision")
 
 

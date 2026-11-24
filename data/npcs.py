@@ -88,6 +88,7 @@ OLVIDA_TRAS_FALLAR = 0.5        # si se revela y falla, olvida esta parte de lo 
 CALMA_TRAS_FALLAR_MS = 15000    # y espera esto antes de volver a cazar
 ENFRIAMIENTO_CAZA_MS = 25000    # después de atrapar a alguien, descansa de cazar
 TRANSFORMARSE_MS = 750          # el susto: se transforma ahí y le da ese tiempo a la presa
+DISFRAZARSE_MS = 1300           # volver a ser prisionero (la animación al derecho, quieto)
 RAFAGA_MS = 4200                # cuánto dura su carrera después de revelarse
 PISTA_PRESA_MS = 6000           # cada cuánto "sabe" dónde está su presa (es persistente)
 RECUERDA_ESCONDITE_MS = 25000   # si la vio esconderse hace menos, va a revisar

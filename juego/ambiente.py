@@ -413,9 +413,18 @@ def _susto_transformacion(screen, vista, t, disfraz, puesto):
     h = vista.height
     if t < 0.4:                                          # el prisionero, cada vez más raro
         img, alto, fuerza = prisionero, h * (0.55 + 0.07 * t / 0.4), int(2 + 10 * t / 0.4)
-    elif t < 0.65:                                       # cambia de forma a tirones
-        img = monstruo if (semilla // 1) % 2 else prisionero
-        alto, fuerza = h * 0.65, 14
+    elif t < 0.65:                                       # cambia de forma
+        from entidades.cambiaformas import figuras_transformacion
+        figuras = figuras_transformacion()
+        if figuras:
+            # La hoja de transformación al revés (prisionero -> monstruo),
+            # cada cuadro a su alto relativo para que la masa no se estire.
+            k = (t - 0.4) / 0.25
+            img, rel = figuras[len(figuras) - 1 - min(len(figuras) - 1, int(k * len(figuras)))]
+            alto, fuerza = h * 0.65 * rel, 8
+        else:                                            # sin arte: a tirones
+            img = monstruo if (semilla // 1) % 2 else prisionero
+            alto, fuerza = h * 0.65, 14
     else:                                                # ya es el monstruo y se acerca
         k = (t - 0.65) / 0.35
         img, alto, fuerza = monstruo, h * (0.65 + 0.3 * k), int(14 * (1 - k)) + 2

@@ -93,7 +93,7 @@ from data.logros import ARBOL_LOGROS
 from juego.presentacion_aliens import PresentacionAliens
 from screens.presentacion_aliens import render_presentacion
 from juego.dificultad import Dificultad
-from entidades.cambiaformas import Cambiaformas
+from entidades.cambiaformas import Cambiaformas, cuadros_transformacion
 from entidades.sombra import Sombra
 from data.npcs import NPCS_POR_PARTIDA
 from misiones.logros import GestorLogros
@@ -911,6 +911,7 @@ class Game:
         # Sus hojas se cargan ya, como las de los demás aliens (si no, el
         # juego se congela un instante la primera vez que aparecen).
         sprites_de(self.cambiaformas.tipo)
+        cuadros_transformacion()
         for apariencia in apariencias.values():
             sprites_prisionero(apariencia.sprite)
 

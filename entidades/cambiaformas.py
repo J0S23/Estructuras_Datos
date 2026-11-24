@@ -28,6 +28,7 @@ preguntas (percibir) y ejecuta sus hojas (_ejecutar).
 """
 
 import math
+import os
 import random
 
 import pygame
@@ -38,7 +39,7 @@ from data.comportamiento_cambiaformas import ARBOL_CAMBIAFORMAS
 from data.npcs import (DANIO_SABOTAJE, DISTANCIA_REVELARSE, DISTANCIA_COMPANIA, VISION,
                        RAFAGA_MS, PISTA_PRESA_MS, RECUERDA_ESCONDITE_MS, HUIDA_MAX_MS,
                        EXPUESTO_MS, DESCANSO_TRAS_FALLAR_MS, GLITCH_CADA_MS, GLITCH_DURA_MS,
-                       TRANSFORMARSE_MS, ESPERA_INICIAL_MS, ENFRIAMIENTO_CAZA_MS,
+                       TRANSFORMARSE_MS, DISFRAZARSE_MS, ESPERA_INICIAL_MS, ENFRIAMIENTO_CAZA_MS,
                        TRAMPAS, PRIMERA_TRAMPA_MS, TRAMPA_CADA_MS, DESENMASCARADO_MS,
                        DISTANCIA_SEGUIR_CF, TRAICION_SOLO_MS, RADIO_SABOTAJE,
                        SUSURRO_RADIO, SUSURRO_CADA_MS, MANADA_MS,
@@ -64,6 +65,75 @@ def _d(a, b):
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
+# -- Animación de transformación ------------------------------------------------------
+# Una sola hoja de frente (Alien_Cambiaformas_transformacion.png, cuadros de
+# 96 px): monstruo -> masa -> casi prisionero. El cuadro que sigue al último
+# es el idle_south del prisionero que imita, así sirve para cualquiera de
+# ellos aunque sus sprites (96 px) y los del monstruo (80 px) no midan igual.
+# Al derecho es disfrazarse; al revés, revelarse. (El nombre no termina en una
+# dirección, así que cargar_animaciones no la confunde con otra hoja.)
+HOJA_TRANSFORMACION = "Alien_Cambiaformas_transformacion.png"
+_transformacion = {}
+
+
+def _ruta_transformacion():
+    from entidades.alien import SPRITES_ALIEN, _RAIZ_PROYECTO
+    return os.path.join(_RAIZ_PROYECTO, "Imagenes", "Aliens", SPRITES_ALIEN["cambiaformas"][0],
+                        HOJA_TRANSFORMACION)
+
+
+def hay_transformacion():
+    """Si está la hoja. La lógica (cuánto se queda quieto) va con esto y no
+    con si se pudo cargar: el servidor de red no tiene ventana y aun así sus
+    clientes la dibujan."""
+    return os.path.isfile(_ruta_transformacion())
+
+
+def cuadros_transformacion():
+    """[(imagen, aire_bajo_los_pies)] de la hoja, ya escalados para el mapa:
+    el primero del tamaño del monstruo y el último del de un prisionero (la
+    escala va cambiando poco a poco para que no dé un salto). [] sin arte."""
+    if "mapa" in _transformacion:
+        return _transformacion["mapa"]
+    if pygame.display.get_surface() is None:
+        return []           # (sin pantalla todavía: no se guarda, se intenta después)
+    cuadros = []
+    from entidades.alien import SPRITES_ALIEN
+    from Movimiento.Personaje import cortar_spritesheet_auto
+    escala_monstruo = SPRITES_ALIEN["cambiaformas"][1]
+    ruta = _ruta_transformacion()
+    if os.path.isfile(ruta):
+        crudos = cortar_spritesheet_auto(ruta)
+        n = len(crudos)
+        for i, cuadro in enumerate(crudos):
+            t = i / max(1, n - 1)
+            k = escala_monstruo + (npcs.ESCALA_SPRITE - escala_monstruo) * t
+            grande = pygame.transform.scale(
+                cuadro, (round(cuadro.get_width() * k), round(cuadro.get_height() * k)))
+            contenido = grande.get_bounding_rect()
+            cuadros.append((grande, grande.get_height() - contenido.bottom))
+    _transformacion["mapa"] = cuadros
+    return cuadros
+
+
+def figuras_transformacion():
+    """Los mismos cuadros sin escalar y recortados (para el susto en pantalla
+    de ambiente.py), con el alto del primero como referencia: [(img, alto_rel)]."""
+    if "susto" not in _transformacion:
+        if pygame.display.get_surface() is None:
+            return []
+        figuras = []
+        from Movimiento.Personaje import cortar_spritesheet_auto
+        ruta = _ruta_transformacion()
+        if os.path.isfile(ruta):
+            recortes = [c.subsurface(c.get_bounding_rect()).copy()
+                        for c in cortar_spritesheet_auto(ruta)]
+            ref = recortes[0].get_height() if recortes else 1
+            figuras = [(img, img.get_height() / ref) for img in recortes]
+        _transformacion["susto"] = figuras
+    return _transformacion["susto"]
+
+
 class Cambiaformas(Alien):
     def __init__(self, juego, numero, apariencias, identidad, punto, rng=None):
         """`apariencias`: {usuario: Apariencia} de los prisioneros que puede
@@ -83,7 +153,8 @@ class Cambiaformas(Alien):
         self.huida_ms = 0
         self.huir_al_despertar = False
         self.rafaga_ms = 0
-        self.transformando_ms = 0
+        self.transformando_ms = 0        # revelándose: la animación al revés
+        self.disfrazando_ms = 0          # volviendo a ser prisionero: al derecho
         self._giro = DireccionSuave()       # hacia dónde mira el sprite revelado
         self.calma_ms = int(self._ajuste("cf_espera_ms", ESPERA_INICIAL_MS))  # al empezar se toma su tiempo
         self.revisando = None               # el casillero que está revisando
@@ -287,6 +358,9 @@ class Cambiaformas(Alien):
         self.vio_esconderse_ms += dt
         self.expuesto_ms = max(0, self.expuesto_ms - dt)
         self.huida_ms = max(0, self.huida_ms - dt)
+        if not self.disfrazado:
+            self.disfrazando_ms = 0      # (lo hackearon o lo delataron a mitad)
+        self.disfrazando_ms = max(0, self.disfrazando_ms - dt)
         self.glitch_ms -= dt
         if self.glitch_ms < -GLITCH_DURA_MS:
             self.glitch_ms = GLITCH_CADA_MS * self.rng.uniform(0.7, 1.3)
@@ -400,6 +474,8 @@ class Cambiaformas(Alien):
         presa = self.presa
         if accion == "DESCANSAR":
             return
+        if self.disfrazado and self.disfrazando_ms > 0:
+            return          # se está volviendo prisionero: no se mueve hasta terminar
         if accion == "HUIR":
             self._huir(dt, factor, mundo)
             return
@@ -689,6 +765,8 @@ class Cambiaformas(Alien):
             else self.rng.choice(opciones)
         self.apariencia = self.apariencias[usuario]
         self.disfrazado = True
+        if hay_transformacion():
+            self.disfrazando_ms = DISFRAZARSE_MS
         self.huida_ms = 0
         self.punto_huida = None
 
@@ -764,6 +842,18 @@ class Cambiaformas(Alien):
         super().dibujar_senal(screen, offset)
 
     def dibujar(self, screen, offset):
+        cuadros = cuadros_transformacion()
+        if cuadros and self.apariencia is not None:
+            if self.disfrazado and self.disfrazando_ms > 0:
+                # Al derecho: monstruo -> prisionero (el último es el idle del NPC).
+                avance = 1 - self.disfrazando_ms / DISFRAZARSE_MS
+                if self._dibujar_transformacion(screen, offset, cuadros, avance):
+                    return
+            elif not self.disfrazado and self.transformando_ms > 0:
+                # Al revés: prisionero -> monstruo.
+                avance = self.transformando_ms / TRANSFORMARSE_MS
+                if self._dibujar_transformacion(screen, offset, cuadros, avance):
+                    return
         if self.disfrazado and self.apariencia is not None:
             usuario = self.apariencia.usuario
             if self.glitch_ms < 0:
@@ -783,6 +873,30 @@ class Cambiaformas(Alien):
             super().dibujar(screen, offset)       # el sprite de Joseph
         else:
             self._dibujar_monstruo(screen, offset)
+
+    def _dibujar_transformacion(self, screen, offset, cuadros, avance):
+        """`avance` 0 = monstruo, 1 = prisionero. Los cuadros de la hoja y, como
+        último, el prisionero quieto de frente. Devuelve False si ya le toca
+        ese último (lo dibuja quien llama, con su letrero)."""
+        total = len(cuadros) + 1
+        i = min(total - 1, int(max(0.0, avance) * total))
+        if i == total - 1:
+            if self.disfrazado:
+                return False
+            self.apariencia.direccion, self.apariencia.moviendose = "south", False
+            self.apariencia.dibujar(screen, self.hitbox.center, offset)
+            return True
+        imagen, aire = cuadros[i]
+        # Los pies del monstruo van en hitbox.bottom y los del prisionero un
+        # poco más arriba (npcs.Apariencia): se pasa de uno a otro de a poco.
+        t = i / max(1, len(cuadros) - 1)
+        suelo = self.hitbox.bottom + (self.hitbox.centery + 6 - self.hitbox.bottom) * t
+        x = self.hitbox.centerx - offset[0]
+        rect = imagen.get_rect(midbottom=(x, int(suelo - offset[1] + aire)))
+        npcs.efectos.sombra(screen, (x, int(suelo - offset[1]) - 2),
+                            imagen.get_bounding_rect().width * 0.95)
+        screen.blit(imagen, rect)
+        return True
 
     def _dibujar_monstruo(self, screen, offset):
         """Si falta el sprite (Imagenes/Aliens/Alien_Cambiaformas): una
