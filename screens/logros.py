@@ -46,6 +46,8 @@ NOMBRE_RAMA = {
     "aliens": "Aliens",
     "cambiaformas": "Cambiaformas",
     "caso": "El caso",
+    "historia": "Los niños",
+    "baul": "El baúl",
 }
 
 SUPERMUESTREO = 3          # las insignias se dibujan 3 veces más grandes y se achican (bordes suaves)
@@ -161,6 +163,19 @@ def _dibujar_icono(sup, rama, centro, s, color, fondo):
         # Una lupa.
         pygame.draw.circle(sup, color, (int(cx - s * 0.08), int(cy - s * 0.08)), int(s * 0.28), g + 1)
         pygame.draw.line(sup, color, (cx + s * 0.12, cy + s * 0.12), (cx + s * 0.4, cy + s * 0.4), int(g * 1.8))
+    elif rama == "historia":
+        # Una cápsula de cristal con un niño adentro.
+        pygame.draw.rect(sup, color, (cx - s * 0.24, cy - s * 0.48, s * 0.48, s * 0.12), border_radius=max(1, int(s * 0.04)))
+        pygame.draw.rect(sup, color, (cx - s * 0.24, cy + s * 0.36, s * 0.48, s * 0.12), border_radius=max(1, int(s * 0.04)))
+        pygame.draw.rect(sup, color, (cx - s * 0.2, cy - s * 0.38, s * 0.4, s * 0.76), g)
+        pygame.draw.circle(sup, color, (cx, int(cy - s * 0.12)), max(2, int(s * 0.09)))
+        pygame.draw.ellipse(sup, color, (cx - s * 0.11, cy - s * 0.02, s * 0.22, s * 0.3))
+    elif rama == "baul":
+        # Un martillo.
+        pygame.draw.line(sup, color, (cx - s * 0.32, cy + s * 0.4), (cx + s * 0.12, cy - s * 0.12), int(g * 1.6))
+        cabeza = [(cx - s * 0.06, cy - s * 0.42), (cx + s * 0.36, cy - s * 0.04),
+                  (cx + s * 0.22, cy + s * 0.1), (cx - s * 0.2, cy - s * 0.28)]
+        pygame.draw.polygon(sup, color, cabeza)
     else:
         # La raíz: una estrella.
         puntos = []
@@ -258,7 +273,7 @@ def _fondo_aviso(tamano, alfa):
 
 def render_aviso_logro(screen, gestor):
     """Cartel abajo al centro: insignia, "¡LOGRO!", nombre y descripción."""
-    if gestor is None or not gestor.avisos:
+    if gestor is None or not gestor.avisos or getattr(gestor, "callado", False):
         return
     nodo, ms = gestor.avisos[0]
     ancho, alto = screen.get_size()

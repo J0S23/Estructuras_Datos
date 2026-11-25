@@ -7,10 +7,14 @@ hay que avisarle al juego cuándo se consigue (logros.py).
 """
 
 
-def L(clave, nombre, descripcion, *hijos, rama=None, compuesto=False):
+def L(clave, nombre, descripcion, *hijos, rama=None, compuesto=False, estricto=False):
     d = {"clave": clave, "nombre": nombre, "descripcion": descripcion, "hijos": list(hijos)}
     if rama:
         d["rama"] = rama
+    if estricto:
+        # Solo se consigue si ya tienen a su padre (y a todos los de arriba):
+        # no espera ni "marca el camino" (Diego, nov 25: los nuevos).
+        d["estricto"] = True
     if compuesto:
         # Se consigue con el primero de sus hijos (su descripción lo dice):
         # no queda "por el camino", es un logro de verdad.
@@ -79,6 +83,7 @@ ARBOL_LOGROS = L(
       L("canto_de_sirena", "Canto de sirena", "Distraer al Guardia de la Bahía (Resonante)."),
       L("jardinero", "Mano verde", "Hacer crecer la planta de la Biosfera.",
         L("buen_provecho", "Buen provecho", "Darle la fruta al Guardia para que deje la cápsula.")),
+      L("cepo", "Atrapado", "Que un alien pise un cepo del Forjador.", estricto=True),
       L("conoce_a_tu_enemigo", "Conoce a tu enemigo",
         "Ver de cerca a todos los tipos de alien: el Cambiaformas, la Sombra y el Guardia incluidos."),
       rama="aliens", compuesto=True),
@@ -97,6 +102,25 @@ ARBOL_LOGROS = L(
         L("corazonada", "Corazonada", "Acusar al Cambiaformas correcto antes de tener las 3 pruebas."),
         L("acusacion_falsa", "Acusación falsa", "Acusar a un inocente. La nave te delató.")),
       rama="caso"),
+
+    # Lo de los niños (misiones/sala_secreta.py). Todos estrictos: el hijo no
+    # sale sin haber pasado por el padre.
+    L("detras_de_la_pared", "Detrás de la pared", "Entrar a la sala oculta de la Bahía.",
+      L("eran_de_ellos", "Eran de ellos",
+        "Entrar a la sala habiendo encontrado la mochila, el zapato y el dibujo.", estricto=True),
+      L("llamadas_perdidas", "47 llamadas perdidas", "Revisar el celular que estaba en el piso de la sala.",
+        estricto=True),
+      L("demasiado_tarde", "Demasiado tarde", "Intentar regenerar una cápsula apagada (Biomante).",
+        estricto=True),
+      L("lo_vimos", "Lo vimos todo", "Escapar después de haber visto a los niños.", estricto=True),
+      L("no_los_dejamos", "No los dejamos solos", "Votar por quedarse con los niños, y quedarse.",
+        estricto=True),
+      rama="historia", estricto=True),
+
+    L("letra_pequena", "Letra pequeña", "Abrir el baúl de la prisión con el código escondido en una nota.",
+      L("ellos_primero", "Ellos primero",
+        "Romper las cápsulas, subir a los niños a la cápsula y quedarse atrás.", estricto=True),
+      rama="baul", estricto=True),
     rama="inicio",
 )
 
@@ -111,4 +135,6 @@ COLOR_RAMA = {
     "aliens": (245, 130, 120),
     "cambiaformas": (190, 150, 255),
     "caso": (255, 152, 40),            # la investigación del Cambiaformas (infiltrado.py)
+    "historia": (200, 232, 110),       # los niños de la sala oculta
+    "baul": (222, 178, 120),           # el baúl de la prisión y el martillo
 }

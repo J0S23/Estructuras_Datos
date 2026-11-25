@@ -60,6 +60,7 @@ class ArbolLogros:
         rama = datos.get("rama", rama)
         nodo = NodoLogro(datos["clave"], datos["nombre"], datos["descripcion"], rama, padre)
         nodo.compuesto = bool(datos.get("compuesto", False))
+        nodo.estricto = bool(datos.get("estricto", False))
         if nodo.clave in self.indice:
             raise ValueError(f"logro repetido: {nodo.clave}")
         self.indice[nodo.clave] = nodo

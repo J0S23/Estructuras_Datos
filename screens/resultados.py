@@ -79,6 +79,8 @@ def opciones_resultados(logros, nexus=None):
 def _paso_alcanzado(mision):
     """Hasta qué paso de PASOS llegaron (len(PASOS) = todos, escaparon)."""
     from misiones.mision import PIEZAS_NECESARIAS
+    if getattr(mision, "final", None) == "liberados":
+        return len(PASOS) - 1        # (ganaron, pero no escaparon: se quedaron delante)
     if mision.resultado == "victoria":
         return len(PASOS)
     fase = mision.fase
@@ -137,8 +139,8 @@ def en_intro():
 
 
 def saltar_intro():
-    """Enter, un botón o un clic durante la escena: pasa a los resultados (la
-    escena sigue de fondo). Devuelve True si había escena que saltar."""
+    """Esc durante la escena (en un mando, B o START): pasa a los resultados
+    (la escena sigue de fondo). Devuelve True si había escena que saltar."""
     if not en_intro():
         return False
     _entrada["t0"] = pygame.time.get_ticks() - _entrada["intro"]
@@ -159,7 +161,7 @@ def _intro(screen, victoria, t, jugadores, titular, color, motivo, final_histori
         # (los finales de la sala oculta traen su historia y su frase: el
         # titular sale después, en los resultados)
         if t > 700:
-            estilo.pie(screen, "[ENTER] ver los resultados", alto - 34)
+            estilo.pie(screen, "[ESC] ver los resultados", alto - 34)
         return
     e = max(0.72, min(1.6, min(ancho / 1280, alto / 720)))
     aparece = _suave(t, 2600 if victoria else 1700, 700)
@@ -173,7 +175,7 @@ def _intro(screen, victoria, t, jugadores, titular, color, motivo, final_histori
             estilo.texto(screen, motivo, fuente_de_tamano(max(14, int(19 * e))),
                          (ancho // 2, rect.bottom + int(18 * e)), COLOR_TEXTO, "midtop")
     if t > 700:
-        estilo.pie(screen, "[ENTER] ver los resultados", alto - 34)
+        estilo.pie(screen, "[ESC] ver los resultados", alto - 34)
 
 
 def _suave(t, inicio, duracion):
@@ -396,10 +398,12 @@ def _tarjeta_jugador(screen, rect, numero, jugador, fuentes, mejor, cuenta=1.0):
         y += _texto(screen, texto, f, x, y, ancho_texto, c) + 2
 
 
-def _pasos(screen, rect, alcanzado, resultado, f_chica, radio=11, avance=None):
+def _pasos(screen, rect, alcanzado, resultado, f_chica, radio=11, avance=None, cruz=False):
     """Los pasos de la misión unidos por una línea: hechos en verde, donde
     se quedaron en amarillo (rojo si perdieron ahí), lo que faltó apagado.
-    `avance` (de 0 a `alcanzado`, animación): hasta dónde llegó la línea verde."""
+    `avance` (de 0 a `alcanzado`, animación): hasta dónde llegó la línea verde.
+    `cruz`: el paso donde se quedaron lleva una X (el final "liberados": no
+    escaparon porque se quedaron, en amarillo y no en rojo)."""
     n = len(PASOS)
     margen = rect.width / (n * 2)
     y = rect.y + radio + 3
@@ -427,10 +431,14 @@ def _pasos(screen, rect, alcanzado, resultado, f_chica, radio=11, avance=None):
             c, lleno = COLOR_APAGADO, False
         pygame.draw.circle(screen, COLOR_PANEL, (xs[i], y), radio)
         pygame.draw.circle(screen, c, (xs[i], y), radio, 0 if lleno else 3)
+        k = radio / 11
         if i < alcanzado:      # una palomita
-            k = radio / 11
             pygame.draw.lines(screen, COLOR_PANEL, False, [(xs[i] - 5 * k, y), (xs[i] - 1 * k, y + 4 * k),
                                                            (xs[i] + 6 * k, y - 4 * k)], 3)
+        elif i == alcanzado and cruz:
+            for a, b in (((-4, -4), (4, 4)), ((4, -4), (-4, 4))):
+                pygame.draw.line(screen, COLOR_PANEL, (xs[i] + a[0] * k, y + a[1] * k),
+                                 (xs[i] + b[0] * k, y + b[1] * k), 3)
         _centrado(screen, nombre, f_chica, xs[i], y + radio + 5, int((rect.width - 2 * margen) / (n - 1)) - 4,
                   COLOR_TEXTO if i <= alcanzado else COLOR_APAGADO)
     return y + radio + 5 + f_chica.get_linesize() + 6
@@ -493,7 +501,8 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
     if mision is None or not mision.activa:
         titular, color = "SE ACABÓ LA RONDA", COLOR_TEXTO
     elif fin is not None:
-        titular, color = fin["titular"], (COLOR_BIEN if victoria else COLOR_MAL)
+        titular = fin["titular"]
+        color = COLOR_TITULO if fin.get("agridulce") else (COLOR_BIEN if victoria else COLOR_MAL)
     elif victoria:
         titular, color = "¡ESCAPARON DE LA NAVE!", COLOR_BIEN
     else:
@@ -520,6 +529,10 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
     # -- Titular -------------------------------------------------------------------
     y = int(18 * e)
     img = f_titular.render(titular, True, color)
+    if img.get_width() > ancho - 2 * margen:
+        # (un titular largo, como el de "liberados": más chico para que quepa)
+        f_titular = fuente_de_tamano(max(10, int(px(48) * (ancho - 2 * margen) / img.get_width() * 0.95)))
+        img = f_titular.render(titular, True, color)
     entra = _suave(t, 0, 550)
     destino = img.get_rect(midtop=(ancho // 2, y - int((1 - entra) * 30)))
     if entra < 1:
@@ -632,7 +645,8 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
         alcanzado = _paso_alcanzado(mision)
         y_c = _pasos(screen, pygame.Rect(caja.x + 10, y_c, caja.width - 20, 40),
                      alcanzado, mision.resultado, f_chica, radio,
-                     avance=alcanzado * _suave(t, 900, 300 + 320 * max(1, alcanzado)))
+                     avance=alcanzado * _suave(t, 900, 300 + 320 * max(1, alcanzado)),
+                     cruz=bool(fin and fin.get("agridulce")))
         if lineas_cf:
             img = f_chica.render("El Cambiaformas", True, COLOR_TITULO)
             screen.blit(img, (texto_x, y_c + 2))

@@ -93,7 +93,10 @@ mando, si se reconocio (por posicion) o va por numeros de respaldo, de que tipo 
 y que accion hace cada boton (los numeros de respaldo se ajustan en `mandos.py`). No hay tecla de correr; la de sigilo hace caminar a la
 mitad de velocidad y casi sin ruido.
 
-Teclas globales: **[F11]** alterna ventana, **[F3]** muestra los FPS y cuanto tarda
+Teclas globales: **[F1]** (en partida) abre el menu de admin para probar
+(apagon, eventos, invencible, abrir puertas, "Saltar a la capsula reparada"
+para ver los finales, "Dar el martillo del baul", ganar o perder ya; la
+partida en que se usa no guarda sus logros), **[F11]** alterna ventana, **[F3]** muestra los FPS y cuanto tarda
 cada cuadro (los cuadros lentos se escriben en la consola) y **[ESC]** (o START en el mando) abre el
 menu de pausa: continuar, opciones, logros y terminar partida. En Opciones, ademas del
 sonido y la pantalla completa, estan las vistas para probar: apagar el campo de vision y
@@ -106,10 +109,11 @@ codigo (la puerta de la salida), las consolas mas cercanas caminando (una con 2
 jugadores, dos con 3 y tres con 4), las tres piezas,
 el Guardia, la planta, la puerta para dos y el caso del Cambiaformas (como
 siempre; el caso no hace falta para ganar), el primer rumor a los 20 s, la confianza sube mas rapido (la verdad corre
-tres veces mas rapido y convence a mas gente), los planos piden el 80 % (hacen
-falta unos 3 desmentidos), las cuentas falsas no ganan
+tres veces mas rapido y convence a mas gente), los planos piden el 70 % (hacen
+falta unos 2 o 3 desmentidos), las cuentas falsas no ganan
 seguidores y un **reloj** de 12 minutos en el HUD (avisa a los 2 minutos y a 1, y al
-llegar a 0 termina: "Se acabo el tiempo"). En **Jugar en red > Crear partida** tambien
+llegar a 0 termina: "Se acabo el tiempo"; con los ninos de la sala oculta el reloj
+se detiene, y si llega a 0 con ellos adentro empieza la votacion). En **Jugar en red > Crear partida** tambien
 se escoge "Modo feria: Si/No" para esa partida (las otras laptops la juegan igual;
 el nombre para el ranking sale en la laptop que la creo). Ademas, al terminar una partida el equipo pone su **nombre** (hasta 16
 letras: se escribe con el teclado, o con el mando como en las maquinas de arcade) y queda en el **Ranking**
@@ -332,6 +336,21 @@ el Cambiaformas persigue al Tecnomante por un pasillo, con una barra y un consej
 (`data/consejos_carga.py`). La partida se arma en otro hilo para que la animacion
 no se congele, y la pantalla dura al menos 2 s.
 
+**La sala oculta de los ninos** (la historia completa en `docs/historia.md`):
+al reparar la capsula se abre una puerta en la pared de la Bahia. Se entra solo
+si estan todos juntos frente a ella (si falta alguien: "Quizá debería esperar a
+mis amigos..."). Adentro estan los ninos desaparecidos en capsulas de cristal;
+cuando cruzan todos la franja de la entrada de la sala (desde ahi una barrera
+invisible no deja salir hasta que se decide) hablan, alguien revisa el celular
+del piso, suena la alarma y votan en 20 s:
+escapar o quedarse con ellos (empate: se quedan; sin votos, el Guardia destruye
+la capsula). Hay cinco finales: escapar sin entrar, escapar sabiendo,
+quedarse (los encierran junto a los ninos), nadie decide y **liberarlos**: en
+la prision hay un baul con un codigo de 4 numeros escrito al margen de una nota
+cualquiera; adentro hay un martillo, y si alguien suelto lo lleva al votar,
+"quedarse" cambia por "romper las capsulas y sacarlos". Desde que entran nadie
+atrapa a nadie: el final lo decide la votacion.
+
 Mision secundaria (opcional), idea de Joseph: **el infiltrado**. Uno de los que
 escriben en NEXUS es un alien cambiaformas. Por la nave hay tres pruebas (audio,
 expediente y captura de camara); cada una revela un rasgo suyo y, al subirla
@@ -364,6 +383,8 @@ python pruebas/prueba_red_transiciones.py # en red tambien el glitch al entrar y
 python pruebas/prueba_flechas_camino.py   # las flechas guía siguen el camino, no atraviesan paredes
 python pruebas/prueba_infiltrado.py # mision secundaria del infiltrado de NEXUS
 python pruebas/prueba_logros.py    # arbol de logros y cuando se consigue cada uno
+python pruebas/prueba_sala_secreta.py # la sala de los ninos, el baul, el martillo y cada final
+python pruebas/prueba_red_ninos.py    # lo mismo en red (y en modo feria)
 python pruebas/prueba_sonidos.py   # que todo sonido pedido exista y suene donde va
 python pruebas/simulador.py 8      # bots que juegan 8 partidas: bugs y balance
 python pruebas/prueba_hud.py       # capturas del HUD con 2, 3 y 4 jugadores
@@ -440,5 +461,7 @@ python pruebas/prueba_hitbox_editor.py  # zoom y paredes idénticas a las del ju
   y el logo de NEXUS) y `Objetos/`.
 - `Hitboxes/` -- los JSON que generan los editores (paredes, objetos del mapa,
   hitbox de cada rol). La nave es el unico mapa.
-- `Audio/`, `Fuentes/` -- efectos de sonido y la tipografia.
+- `Audio/`, `Fuentes/` -- efectos de sonido (`SFX/`), voces del narrador y
+  los agentes (`Narrador/`), la musica de cada final (`Musica/`, ver
+  `juego/musica_final.py`) y la tipografia.
 - `docs/` -- documentacion tecnica: [estructuras](docs/estructuras.md), [arquitectura](docs/arquitectura.md) y [guia rapida](docs/guia_rapida.md).

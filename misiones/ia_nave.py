@@ -42,6 +42,12 @@ class Narrador:
         self.enfriamiento_ms = 0
         self.silencio_ms = 0
         self.dichas = []                # historial, para las pruebas
+        # (los pone el juego) `_espera()`: alguien está hablando con voz
+        # grabada: NEILA espera a que termine (nunca se enciman); `_solo_sala()`:
+        # está pasando lo de los niños: solo dice lo de la sala ("sala_*").
+        self._espera = None
+        self._solo_sala = None
+        self._pendiente = None
 
     @property
     def hablando(self):
@@ -49,6 +55,13 @@ class Narrador:
 
     def decir(self, evento, rol=None, forzar=False):
         """Dice una frase de ese evento. Devuelve True si la dijo."""
+        if self._solo_sala is not None and self._solo_sala() and not evento.startswith("sala_"):
+            return False          # (con los niños, nada de comentarios de la nave)
+        if self._espera is not None and self._espera():
+            if forzar:
+                self._pendiente = (evento, rol)     # (lo dice en cuanto termine la voz)
+                return True
+            return False
         if self.enfriamiento_ms > 0 and not forzar:
             return False
         opciones = FRASES.get(evento)
@@ -70,6 +83,10 @@ class Narrador:
         self.mostrado_ms += dt
         self.enfriamiento_ms = max(0, self.enfriamiento_ms - dt)
         self.silencio_ms += dt
+        if self._pendiente is not None and not (self._espera is not None and self._espera()):
+            evento, rol = self._pendiente
+            self._pendiente = None
+            self.decir(evento, rol, True)
         if self.silencio_ms >= SILENCIO_PARA_AMBIENTE_MS:
             self.decir("ambiente")
             self.silencio_ms = 0

@@ -134,8 +134,9 @@ def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
         screen.blit(cache_dibujo.capa(r.size, (*COLOR_CAPSULA, alfa)), r.topleft)
         nave = imagen_nave(etapa_nave(mision))
         if nave is not None:
-            # La nave de Anny encima del piso de la cápsula: rota, en partes o
-            # completa según la barra de reparación.
+            # La nave de Anny encima del piso de la cápsula: rota, en partes
+            # (con las piezas tiradas alrededor) o completa según la barra de
+            # reparación. Es la misma nave que sale volando en los finales.
             pos = nave.get_rect(midtop=(r.centerx, r.bottom + PIE_NAVE - BASE_NAVE * ESCALA_NAVE))
             screen.blit(nave, pos)
             pygame.draw.rect(screen, COLOR_CAPSULA, r, 2, border_radius=10)
@@ -200,7 +201,7 @@ def dibujar_piso(screen, offset, camara, dueño, mision, tiempo_ms):
 ARCHIVOS_NAVE = ("nave_rota.png", "nave_en_partes.png", "nave_completa.png")
 ESCALA_NAVE = 3          # como el mapa (ESCALA_MAPA): cada pixel del dibujo = 3 px
 PIE_NAVE = 8             # cuánto baja el dibujo del borde de abajo de la cápsula
-BASE_NAVE = 56           # fila (del dibujo de 64) donde apoya el casco: la misma en las tres
+BASE_NAVE = 39           # fila (del dibujo de 96x60) donde apoya el casco: la misma en las tres
 _naves = {}
 
 

@@ -80,28 +80,30 @@ Con los planos, los agentes tienen que alejar al Guardia de la Bahía, reunir la
 
 ### La sala oculta
 
-Con la cápsula reparada, se abre la puerta empotrada de la pared de arriba de la Bahía, a la derecha de la cápsula: se destraba, se parte en dos y sale una luz verde. Desde la Bahía solo se ve un pasillo oscuro; lo que hay detrás se ve al cruzar la puerta: un pasillo que sube, voltea y lleva a una sala escondida. Pueden subir a la cápsula y escapar, o entrar.
+Con la cápsula reparada, se abre la puerta empotrada de la pared de arriba de la Bahía, a la derecha de la cápsula: se destraba, se parte en dos y sale una luz verde. Desde la Bahía solo se ve un pasillo oscuro; lo que hay detrás se ve al cruzar la puerta: un pasillo que sube, voltea y lleva a una sala escondida. Pueden subir a la cápsula y escapar, o entrar. A la sala solo se entra juntos: si falta alguien (o está en una celda), el que intenta cruzar se devuelve pensando "Quizá debería esperar a mis amigos antes de entrar por ahí". Lo de los niños empieza cuando todos cruzaron la franja amarilla y negra de la entrada de la sala; desde ahí una barrera invisible no deja salir a nadie hasta que se decide (se quita cuando echan a andar a la cápsula, al escapar o al sacar a los niños). Desde que ven a los niños nadie atrapa a nadie: el final lo decide la votación.
 
 Si entran, encuentran a los niños. Están todos los que desaparecieron, dormidos dentro de cápsulas de cristal conectadas a la nave, algunos todavía con el celular en la mano. Eso era lo que los famosos escondían. La mochila, el zapato y el dibujo cobran sentido.
 
 No todos lo lograron, aunque nadie lo dice: algunas cápsulas ya no brillan y su monitor está plano; mientras los agentes hablan, una parpadea, su pitido se corta y NEILA la "archiva" con voz fría. En el piso hay un celular con 47 llamadas perdidas y los mensajes de una mamá. Si el Biomante intenta regenerar una cápsula apagada, su poder no encuentra nada que curar.
 
-En ese momento suenan todas las alarmas y todos los aliens de la nave van hacia ellos: se ven y se oyen venir, y llegan justo cuando se acaba el tiempo. Las cápsulas de cristal no se abren y no hay tiempo de sacar a nadie. Los agentes tienen 20 segundos para votar, cada uno en su pantalla: **correr a la cápsula y escapar, o quedarse con los niños y morir.** Gana lo que más voten; en un empate, se quedan.
+En ese momento suenan todas las alarmas y todos los aliens de la nave van hacia ellos: se oyen venir, cada vez más cerca, y se juntan frente a la puerta secreta justo cuando se acaba el tiempo (desde la sala no se ven; solo si se quedan entran corriendo por el pasillo). Las cápsulas de cristal no se abren y, sin algo con qué romper el vidrio, no hay cómo sacar a nadie. Los agentes tienen 20 segundos para votar, cada uno en su pantalla: **correr a la cápsula y escapar, o quedarse con los niños y morir.** Gana lo que más voten; en un empate, se quedan.
 
 ### El baúl de la prisión y el martillo
 
 En la prisión hay un baúl con un teclado de cuatro números. El código no está en las notas de las puertas: está rayado al margen de una nota cualquiera del mapa, así que hay que leerlas con cuidado para encontrarlo (si se equivocan, suena la alarma). Adentro hay un martillo, y lo puede llevar cualquiera, sin importar su rol. Si quien lo lleva queda fuera, el martillo vuelve al baúl.
 
-Si alguien del equipo lleva el martillo cuando suena la alarma en la sala de los niños, la segunda opción de la votación deja de ser "quedarse con ellos" y pasa a ser **romper las cápsulas y sacarlos**. Si gana, los aliens no llegan: el que lleva el martillo va solo a cada cápsula de un niño vivo y rompe el vidrio (tres martillazos cada una). Después todos van a la cápsula de escape: los niños se suben uno por uno y los agentes se quedan delante, tapándoles el paso a los aliens que vuelven.
+Si alguien del equipo lleva el martillo cuando suena la alarma en la sala de los niños (y no está encerrado en una celda: desde ahí no puede romper nada), la segunda opción de la votación deja de ser "quedarse con ellos" y pasa a ser **romper las cápsulas y sacarlos**. Si gana, los aliens no llegan: el que lleva el martillo va solo a cada cápsula de un niño vivo y rompe el vidrio (tres martillazos cada una). Después todos van a la cápsula de escape: los niños se suben uno por uno y los agentes se quedan delante, tapándoles el paso a los aliens que vuelven y rodean la cápsula.
 
 ## Los finales
 
 - **Escapan sin entrar:** exponen a los famosos alienígenas y NEXUS deja de ser la voz de la nave. Pero nunca sabrán lo que había detrás del agujero, y los niños siguen arriba.
-- **Entran y escapan:** salen vivos con lo que vieron. Por primera vez NEXUS habla de los niños: la noticia es real y millones de personas la comparten. Los niños siguen arriba, pero ya nadie puede esconderlos.
+- **Entran y escapan:** caminan solos a la cápsula y, cuando ya están adentro, todos los aliens de la nave aparecen alrededor, a punto de alcanzarla, mientras despegan. Salen vivos con lo que vieron. Por primera vez NEXUS habla de los niños: la noticia es real y millones de personas la comparten. Los niños siguen arriba, pero ya nadie puede esconderlos.
 - **Entran y se quedan:** los encierran en las celdas de la nave, junto a los niños, y el Cambiaformas patrulla por delante. La pantalla se apaga y NEXUS sigue publicando como si nada. En la Tierra nadie sabrá nunca lo que encontraron.
 - **Los liberan (con el martillo):** los niños se van en la cápsula y los agentes se quedan atrás. A la mañana siguiente, en la Tierra, una niña despierta en su cuarto; en NEXUS la noticia de que volvieron se comparte millones de veces, y debajo, #NoVolvieron: los agentes se quedaron arriba. La frase final cambia: "Ellos compartieron su dirección. Ustedes compartieron su lugar."
 - **Nadie decide:** si se acaba el tiempo sin votos, se quedan en la nave: el Guardia de la Bahía suelta la fruta, destruye la cápsula y los capturan.
 - **Derrota:** atrapan a todos los agentes o se quedan sin vidas. Esa noche NEXUS publica: "Agentes colombianos difundían noticias falsas". El Cambiaformas gana sin pelear.
+
+Cada final tiene su música en la pantalla de resultados (`juego/musica_final.py`, archivos en `Audio/Musica/`): la derrota, algo inquietante; escapar sin entrar, un cierre de ciencia ficción distópica; escapar sabiendo, aislamiento que termina en esperanza; quedarse (o que nadie vote), cuerdas tristes; liberarlos, un vals de piano agridulce. Baja mientras habla el narrador. Los créditos están en la pantalla de créditos.
 
 ## El mensaje
 

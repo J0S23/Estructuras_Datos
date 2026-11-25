@@ -14,12 +14,12 @@ saltan) y después queda de fondo, oscurecida, detrás de los resultados
   personaje respirando), las rejas caen una tras otra (con polvo y temblor),
   la baliza roja gira y un alien patrulla por delante.
 
-La cápsula es PROVISIONAL: el dibujo de la cápsula reparada del juego
-(Imagenes/Objetos/nave_completa.png), volteado y con fuego dibujado. Cuando
-esté la animación de verdad, basta con poner la hoja en
-Imagenes/UI/capsula_escape.png (cuadros cuadrados uno al lado del otro, la
-cápsula mirando a la DERECHA): se usa sola, a `FPS_CAPSULA` cuadros por
-segundo, y el fuego dibujado se apaga si `FUEGO_DIBUJADO` es False.
+La cápsula volando es la animación de Anny (Imagenes/UI/capsula_escape.png:
+16 cuadros de 80x80 uno al lado del otro, mirando a la DERECHA, con sus
+propios propulsores) a `FPS_CAPSULA` cuadros por segundo, agrandada a un
+múltiplo entero (pixel art). Si esa hoja no está, se usa el dibujo de la
+cápsula reparada del juego (Imagenes/Objetos/nave_completa.png, ya mirando a
+la derecha) con fuego dibujado (`FUEGO_DIBUJADO`).
 
 Todo sale del tiempo `t` (ms desde que apareció la pantalla): sin estado.
 Lo pesado (fondo, nebulosa, planeta, galaxia, celdas) se arma una vez por
@@ -33,8 +33,9 @@ import random
 import pygame
 
 INTRO_MS = 5600
-FPS_CAPSULA = 10
-FUEGO_DIBUJADO = True
+FPS_CAPSULA = 12               # (los 12 FPS de la animación de Anny)
+FUEGO_DIBUJADO = True          # (solo con la cápsula provisional: la de Anny trae sus propulsores)
+HOJA_CAPSULA = os.path.join("Imagenes", "UI", "capsula_escape.png")
 
 _RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _cache = {}
@@ -56,16 +57,20 @@ def _suave(t, inicio, duracion):
     return 1 - (1 - x) ** 3
 
 
-def _hoja(ruta, alto, voltear=False):
+def _hoja(ruta, alto, voltear=False, entero=False):
     """Los cuadros de una hoja (cuadros cuadrados en fila), recortados todos
-    al mismo rectángulo y agrandados a `alto` px (sin suavizar: pixel art)."""
+    al mismo rectángulo y agrandados a `alto` px (sin suavizar: pixel art).
+    Con `entero`, a la escala entera más cercana (los pixeles parejos)."""
     def armar():
         try:
             hoja = pygame.image.load(os.path.join(_RAIZ, ruta)).convert_alpha()
         except (pygame.error, FileNotFoundError, OSError):
             return []
         lado = hoja.get_height()
-        cuadros = [hoja.subsurface((i * lado, 0, lado, lado)) for i in range(max(1, hoja.get_width() // lado))]
+        if hoja.get_width() < 2 * lado:
+            cuadros = [hoja]          # (un dibujo solo, no una hoja de cuadros)
+        else:
+            cuadros = [hoja.subsurface((i * lado, 0, lado, lado)) for i in range(hoja.get_width() // lado)]
         caja = None
         for c in cuadros:
             r = c.get_bounding_rect()
@@ -74,13 +79,15 @@ def _hoja(ruta, alto, voltear=False):
         if caja is None:
             return []
         escala = alto / caja.h
-        tam = (max(1, int(caja.w * escala)), max(1, int(alto)))
+        if entero:
+            escala = max(1, round(escala))
+        tam = (max(1, int(caja.w * escala)), max(1, int(caja.h * escala)))
         salida = []
         for c in cuadros:
             img = pygame.transform.scale(c.subsurface(caja), tam)
             salida.append(pygame.transform.flip(img, True, False) if voltear else img)
         return salida
-    return _guardado(("hoja", ruta, int(alto), voltear), armar)
+    return _guardado(("hoja", ruta, int(alto), voltear, entero), armar)
 
 
 # ===========================================================================================
@@ -308,51 +315,209 @@ def _fugaces(screen, t):
         pygame.draw.circle(screen, (c, c, min(255, c + 20)), (int(x + k * 9), int(y - k * 4.3)), max(1, int(2 * f)))
 
 
-def _nave_alien(alto):
-    """La nave de los aliens, de lado (se queda atrás)."""
+# Base de la nave alienígena (pixel art): se dibuja chiquita y se agranda sin suavizar.
+NAVE_BASE = (240, 104)          # px de la nave dibujada (se agranda a un múltiplo entero)
+COMPUERTA = (217, 59)           # dónde está la compuerta abierta en ese dibujo
+
+
+def _mezcla(a, b, f):
+    f = max(0.0, min(1.0, f))
+    return tuple(int(a[i] + (b[i] - a[i]) * f) for i in range(3))
+
+
+def _nave_alien_base():
+    """La nave de los aliens, de lado, en pixel art (240x104): un platillo
+    de metal oscuro con franjas, la cúpula verde con tres siluetas, la panza
+    orgánica con costillas, aletas, antena y, a la derecha, la compuerta
+    abierta por donde salió la cápsula. Con contorno oscuro, como los sprites
+    del juego."""
     def armar():
-        w, h = int(alto * 2.2), int(alto)
+        w, h = NAVE_BASE
         sup = pygame.Surface((w, h), pygame.SRCALPHA)
-        # La cúpula de vidrio, con un brillo verdoso por dentro.
-        cupula = pygame.Rect(int(w * 0.3), int(h * 0.06), int(w * 0.4), int(h * 0.5))
-        for k in range(12):
-            f = k / 12
-            r = cupula.inflate(-int(cupula.w * 0.7 * f), -int(cupula.h * 0.7 * f))
-            r.bottom = cupula.bottom - int(cupula.h * 0.1 * f)
-            pygame.draw.ellipse(sup, (int(30 + 40 * f), int(50 + 120 * f), int(60 + 60 * f)), r)
-        pygame.draw.ellipse(sup, (120, 200, 170), cupula, 2)
-        pygame.draw.arc(sup, (200, 255, 230), cupula.inflate(-cupula.w * 0.3, -cupula.h * 0.3), 1.9, 2.6, 3)
-        # El casco: un disco ancho con degradado de arriba a abajo.
-        casco = pygame.Rect(0, int(h * 0.36), w, int(h * 0.4))
-        for k in range(16):
-            f = k / 15
-            franja = pygame.Rect(casco.x, casco.y + int(casco.h * f * 0.9), casco.w, int(casco.h * (1 - f * 0.9)))
-            pygame.draw.ellipse(sup, (int(70 - 46 * f), int(64 - 44 * f), int(96 - 60 * f)), franja)
-        pygame.draw.ellipse(sup, (120, 110, 150), casco, 3)
-        borde = casco.inflate(-int(w * 0.06), -int(casco.h * 0.45))
-        pygame.draw.ellipse(sup, (40, 36, 56), borde, 2)
-        # Ventanitas encendidas a lo largo.
-        for i in range(14):
-            x = int(w * (0.12 + 0.055 * i))
-            y = int(casco.centery - casco.h * 0.04)
-            pygame.draw.rect(sup, (255, 210, 120) if i % 4 else (120, 230, 200), (x, y, max(4, w // 90), max(3, h // 40)))
-        # Patas de aterrizaje y el motor de abajo.
-        pygame.draw.ellipse(sup, (110, 255, 190), (int(w * 0.38), int(h * 0.7), int(w * 0.24), int(h * 0.08)))
-        # La compuerta abierta por donde salió la cápsula (a la derecha).
-        pygame.draw.ellipse(sup, (255, 170, 90), (int(w * 0.86), int(h * 0.5), int(w * 0.07), int(h * 0.1)))
-        return sup
+        cx = w // 2
+        # -- Aletas de atrás (detrás del casco) -----------------------------------
+        for lado in (-1, 1):
+            base_x = cx + lado * 70
+            puntas = [(base_x - lado * 10, 50), (base_x + lado * 30, 16), (base_x + lado * 38, 18),
+                      (base_x + lado * 24, 52)]
+            pygame.draw.polygon(sup, (58, 46, 84), puntas)
+            pygame.draw.line(sup, (150, 120, 200), puntas[1], puntas[2])
+            pygame.draw.line(sup, (96, 78, 136), puntas[0], puntas[1])
+        # -- La panza: orgánica, con costillas --------------------------------------
+        panza = pygame.Rect(cx - 80, 54, 160, 40)
+        pygame.draw.ellipse(sup, (40, 22, 50), panza)
+        pygame.draw.ellipse(sup, (78, 38, 88), panza.inflate(-14, -14))
+        pygame.draw.ellipse(sup, (104, 52, 112), panza.inflate(-60, -24))
+        for i in range(-6, 7):
+            if i == 0:
+                continue
+            x = cx + i * 11
+            alto_c = 16 - abs(i) * 2
+            inclina = 3 if i > 0 else -3
+            pygame.draw.line(sup, (168, 92, 170), (x, 70), (x + inclina, 70 + alto_c))
+            pygame.draw.line(sup, (30, 14, 38), (x + 1, 71), (x + 1 + inclina, 71 + alto_c))
+        # El emisor de abajo (verde).
+        pygame.draw.ellipse(sup, (24, 70, 58), (cx - 24, 84, 48, 14))
+        pygame.draw.ellipse(sup, (70, 220, 160), (cx - 18, 86, 36, 9))
+        pygame.draw.ellipse(sup, (200, 255, 225), (cx - 9, 88, 18, 4))
+        # -- El casco: un disco ancho con franjas de luz --------------------------
+        casco = pygame.Rect(2, 40, w - 4, 38)
+        alto_casco = casco.height
+        for y in range(casco.top, casco.bottom):
+            f = (y - casco.top) / alto_casco
+            # ancho de la elipse en esta fila
+            dy = (y + 0.5 - casco.centery) / (alto_casco / 2)
+            if abs(dy) >= 1:
+                continue
+            medio = int((casco.width / 2) * math.sqrt(1 - dy * dy))
+            if f < 0.5:
+                color = _mezcla((150, 144, 182), (82, 76, 112), f / 0.5)
+                if 0.1 < f < 0.2:
+                    color = _mezcla(color, (214, 210, 240), 0.5)      # el brillo de arriba
+            else:
+                color = _mezcla((66, 58, 92), (26, 22, 40), (f - 0.5) / 0.5)
+            pygame.draw.line(sup, color, (cx - medio, y), (cx + medio - 1, y))
+        # El borde del ecuador: una franja brillante y luces.
+        ecuador = casco.centery
+        for y, color in ((ecuador - 1, (196, 190, 230)), (ecuador, (120, 112, 160)), (ecuador + 1, (40, 34, 60))):
+            dy = (y + 0.5 - casco.centery) / (alto_casco / 2)
+            medio = int((casco.width / 2) * math.sqrt(max(0.0, 1 - dy * dy)))
+            pygame.draw.line(sup, color, (cx - medio + 2, y), (cx + medio - 3, y))
+        # Paneles: costuras verticales (curvas por la perspectiva) y remaches.
+        for i in range(-9, 10):
+            x = cx + int(math.sin(i / 10 * math.pi / 2) * (casco.width / 2 - 8))
+            pygame.draw.line(sup, (58, 52, 82), (x, casco.top + 9), (x, ecuador - 3))
+            pygame.draw.line(sup, (18, 14, 30), (x, ecuador + 3), (x, casco.bottom - 7))
+            if i % 2 == 0:
+                sup.set_at((x + 2, ecuador - 6), (200, 196, 232))
+        # Ventanas a lo largo, bajo el ecuador.
+        for i in range(-8, 9):
+            x = cx + int(math.sin(i / 9.5 * math.pi / 2) * (casco.width / 2 - 20))
+            color = (120, 240, 200) if i % 3 == 0 else (255, 206, 120)
+            pygame.draw.rect(sup, (20, 14, 26), (x - 2, ecuador + 4, 5, 4))
+            pygame.draw.rect(sup, color, (x - 1, ecuador + 5, 3, 2))
+        # -- La cubierta de arriba y la cúpula --------------------------------------
+        cubierta = pygame.Rect(cx - 70, 34, 140, 18)
+        pygame.draw.ellipse(sup, (96, 90, 128), cubierta)
+        pygame.draw.ellipse(sup, (140, 134, 172), cubierta.inflate(-10, -8))
+        pygame.draw.ellipse(sup, (60, 54, 86), cubierta, 1)
+        cupula = pygame.Rect(cx - 42, 6, 84, 64)
+        recorte = pygame.Rect(0, 0, w, 42)
+        vidrio = pygame.Surface((w, h), pygame.SRCALPHA)
+        for k in range(14):
+            f = k / 13
+            r = cupula.inflate(-int(cupula.w * 0.75 * f), -int(cupula.h * 0.75 * f))
+            r.bottom = cupula.bottom - int(cupula.h * 0.08 * f)
+            pygame.draw.ellipse(vidrio, _mezcla((20, 54, 56), (110, 250, 190), f ** 1.4), r)
+        # Las tres siluetas de adentro (cabezas largas, cuellos finos), a contraluz.
+        sombra = (22, 58, 52)
+        for dx, alto_s in ((-19, 2), (0, -2), (18, 3)):
+            x = cx + dx
+            pygame.draw.ellipse(vidrio, sombra, (x - 4, 18 + alto_s, 9, 13))
+            pygame.draw.rect(vidrio, sombra, (x - 1, 30 + alto_s, 3, 3))
+            pygame.draw.ellipse(vidrio, sombra, (x - 6, 32 + alto_s, 13, 14))
+            vidrio.set_at((x - 2, 24 + alto_s), (200, 255, 140))
+            vidrio.set_at((x + 2, 24 + alto_s), (200, 255, 140))
+        sup.blit(vidrio, recorte, recorte)
+        # Borde y brillo del vidrio.
+        pygame.draw.arc(sup, (170, 255, 220), cupula, 0.05, math.pi - 0.05, 1)
+        pygame.draw.arc(sup, (240, 255, 250), cupula.inflate(-18, -14), 1.9, 2.5, 2)
+        sup.set_at((cx - 22, 16), (255, 255, 255))
+        # La antena.
+        pygame.draw.line(sup, (150, 144, 182), (cx, 6), (cx, 0))
+        pygame.draw.rect(sup, (255, 70, 80), (cx - 1, 0, 3, 2))
+        # -- La compuerta abierta (a la derecha): por ahí salió la cápsula ----------
+        puerta = pygame.Rect(w - 34, ecuador - 6, 22, 12)
+        pygame.draw.ellipse(sup, (24, 12, 10), puerta.inflate(6, 4))
+        pygame.draw.ellipse(sup, (230, 110, 50), puerta)
+        pygame.draw.ellipse(sup, (255, 190, 110), puerta.inflate(-6, -4))
+        pygame.draw.ellipse(sup, (255, 246, 210), puerta.inflate(-12, -8))
+        # (la tapa, abierta hacia arriba)
+        pygame.draw.polygon(sup, (110, 104, 146), [(puerta.left, puerta.top - 2), (puerta.right, puerta.top - 2),
+                                                   (puerta.right - 3, puerta.top - 9), (puerta.left + 4, puerta.top - 8)])
+        pygame.draw.line(sup, (200, 196, 232), (puerta.left + 4, puerta.top - 8), (puerta.right - 3, puerta.top - 9))
+        # -- Contorno oscuro de 1 px (como los sprites del juego) -------------------
+        mascara = pygame.mask.from_surface(sup)
+        borde = pygame.Surface((w, h), pygame.SRCALPHA)
+        for x, y in mascara.outline():
+            for ox, oy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                px, py = x + ox, y + oy
+                if 0 <= px < w and 0 <= py < h and not mascara.get_at((px, py)):
+                    borde.set_at((px, py), (10, 8, 18))
+        borde.blit(sup, (0, 0))
+        return borde
+    return _guardado(("nave_alien_base",), armar)
+
+
+def _nave_alien(alto):
+    """La nave de los aliens, agrandada a la escala entera más cercana a `alto` px."""
+    def armar():
+        base = _nave_alien_base()
+        escala = max(1, round(alto / NAVE_BASE[1]))
+        return pygame.transform.scale(base, (NAVE_BASE[0] * escala, NAVE_BASE[1] * escala))
     return _guardado(("nave_alien", int(alto)), armar)
 
 
+def _dibujar_nave_alien(screen, t, w, h):
+    """La nave de la que salieron, con sus luces: la cúpula y el emisor de
+    abajo laten, la compuerta abierta brilla y las luces del borde corren."""
+    nave = _nave_alien(int(h * 0.5))
+    lejos = _suave(t, 500, 4300)
+    escala = 1 - 0.6 * lejos
+    nw, nh = nave.get_size()
+    # (achicada en pasos: no se reescala en cada cuadro)
+    paso = round(escala * 20) / 20
+    if paso < 0.999:
+        nave = _guardado(("nave_alien_lejos", nh, paso),
+                         lambda: pygame.transform.scale(nave, (int(nw * paso), int(nh * paso))))
+    sw, sh = nave.get_size()
+    # Al principio, la compuerta justo donde aparece la cápsula (_camino_capsula).
+    # Después se queda atrás: se achica hacia arriba a la izquierda (sin
+    # salirse de la pantalla enseguida, para que se alcance a ver).
+    ks = sw / NAVE_BASE[0]
+    x = (w * 0.25 - w * 0.17 * lejos) - COMPUERTA[0] * ks
+    y = (h * 0.39 - h * 0.1 * lejos) - COMPUERTA[1] * ks
+    alfa = 1.0 if t < 3000 else max(0.0, 1 - (t - 3000) / 1900)
+    if alfa < 1:
+        nave = nave.copy()
+        nave.set_alpha(int(255 * alfa))
+    screen.blit(nave, (int(x), int(y)))
+    if alfa <= 0:
+        return
+    k = sw / NAVE_BASE[0]                         # px de pantalla por px del dibujo
+
+    def punto(px, py):
+        return int(x + px * k), int(y + py * k)
+
+    def luz(px, py, radio, color, fuerza=1.0):
+        r = max(3, int(radio * k * fuerza))
+        img = _resplandor(r, tuple(int(c * alfa) for c in color))
+        screen.blit(img, img.get_rect(center=punto(px, py)), special_flags=pygame.BLEND_RGB_ADD)
+
+    latido = 0.75 + 0.25 * math.sin(t / 260)
+    luz(120, 30, 46, (30, 90, 70), latido)                   # la cúpula
+    luz(120, 90, 34, (40, 140, 100), latido)                 # el emisor de abajo
+    luz(COMPUERTA[0], COMPUERTA[1], 22, (170, 90, 30), 0.85 + 0.15 * math.sin(t / 90))   # la compuerta
+    # Las luces del borde: una ola que corre de izquierda a derecha.
+    for i in range(-8, 9):
+        px = 120 + int(math.sin(i / 9.5 * math.pi / 2) * (NAVE_BASE[0] / 2 - 22))
+        ola = math.sin(i * 0.7 - t / 120)
+        if ola > 0.6:
+            luz(px, 64, 5, (200, 160, 80) if i % 3 else (80, 200, 160))
+    # La antena: un pitido rojo.
+    if (t // 450) % 2 == 0:
+        luz(120, 1, 6, (200, 40, 50))
+
+
 def _capsula(alto):
-    """Los cuadros de la cápsula, mirando a la derecha. La de verdad si está
-    (Imagenes/UI/capsula_escape.png); si no, la provisional."""
-    ruta = os.path.join("Imagenes", "UI", "capsula_escape.png")
-    if os.path.exists(os.path.join(_RAIZ, ruta)):
-        cuadros = _hoja(ruta, alto)
+    """(cuadros, provisional): los cuadros de la cápsula, mirando a la
+    derecha. La animación de Anny si está (HOJA_CAPSULA); si no, la
+    provisional (sin animación: lleva el fuego dibujado)."""
+    if os.path.exists(os.path.join(_RAIZ, HOJA_CAPSULA)):
+        cuadros = _hoja(HOJA_CAPSULA, alto, entero=True)
         if cuadros:
-            return cuadros
-    return _hoja(os.path.join("Imagenes", "Objetos", "nave_completa.png"), alto, voltear=True)
+            return cuadros, False
+    return _hoja(os.path.join("Imagenes", "Objetos", "nave_completa.png"), alto), True
 
 
 _giradas = {}
@@ -430,22 +595,13 @@ def _escena_escape(screen, t):
     recorrido = t * 0.06 + 2600 * _suave(t, 300, 3800)
     _estrellas_espacio(screen, t, recorrido, arranque)
     _fugaces(screen, t)
-    # La nave alienígena: al principio a la izquierda, y se queda atrás.
-    if t < 4200:
-        nave = _nave_alien(int(h * 0.5))
-        x = -nave.get_width() * 0.62 - w * 0.5 * _suave(t, 300, 3800)
-        y = h * 0.36 - nave.get_height() // 2
-        if t > 2600:
-            nave = nave.copy()
-            nave.set_alpha(int(255 * (1 - (t - 2600) / 1600)))
-        screen.blit(nave, (int(x), int(y)))
-        for i in range(6):
-            if (t // 300 + i) % 3:
-                pygame.draw.circle(screen, (255, 60, 70), (int(x + nave.get_width() * (0.12 + 0.13 * i)),
-                                                           int(y + nave.get_height() * 0.66)), 3)
+    # La nave alienígena: al principio a la izquierda, y se queda atrás
+    # (se aleja: se corre a la izquierda, se achica y se apaga).
+    if t < 5000:
+        _dibujar_nave_alien(screen, t, w, h)
     # La cápsula.
     cx, cy, escala, angulo = _camino_capsula(t, w, h)
-    cuadros = _capsula(int(h * 0.26) // 4 * 4 or 4)
+    cuadros, provisional = _capsula(int(h * 0.26) // 4 * 4 or 4)
     if not cuadros:
         return
     img = cuadros[int(t / 1000 * FPS_CAPSULA) % len(cuadros)]
@@ -453,7 +609,7 @@ def _escena_escape(screen, t):
         # Mientras se acerca (crece) no se guarda: se agranda en el momento.
         img = pygame.transform.scale(img, (max(1, int(img.get_width() * escala)),
                                            max(1, int(img.get_height() * escala))))
-    if FUEGO_DIBUJADO:
+    if FUEGO_DIBUJADO and provisional:
         a = math.radians(angulo)
         dx, dy = -img.get_width() * 0.44, img.get_height() * 0.02
         punta = (cx + dx * math.cos(a) + dy * math.sin(a), cy - dx * math.sin(a) + dy * math.cos(a))
@@ -532,19 +688,19 @@ def _resplandor(radio, color):
 
 
 def _armar_resplandor(radio, color):
-    if True:
-        sup = pygame.Surface((radio * 2, radio * 2))
-        sup.fill((0, 0, 0))
-        for k in range(16, 0, -1):
-            f = (1 - k / 17) ** 2
-            pygame.draw.circle(sup, tuple(int(c * f) for c in color), (radio, radio), int(radio * k / 16))
-        return sup
+    sup = pygame.Surface((radio * 2, radio * 2))
+    sup.fill((0, 0, 0))
+    for k in range(16, 0, -1):
+        f = (1 - k / 17) ** 2
+        pygame.draw.circle(sup, tuple(int(c * f) for c in color), (radio, radio), int(radio * k / 16))
+    return sup
 
 
 # Quién patrulla por delante de las celdas: (carpeta, hoja, cuadros por segundo, alto).
 PATRULLAS = {
     "cazador": ("Alien_Rapido", "walking", 9, 0.3),
-    "cambiaformas": ("Alien_Cambiaformas", "running", 12, 0.27),
+    # (en el juego es más alto que los agentes: ~1.5 veces lo que miden en su celda)
+    "cambiaformas": ("Alien_Cambiaformas", "running", 12, 0.41),
 }
 
 

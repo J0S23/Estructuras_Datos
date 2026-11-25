@@ -15,6 +15,10 @@ class NodoLogro:
         # Compuesto: "cualquiera de los de abajo". Se consigue de verdad con el
         # primero de sus hijos (no queda "por el camino").
         self.compuesto = False
+        # Estricto: solo se consigue si ya están todos los de arriba (los
+        # demás, si el padre tarda, lo esperan un momento y lo marcan "por el
+        # camino": misiones/logros.py).
+        self.estricto = False
 
     @property
     def visible(self):

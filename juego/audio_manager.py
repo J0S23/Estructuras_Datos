@@ -9,6 +9,11 @@ silencio y el juego sigue.
 De fondo suena un zumbido de la nave en bucle (`bucle`), que se calla en los
 apagones, y encima la música (`musica`): tranquila, o de tensión cuando un
 alien persigue a alguien. El volumen de los dos sigue al de los efectos.
+
+Las canciones largas de los finales (Audio/Musica/, `cancion`) no se cargan
+enteras como los efectos: van por el reproductor de pygame (mixer.music),
+que las lee de a poco del disco (una de 4 minutos ocupaba ~40 MB y daba un
+tirón al cargarse).
 """
 
 import os
@@ -17,6 +22,12 @@ import os
 _RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 import pygame
+
+# Canales apartados: 0 y 1 la música, 2 el zumbido de la nave y 3 las voces
+# grabadas (juego/voces.py). Los efectos usan los demás.
+RESERVADOS = 4
+CANAL_VOZ = 3
+VOLUMEN_VOZ = 1.0
 
 
 class AudioManager:
@@ -31,6 +42,11 @@ class AudioManager:
         self._musica = None        # nombre de la música que está sonando
         self._volumen_musica = 0.0
         self._turno_musica = 1     # cuál de los dos canales de música toca (0 o 1)
+        self._voces = {}           # archivo -> pygame.mixer.Sound
+        self._voz = None           # el nombre de la voz que está sonando
+        self._k_voz = 1.0          # la música y el zumbido, más bajitos mientras habla una voz
+        self._cancion = None       # la canción larga que está sonando (ruta)
+        self._volumen_cancion = 0.0
 
     def _resolve_audio_path(self, folder, nombre):
         for extension in (".ogg", ".wav", ".mp3"):
@@ -48,6 +64,8 @@ class AudioManager:
         try:
             if self._canal_musica is not None:
                 self._canal_musica.set_volume(self._volumen_musica * self.sfx_volume)
+            if self._cancion is not None:
+                pygame.mixer.music.set_volume(self._volumen_cancion * self.sfx_volume * self._k_voz)
         except Exception:
             pass
 
@@ -89,7 +107,7 @@ class AudioManager:
                     return
                 # Canal apartado (el 2; el 0 y el 1 son de la música): los
                 # efectos no lo usan y la música no lo pisa.
-                pygame.mixer.set_reserved(3)
+                pygame.mixer.set_reserved(RESERVADOS)
                 self._canal_bucle = pygame.mixer.Channel(2)
                 self._canal_bucle.play(sonido, loops=-1, fade_ms=800)
                 self._bucle = nombre
@@ -101,7 +119,7 @@ class AudioManager:
         self._volumen_bucle = max(0.0, min(1.0, volumen))
         try:
             if self._canal_bucle is not None:
-                self._canal_bucle.set_volume(self._volumen_bucle * self.sfx_volume)
+                self._canal_bucle.set_volume(self._volumen_bucle * self.sfx_volume * self._k_voz)
         except Exception:
             pass
 
@@ -134,14 +152,14 @@ class AudioManager:
                 # Dos canales apartados solo para la música (los efectos no los
                 # usan): así nunca se queda sin canal, y al cambiar de música
                 # la nueva entra por el otro mientras la anterior se apaga.
-                pygame.mixer.set_reserved(3)
+                pygame.mixer.set_reserved(RESERVADOS)
                 self._turno_musica = 1 - self._turno_musica
                 canal = pygame.mixer.Channel(self._turno_musica)
                 canal.play(sonido, loops=-1, fade_ms=1500)
                 self._canal_musica, self._musica = canal, nombre
             self._volumen_musica = max(0.0, min(1.0, volumen))
             if self._canal_musica is not None:
-                self._canal_musica.set_volume(self._volumen_musica * self.sfx_volume)
+                self._canal_musica.set_volume(self._volumen_musica * self.sfx_volume * self._k_voz)
         except Exception:
             pass
 
@@ -157,7 +175,104 @@ class AudioManager:
     def sonando_musica(self):
         return self._musica
 
+    # -- Voces grabadas (juego/voces.py) -------------------------------------------------
+
+    def play_voz(self, nombre):
+        """Suena la voz grabada `nombre` (Audio/Narrador) en su canal: si ya
+        sonaba otra, la corta (nunca se enciman dos voces). Mientras suena,
+        la música y el zumbido bajan un poco para que se entienda."""
+        try:
+            if pygame.mixer.get_init() is None:
+                return
+            from juego import voces
+            archivo = voces.ruta(nombre)
+            if archivo is None:
+                return
+            sonido = self._voces.get(archivo)
+            if sonido is None:
+                sonido = self._voces[archivo] = pygame.mixer.Sound(archivo)
+            if pygame.mixer.get_num_channels() < 16:
+                pygame.mixer.set_num_channels(16)
+            pygame.mixer.set_reserved(RESERVADOS)
+            canal = pygame.mixer.Channel(CANAL_VOZ)
+            canal.stop()
+            canal.set_volume(min(1.0, VOLUMEN_VOZ * max(0.35, self.sfx_volume) / 0.7))
+            canal.play(sonido)
+            self._voz = nombre
+            self._agachar(True)
+        except Exception:
+            pass
+
+    def parar_voz(self):
+        try:
+            if pygame.mixer.get_init() is not None:
+                pygame.mixer.Channel(CANAL_VOZ).fadeout(250)
+        except Exception:
+            pass
+        self._voz = None
+        self._agachar(False)
+
+    @property
+    def sonando_voz(self):
+        """El nombre de la voz que suena (o None)."""
+        try:
+            if self._voz is not None and pygame.mixer.get_init() is not None \
+                    and not pygame.mixer.Channel(CANAL_VOZ).get_busy():
+                self._voz = None
+                self._agachar(False)
+        except Exception:
+            self._voz = None
+        return self._voz
+
+    def _agachar(self, agachado):
+        """La música y el zumbido más bajitos mientras habla una voz."""
+        k = self._k_voz = 0.45 if agachado else 1.0
+        try:
+            if self._canal_musica is not None:
+                self._canal_musica.set_volume(self._volumen_musica * self.sfx_volume * k)
+            if self._canal_bucle is not None:
+                self._canal_bucle.set_volume(self._volumen_bucle * self.sfx_volume * k)
+            if self._cancion is not None:
+                pygame.mixer.music.set_volume(self._volumen_cancion * self.sfx_volume * k)
+        except Exception:
+            pass
+
+    # -- Canciones largas (los finales) ----------------------------------------------------
+
+    def cancion(self, ruta, volumen=1.0):
+        """Suena la canción de `ruta` en bucle, leída de a poco del disco
+        (si ya suena, solo cambia el volumen). Baja mientras habla una voz."""
+        try:
+            if pygame.mixer.get_init() is None:
+                return
+            if self._cancion != ruta:
+                if not os.path.exists(ruta):
+                    return
+                pygame.mixer.music.load(ruta)
+                pygame.mixer.music.play(loops=-1, fade_ms=2000)
+                self._cancion = ruta
+            self._volumen_cancion = max(0.0, min(1.0, volumen))
+            pygame.mixer.music.set_volume(self._volumen_cancion * self.sfx_volume * self._k_voz)
+        except Exception:
+            self._cancion = None
+
+    def parar_cancion(self):
+        try:
+            if self._cancion is not None and pygame.mixer.get_init() is not None:
+                pygame.mixer.music.fadeout(1500)
+        except Exception:
+            pass
+        self._cancion = None
+
+    @property
+    def sonando_cancion(self):
+        return self._cancion
+
     def play_sfx(self, nombre, volume_scale=1.0):
+        if nombre.startswith("voz:"):
+            # (las voces de la sala viajan en red como un sonido más)
+            self.play_voz(nombre[4:])
+            return
         try:
             if pygame.mixer.get_init() is None:
                 return

@@ -109,7 +109,11 @@ CAPSULAS = 8
 # (data/ia_nave.py: "sala_archivado"). Todo por índice de cápsula (0..7).
 SUJETOS = [12, 15, 19, 22, 23, 27, 30, 34]
 APAGADAS = (2, 5, 7)
-SE_APAGA = {"capsula": 4, "desde_ms": 8000, "dura_ms": 1900}
+# Se apaga justo antes de la línea `antes_de_linea` del diálogo ("Esa luz estaba
+# prendida hace un momento..."): entre la línea anterior y esa hay una pausa
+# (parpadea `dura_ms`, se queda plana y `pausa_ms` después hablan) (Diego, nov 25:
+# antes se apagaba a los 8 s y la frase llegaba mucho después).
+SE_APAGA = {"capsula": 4, "antes_de_linea": 4, "dura_ms": 1900, "pausa_ms": 700}
 # El celular en el piso, frente a una cápsula apagada: los mensajes de la mamá.
 CELULAR_NINO = {
     "capsula": 5,
@@ -164,6 +168,8 @@ MARTILLO = {
     # Al revisar una cápsula viva en la sala (pista de que se puede).
     "sin_martillo": "El vidrio es grueso. Con algo pesado se podría romper...",
     "con_martillo": "Con el martillo podría romper el vidrio... Hay que decidirlo juntos.",
+    # Lo lleva alguien encerrado en una celda cuando suena la alarma: no cuenta.
+    "encerrado": "Tengo el martillo... pero desde esta celda no puedo romper nada.",
 }
 # Ganó liberarlos (misiones/sala_secreta.py): quien lleva el martillo rompe
 # las cápsulas (sin aliens: se devuelven), los niños y los agentes van a la
@@ -176,6 +182,16 @@ LIBERAR = {
     "entra_ms": 420,               # lo que tarda en meterse a la cápsula
     "despega_ms": 1900,            # desde que entra el último hasta que se van
     "sube": "¡Arriba, rápido! ¡Nosotros nos quedamos!",
+}
+
+# Entrar a la sala oculta: solo si están todos juntos frente a la puerta (o
+# ya adentro). Así nadie se queda al otro lado del mapa mientras pasa lo de
+# los niños (Diego, nov 25). La cápsula ya pedía lo mismo.
+PUERTA_JUNTOS = {
+    "radio": 420,                  # a cuánto de la puerta cuenta como "aquí" (px del mundo)
+    "esperar": "Quizá debería esperar a mis amigos antes de entrar por ahí.",
+    "celda": "No podemos entrar sin {}: primero hay que sacarlo de la celda.",
+    "cada_ms": 2500,               # (para no repetir el aviso a cada paso)
 }
 
 # Llegar a la cápsula con la sala oculta abierta (y sin haber entrado): no se
@@ -265,7 +281,10 @@ FINALES = {
     },
     "liberados": {
         "victoria": True,
-        "titular": "LOS NIÑOS VOLVIERON A CASA",
+        "titular": "LOS NIÑOS VOLVIERON A CASA... PERO USTEDES NO",
+        # (agridulce: el titular en amarillo, ni verde ni rojo; y en "La misión",
+        # "Escapar" lleva una X amarilla: ellos no escaparon, se quedaron)
+        "agridulce": True,
         "motivo": "Rompieron las cápsulas, subieron a los niños a la cápsula y se quedaron atrás.",
         "escena": ["Los niños se van en la cápsula. Los agentes se quedan atrás, tapando la puerta.",
                    "A la mañana siguiente, en la Tierra, una niña despierta en su cuarto.",

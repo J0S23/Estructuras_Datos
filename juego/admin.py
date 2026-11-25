@@ -168,6 +168,64 @@ def _terminar(resultado, motivo):
     return accion
 
 
+def _capsula_lista(juego):
+    """Salta al final de la partida: la cápsula queda reparada (se abre la
+    sala de los niños) y todos aparecen en la Bahía, frente a la puerta, para
+    ver los finales sin jugar la partida entera (Diego, nov 25)."""
+    mision = juego.mision
+    if mision is None or not mision.activa:
+        return "Este mapa no tiene misión"
+    if mision.resultado is not None:
+        return "La partida ya terminó"
+    if mision.fase == "huida":
+        return "La cápsula ya está reparada"
+    _abrir_puertas(juego)
+    _liberar(juego)
+    for consola in mision.consolas:
+        consola["progreso"] = 1
+    mision.piezas_entregadas = max(mision.piezas_entregadas, mision.piezas_necesarias)
+    mision.reparacion = 1.0
+    mision.empezar_huida()
+    # El Guardia de la Bahía, como si le hubieran dado la fruta: se va a su
+    # rincón a comer y ya no persigue a nadie (Diego, nov 25: molestaba
+    # atrapándolos al ver los finales).
+    guardia = getattr(getattr(juego, "guardia_planta", None), "guardia", None)
+    if guardia is not None:
+        guardia.alimentar()
+    # Todos a la Bahía: frente a la puerta de la sala (o a la cápsula, si el
+    # mapa no tiene sala oculta).
+    sala = juego.sala_secreta
+    if sala is not None and sala.activa and sala.puerta is not None:
+        centro = (sala.puerta.centerx, sala.puerta.bottom + 110)
+    elif mision.capsula is not None:
+        centro = (mision.capsula.centerx, mision.capsula.bottom + 80)
+    else:
+        return "¡Cápsula reparada!"
+    vivos = [j for j in juego.jugadores if not j.eliminado]
+    for k, jugador in enumerate(vivos):
+        preferido = (centro[0] + (k - (len(vivos) - 1) / 2) * 60, centro[1])
+        x, y = juego.mundo.punto_libre(preferido, jugador.hitbox.width, jugador.hitbox.height)
+        jugador.personaje.hitbox.topleft = (int(x), int(y))
+        jugador.personaje.sync_sprite_from_hitbox()
+    return "¡Cápsula reparada! Están en la Bahía, frente a la sala de los niños"
+
+
+def _dar_martillo(juego):
+    """Le da el martillo del baúl de la prisión al primero que siga en la
+    partida (para probar el final "liberados")."""
+    sala = juego.sala_secreta
+    if sala is None or not sala.activa or sala.baul is None:
+        return "Este mapa no tiene el baúl"
+    if any("martillo" in j.objetos for j in juego.jugadores):
+        return "Alguien ya lleva el martillo"
+    jugador = next((j for j in juego.jugadores if not j.eliminado), None)
+    if jugador is None:
+        return "No queda nadie"
+    sala.baul["abierto"], sala.baul["con_martillo"] = True, False
+    jugador.objetos.add("martillo")
+    return f"Martillo para {jugador.rol}"
+
+
 def _si_no(valor):
     return "sí" if valor else "no"
 
@@ -190,6 +248,10 @@ OPCIONES = [
      "estado": lambda j: _si_no(getattr(j, "admin_invencible", False))},
     {"texto": "Abrir todas las puertas", "accion": _abrir_puertas},
     {"texto": "Sacar a todos de las celdas", "accion": _liberar},
+    {"texto": "Saltar a la cápsula reparada (los finales)", "accion": _capsula_lista,
+     "estado": lambda j: "lista" if j.mision is not None and j.mision.fase == "huida" else ""},
+    {"texto": "Dar el martillo del baúl", "accion": _dar_martillo,
+     "estado": lambda j: "lo tiene" if any("martillo" in x.objetos for x in j.jugadores) else ""},
     {"texto": "Ganar ya (ver la escena del final)", "accion": _terminar("victoria", "escaparon")},
     {"texto": "Perder ya (todos a las celdas)", "accion": _terminar("derrota", "atrapados")},
 ]

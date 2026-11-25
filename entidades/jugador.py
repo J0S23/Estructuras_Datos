@@ -248,6 +248,9 @@ class Jugador:
         self.mensaje_quien = None     # quién lo dice si no es él: [nombre, foto] (un prisionero)
         self.mensaje_ms = 0
         self.mensaje_total_ms = DURACION_MENSAJE_MS   # cuánto duraba al salir (para la animación)
+        # El mensaje es una línea con voz grabada (juego/voces.py): mientras
+        # suena, lo demás espera (no se corta ni se encima a la voz).
+        self.mensaje_voz = False
         self.mensajes_pendientes = []  # los que esperan a que se lea una instrucción
 
         # Zona del mapa sobre la que está parado, para la pista de "presiona E".
@@ -519,6 +522,14 @@ class Jugador:
         que le habla)."""
         if getattr(self, "en_historia", False):
             return      # (la sala de los niños: no se interrumpe el diálogo; misiones/sala_secreta.py)
+        if self.mensaje_voz and self.mensaje_ms > 0 and texto != self.mensaje:
+            # Está hablando (con voz): esto sale cuando termine.
+            pendientes = getattr(self, "mensajes_pendientes", None)
+            if pendientes is None:
+                pendientes = self.mensajes_pendientes = []
+            pendientes[:] = [p for p in pendientes if p[0] != texto][-2:]
+            pendientes.append((texto, color, quien))
+            return
         if (self.mensaje and self.mensaje_ms > 0 and texto != self.mensaje
                 and es_instruccion(self.mensaje) and not es_instruccion(texto)
                 and self.mensaje_total_ms - self.mensaje_ms < INSTRUCCION_PROTEGIDA_MS):
@@ -531,11 +542,14 @@ class Jugador:
             return
         self._mostrar_mensaje(texto, color, quien)
 
-    def _mostrar_mensaje(self, texto, color, quien):
+    def _mostrar_mensaje(self, texto, color, quien, ms=None, voz=False):
+        """`ms`: lo que dura (si no, según lo largo del texto); `voz`: es una
+        línea con audio (dura lo del audio y nada la interrumpe)."""
         self.mensaje = texto
         self.mensaje_color = color
         self.mensaje_quien = list(quien) if quien else None
-        self.mensaje_ms = self.mensaje_total_ms = duracion_mensaje(texto)
+        self.mensaje_ms = self.mensaje_total_ms = int(ms) if ms else duracion_mensaje(texto)
+        self.mensaje_voz = bool(voz)
 
     def actualizar_mensaje(self, dt):
         pendientes = getattr(self, "mensajes_pendientes", None)
@@ -543,6 +557,9 @@ class Jugador:
             self.mensaje_ms = max(0, self.mensaje_ms - dt)
             if self.mensaje_ms == 0:
                 self.mensaje = ""
+                self.mensaje_voz = False
+        if self.mensaje_voz and self.mensaje_ms > 0:
+            return          # (habla con voz: lo que espera, después)
         if pendientes and (self.mensaje_ms == 0 or not es_instruccion(self.mensaje)
                            or self.mensaje_total_ms - self.mensaje_ms >= INSTRUCCION_PROTEGIDA_MS):
             # La instrucción ya se alcanzó a leer: sale lo que esperaba.

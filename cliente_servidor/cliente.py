@@ -973,10 +973,15 @@ class Sesion:
             desde = min(c.reconectando_desde or time.time() for c in cortadas)
             quedan = max(0, int(RECONECTAR_S - (time.time() - desde)))
             self._cartel(pantalla, f"Se cortó la conexión: reconectando... ({quedan} s)  ·  Esc Esc sale")
-        if glob.get("resultado") and not saliendo:
+        en_resultados = bool(glob.get("resultado")) and not saliendo
+        if en_resultados:
             self._resultado(pantalla, glob["resultado"])
         elif time.time() - getattr(self, "_esc", 0) < 2.5:
             self._cartel(pantalla, "Pulsa Esc otra vez para salir de la partida en red")
+        if not en_resultados:
+            from juego.audio_manager import audio_manager
+            if audio_manager.sonando_cancion:
+                audio_manager.parar_cancion()      # (la música del final, solo en los resultados)
         self._dibujar_transicion(pantalla)
         return not self.motivo
 
@@ -1198,6 +1203,15 @@ class Sesion:
         """La pantalla de resultados del modo local (con el espejo): el resumen
         con "Ver logros" y "Volver al menú", y el árbol de logros. Las teclas,
         `_evento_resultado`."""
+        from juego import musica_final
+        try:
+            mision = getattr(getattr(self.espejo, "g", None), "mision", None)
+            if musica_final.clave(mision) is not None:
+                musica_final.actualizar(mision)          # la música de ese final, como en local
+            elif resultado in ("victoria", "derrota"):
+                musica_final.actualizar_clave(resultado)
+        except Exception:
+            pass
         try:
             if self.espejo.error is not None:
                 raise RuntimeError("sin espejo")
@@ -1271,7 +1285,9 @@ class Sesion:
         from screens import resultados as pantalla_resultados
         from juego.pausa import mover_en_logros
         g = self.espejo.g
-        if g.resultados_vista == "resumen" and pantalla_resultados.saltar_intro():
+        if g.resultados_vista == "resumen" and pantalla_resultados.en_intro():
+            if key == pygame.K_ESCAPE:
+                pantalla_resultados.saltar_intro()      # (solo Esc salta la escena del final)
             return
         if self.iniciales is not None and not self.iniciales.hecho and g.resultados_vista == "resumen":
             from juego.app import TECLAS_INICIALES
@@ -1315,8 +1331,8 @@ class Sesion:
     def _click_resultado(self, pos):
         from screens import resultados as pantalla_resultados
         g = self.espejo.g
-        if g.resultados_vista == "resumen" and pantalla_resultados.saltar_intro():
-            return
+        if g.resultados_vista == "resumen" and pantalla_resultados.en_intro():
+            return          # (un clic ya no salta la escena del final: solo Esc)
         if self.iniciales is not None and not self.iniciales.hecho:
             return          # (primero las iniciales: con el teclado o el mando)
         if g.resultados_vista == "logros":

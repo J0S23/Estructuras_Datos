@@ -35,7 +35,7 @@ nodos = arbol.preorden()
 assert len(nodos) == arbol.total() == len(arbol.indice)
 assert all(n.rama in COLOR_RAMA for n in nodos)
 niveles = arbol.por_niveles()
-assert niveles[0] == [arbol.raiz] and len(niveles[1]) == 8
+assert niveles[0] == [arbol.raiz] and len(niveles[1]) == 10
 assert sum(len(n) for n in niveles) == arbol.total()
 print(f"{arbol.total()} logros, {len(niveles)} niveles, ramas: {[n.nombre for n in niveles[1]]}")
 
@@ -222,15 +222,15 @@ for _ in range(80):
     if g.transitions.is_idle(): break
     g.transitions.update(g, 33)
 g.current_screen = "resultados"
-# Primero va la escena del final sola (screens/final.py): la primera tecla la
-# salta y quedan los resultados (con la escena de fondo).
+# Primero va la escena del final sola (screens/final.py): Esc la salta y
+# quedan los resultados (con la escena de fondo).
 from screens import resultados as pantalla_resultados
 from juego import efectos
 g._dibujar()
 if efectos.ACTIVOS:
     assert pantalla_resultados.en_intro()
     cap("logros_d_escena_final.png")
-    g._manejar_tecla(pygame.K_RETURN)
+    g._manejar_tecla(pygame.K_ESCAPE)
     assert not pantalla_resultados.en_intro() and g.resultados_vista == "resumen"
 cap("logros_d_resultados.png")
 print(f"escapar: 'Libertad', 'Todos a bordo' y 'Nadie me vio' -> {L.arbol.obtenidos()}/{L.arbol.total()}")
@@ -359,4 +359,16 @@ for _ in range(80):
 assert g3.current_screen == "menu"
 historial_logros.cargar = cargar
 print("menú > Logros: todos los logros, con los conseguidos alguna vez")
+# -- Los estrictos (los de los niños, el baúl y el cepo): sin su padre, no -------------------------
+from misiones.logros import GestorLogros
+G = GestorLogros(type("J", (), {})())
+G.conseguir("despertar")
+assert not G.conseguir("ellos_primero") and not G.tiene("ellos_primero") and not G.pendientes, \
+    "sin abrir el baúl, 'Ellos primero' no sale (ni queda esperando)"
+assert not G.conseguir("llamadas_perdidas") and not G.tiene("detras_de_la_pared")
+G.conseguir("letra_pequena")
+assert [n.clave for n in G.conseguir("ellos_primero")] == ["ellos_primero"]
+G.conseguir("detras_de_la_pared")
+assert G.conseguir("llamadas_perdidas") and not G.arbol.buscar("detras_de_la_pared").por_camino
+print("estrictos: el hijo no sale sin haber pasado por el padre")
 print("\nTODO OK")

@@ -814,6 +814,11 @@ class Game:
         if self.sala_secreta.activa:
             from screens import sala_secreta as dibujo_sala
             dibujo_sala.precalentar(self.sala_secreta)
+            # La navegación del tamaño de un jugador (los que caminan solos a
+            # la cápsula o a romper los vidrios): armarla tardaba ~0.3 s y se
+            # notaba como un tirón justo al acabar la votación.
+            from juego import demo
+            navegacion.de_mundo(self.mundo, *demo.TAMANO_NAV)._vecinos()
         self._nuevo_ambiente()
         self.tutorial, self.eventos = None, None
         self.nexus = RedNexus(self) if self.mision.activa else None
@@ -1108,6 +1113,11 @@ class Game:
     def _nuevo_ambiente(self):
         self.ambiente = Ambiente()
         self.narrador = Narrador(al_hablar=lambda: self.ambiente.sonar("ia_voz", 0.7))
+        # NEILA no pisa a quien habla con voz grabada, y con los niños solo
+        # dice lo de la sala (misiones/ia_nave.py, juego/voces.py).
+        self.narrador._espera = lambda: any(j.mensaje_voz and j.mensaje_ms > 0 for j in self.jugadores)
+        self.narrador._solo_sala = lambda: (self.sala_secreta is not None and self.sala_secreta.activa
+                                            and self.sala_secreta.en_secuencia)
         self._aviso_pulso_ms = 0
 
     def sonar(self, nombre, volumen=1.0):
@@ -1218,10 +1228,10 @@ class Game:
         if jugador is None:
             return
         sala = self.sala_secreta
-        if (sala is not None and sala.activa and sala.estado == "desenlace"
-                and sala.resultado in ("escapar", "liberar")):
-            # Ya decidieron en la sala de los niños: caminan solos y nadie los
-            # atrapa (ni el Guardia ni la Sombra), el final ya está escrito.
+        if sala is not None and sala.activa and sala.en_secuencia:
+            # Desde que ven a los niños nadie atrapa a nadie (ni el Guardia ni
+            # la Sombra): el final lo decide la votación y nadie se queda en
+            # una celda mientras los demás se van.
             return
         donde = jugador.hitbox.center
         if self.logros is not None:
@@ -2257,7 +2267,10 @@ class Game:
     def _sonido_de_fondo(self):
         """El zumbido de la nave suena durante la partida; se calla en los
         apagones (las máquinas se apagan) y baja en la pausa."""
+        audio_manager.sonando_voz        # (al terminar una voz, la música vuelve a su volumen)
         if self.current_screen == "partida" and self.mundo is not None:
+            if audio_manager.sonando_cancion:
+                audio_manager.parar_cancion()
             if self.eventos is not None and self.eventos.apagon:
                 volumen = 0.0
             else:
@@ -2275,6 +2288,12 @@ class Game:
         else:
             if audio_manager.sonando_bucle:
                 audio_manager.parar_bucle()
+            # En los resultados, la música de ese final (juego/musica_final.py).
+            from juego import musica_final
+            if self.current_screen == "resultados":
+                musica_final.actualizar(self.mision)
+            else:
+                musica_final.parar()
             if self.current_screen in SIN_MUSICA_MENU:
                 if audio_manager.sonando_musica:
                     audio_manager.parar_musica()
@@ -2305,12 +2324,17 @@ class Game:
             if evento.type == pygame.QUIT:
                 self.running = False
             elif self.current_screen == "intro" and self.intro is not None:
-                # La cinemática de apertura: cualquier tecla, botón o clic la salta.
-                if evento.type in EVENTOS_SALIR_DEMO:
+                # La cinemática de apertura: solo Esc la salta (o, en un mando,
+                # el botón que hace de Esc: B o START). Antes cualquier tecla,
+                # botón o clic, y se saltaba sin querer (Diego, nov 25).
+                if evento.type == pygame.KEYDOWN and evento.key == pygame.K_ESCAPE:
                     self.intro.saltar()
                 elif evento.type in EVENTOS_CONEXION:
                     self.mandos.evento(evento)
                     self._sincronizar_mandos()
+                elif evento.type in EVENTOS_ENTRADA:
+                    if any(accion in ("volver", "pausa") for _, accion in self.mandos.evento(evento)):
+                        self.intro.saltar()
             elif self.demo is not None and evento.type in EVENTOS_SALIR_DEMO:
                 # Cualquier tecla, botón o clic: de la demo al menú, a jugar.
                 self.salir_demo()
@@ -2614,9 +2638,12 @@ class Game:
         self.resultados_rects_logros = {}
 
     def _tecla_resultados(self, key):
-        # Durante la escena del final (screens/final.py), cualquier tecla la salta.
+        # Durante la escena del final (screens/final.py), solo Esc la salta (en
+        # un mando, B o START, que llegan como Esc); las demás teclas, nada.
         from screens import resultados as pantalla_resultados
-        if self.resultados_vista == "resumen" and pantalla_resultados.saltar_intro():
+        if self.resultados_vista == "resumen" and pantalla_resultados.en_intro():
+            if key == pygame.K_ESCAPE:
+                pantalla_resultados.saltar_intro()
             return
         if self.iniciales is not None and not self.iniciales.hecho and self.resultados_vista == "resumen":
             self.iniciales.teclear(key, getattr(self, "texto_tecla", ""), self, TECLAS_INICIALES)
@@ -2657,8 +2684,8 @@ class Game:
 
     def _click_resultados(self, pos):
         from screens import resultados as pantalla_resultados
-        if self.resultados_vista == "resumen" and pantalla_resultados.saltar_intro():
-            return
+        if self.resultados_vista == "resumen" and pantalla_resultados.en_intro():
+            return          # (un clic ya no salta la escena del final: solo Esc)
         if self.iniciales is not None and not self.iniciales.hecho:
             return          # (primero las iniciales: con el teclado o el mando)
         if self.resultados_vista == "logros":

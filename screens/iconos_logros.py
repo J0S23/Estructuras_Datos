@@ -577,6 +577,85 @@ def _acusacion_falsa(d):
     d.circulo(0, 0.26, 0.055, d.fondo)
 
 
+# -- Los niños y el baúl --------------------------------------------------------------------
+
+def _cepo(d):
+    # El cepo, abierto: el aro con dientes y el plato del centro.
+    d.circulo(0, 0.04, 0.42, ancho=0.08)
+    for i in range(10):
+        a = math.pi * 2 * i / 10
+        x, y = math.cos(a), math.sin(a) * 0.9
+        d.poligono([(x * 0.36, 0.04 + y * 0.36), (x * 0.18 + y * 0.07, 0.04 + y * 0.18 - x * 0.07),
+                    (x * 0.18 - y * 0.07, 0.04 + y * 0.18 + x * 0.07)])
+    d.circulo(0, 0.04, 0.1)
+
+
+def _detras_de_la_pared(d):
+    # La puerta partida en dos, con la luz saliendo por la rendija.
+    d.rect(-0.42, -0.44, 0.34, 0.88, radio=0.04)
+    d.rect(0.08, -0.44, 0.34, 0.88, radio=0.04)
+    d.poligono([(-0.06, -0.44), (0.06, -0.44), (0.2, 0.44), (-0.2, 0.44)], d.tono(0.55))
+
+
+def _eran_de_ellos(d):
+    # La mochila.
+    d.rect(-0.3, -0.26, 0.6, 0.7, radio=0.14)
+    d.arco(0, -0.26, 0.16, 180, 0, ancho=0.06)
+    d.rect(-0.2, 0.12, 0.4, 0.2, d.fondo, radio=0.05)
+    d.linea([(-0.2, 0.2), (0.2, 0.2)], ancho=0.04)
+
+
+def _llamadas_perdidas(d):
+    # Un celular con la burbujita roja de las llamadas.
+    d.rect(-0.24, -0.44, 0.48, 0.88, radio=0.08)
+    d.rect(-0.18, -0.34, 0.36, 0.62, d.fondo, radio=0.03)
+    d.circulo(0, 0.36, 0.04, d.fondo)
+    d.circulo(0.24, -0.38, 0.16)
+    d.circulo(0.24, -0.38, 0.1, d.fondo)
+    d.circulo(0.24, -0.38, 0.05)
+
+
+def _demasiado_tarde(d):
+    # El monitor con la línea plana.
+    d.rect(-0.44, -0.32, 0.88, 0.6, radio=0.06)
+    d.rect(-0.36, -0.24, 0.72, 0.44, d.fondo, radio=0.03)
+    d.linea([(-0.3, -0.02), (-0.12, -0.02), (-0.06, -0.14), (0.0, -0.02), (0.3, -0.02)], ancho=0.05)
+    d.rect(-0.16, 0.3, 0.32, 0.1)
+
+
+def _lo_vimos(d):
+    # Un ojo bien abierto.
+    n = 16
+    arriba = [(-0.46 + 0.92 * i / n, -0.3 * math.sin(math.pi * i / n)) for i in range(n + 1)]
+    abajo = [(0.46 - 0.92 * i / n, 0.3 * math.sin(math.pi * i / n)) for i in range(n + 1)]
+    d.poligono(arriba + abajo)
+    d.circulo(0, 0, 0.2, d.fondo)
+    d.circulo(0, 0, 0.1)
+
+
+def _no_los_dejamos(d):
+    # Una persona grande abrazando a una chica.
+    d.persona(-0.12, 0.08, 0.6, d.tono(0.3))
+    d.persona(0.18, 0.2, 0.38)
+
+
+def _letra_pequena(d):
+    # Una nota con una lupa encima.
+    d.rect(-0.42, -0.4, 0.56, 0.72, radio=0.04)
+    for y in (-0.26, -0.14, -0.02):
+        d.linea([(-0.34, y), (0.04, y)], d.fondo, 0.035)
+    d.circulo(0.12, 0.1, 0.2, d.fondo)
+    d.circulo(0.12, 0.1, 0.2, ancho=0.07)
+    d.linea([(0.26, 0.24), (0.44, 0.42)], ancho=0.1)
+
+
+def _ellos_primero(d):
+    # Un agente con los brazos abiertos, tapando, y un niño que se va detrás.
+    d.persona(-0.18, -0.02, 0.32, d.tono(0.4))
+    d.persona(0.12, 0.1, 0.56)
+    d.linea([(-0.2, 0.2), (0.44, 0.2)], ancho=0.07)
+
+
 DIBUJOS = {
     "despertar": _despertar,
     "sigiloso": _sigiloso, "pasos_de_gato": _pasos_de_gato, "shhh": _shhh, "fantasma": _fantasma,
@@ -597,6 +676,9 @@ DIBUJOS = {
     "no_me_enganas": _no_me_enganas, "lobo_con_piel_de_oveja": _lobo_con_piel_de_oveja,
     "algo_no_cuadra": _algo_no_cuadra, "evidencia": _evidencia, "caso_cerrado": _caso_cerrado,
     "corazonada": _corazonada, "acusacion_falsa": _acusacion_falsa,
+    "cepo": _cepo, "detras_de_la_pared": _detras_de_la_pared, "eran_de_ellos": _eran_de_ellos,
+    "llamadas_perdidas": _llamadas_perdidas, "demasiado_tarde": _demasiado_tarde, "lo_vimos": _lo_vimos,
+    "no_los_dejamos": _no_los_dejamos, "letra_pequena": _letra_pequena, "ellos_primero": _ellos_primero,
 }
 
 

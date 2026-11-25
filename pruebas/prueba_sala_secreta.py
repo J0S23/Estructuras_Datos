@@ -121,19 +121,48 @@ def abrir(g, sala):
 
 
 def entrar(g, sala):
+    # (si alguien está diciendo algo con voz, el diálogo espera a que termine)
+    for _ in range(800):
+        if not any(j.mensaje_voz and j.mensaje_ms > 0 for j in g.jugadores):
+            break
+        cuadros(g, DT)
+    # El diálogo empieza cuando TODOS cruzaron la franja de la entrada: el
+    # primero adentro solo, todavía no.
     poner(g.jugadores[0], (sala.sala.left + 120, sala.pasillo.centery))
-    if len(g.jugadores) > 1:
-        poner(g.jugadores[1], (sala.sala.left + 60, sala.pasillo.centery + 40))
+    otros = [j for j in g.jugadores[1:] if j.puede_moverse]
+    if otros:
+        poner(otros[0], (sala.sala.left - 60, sala.pasillo.centery))
+        cuadros(g, 50)
+        assert sala.estado == "abierta", "falta uno: no empiezan a hablar"
+    for k, j in enumerate(otros):
+        poner(j, (sala.sala.left + 60 + 50 * k, sala.pasillo.centery + 40))
     cuadros(g, 50)
     assert sala.estado == "dialogo", sala.estado
+    # La flecha amarilla no manda a la cápsula mientras están con los niños...
+    assert g.mision.punto_objetivo(g.jugadores[0]) is None, g.mision.punto_objetivo(g.jugadores[0])
+    # La barrera invisible: ya no se puede salir por la entrada.
+    barrera = sala.barrera()
+    assert barrera in g.mundo.paredes and g.mundo.colisiona(barrera.inflate(4, -4)), "nadie sale"
     dicho = set()
+    from data.historia import SE_APAGA, DIALOGO_NINOS
+    apagada_en = None
     while sala.estado == "dialogo":
         cuadros(g, DT)
         dicho.update(j.mensaje for j in g.jugadores if j.mensaje)
+        if apagada_en is None and SE_APAGA["capsula"] in sala.apagadas:
+            apagada_en = sala.estado_ms
+    # La cápsula se apaga justo antes de "Esa luz estaba prendida hace un
+    # momento..." (en un silencio entre esa línea y la anterior).
+    k = SE_APAGA["antes_de_linea"]
+    assert "luz" in DIALOGO_NINOS[k]["texto"]
+    assert apagada_en is not None and sala.fin_lineas[k - 1] - 1500 < apagada_en <= sala.fin_lineas[k - 1], \
+        (apagada_en, sala.fin_lineas)
     # Hablaron: la votación no empieza hasta que alguien revise el celular.
     assert sala.estado == "espera", sala.estado
     cuadros(g, 1500)
     assert sala.estado == "espera", "sin revisar el celular no empieza el conteo"
+    # ...y vuelve para el celular.
+    assert (g.mision.punto_objetivo(g.jugadores[0]) or (None, ""))[1] == "Revisa el celular"
     j1 = g.jugadores[0]
     poner(j1, (sala.celular[0] - 30, sala.celular[1]))
     cuadros(g, 50)
@@ -197,6 +226,21 @@ assert nav.conectados(desde, sala.sala.center), "abierta: se llega a la sala cam
 poner(g.jugadores[0], (sala.puerta.centerx + 40, sala.puerta.bottom + 140))
 cuadros(g, 50)
 foto(g, "b_abierta")
+# Solo se entra si están todos: con J2 lejos, la puerta no deja pasar a J1
+# (vuelve a la Bahía y piensa que debería esperar); con J2 cerca, pasa.
+from data.historia import PUERTA_JUNTOS
+j1, j2 = g.jugadores[:2]
+poner(j2, (sala.puerta.centerx + 2000, sala.puerta.bottom + 600))
+poner(j1, (sala.puerta.centerx, sala.puerta.bottom - 12))
+cuadros(g, 50)
+assert not sala.reunidos and j1.hitbox.top >= sala.puerta.bottom, "falta J2: no pasa"
+assert j1.mensaje == PUERTA_JUNTOS["esperar"], j1.mensaje
+assert sala.estado == "abierta"
+poner(j2, (sala.puerta.centerx + 60, sala.puerta.bottom + 80))
+poner(j1, (sala.puerta.centerx, sala.puerta.bottom - 12))
+cuadros(g, 50)
+assert sala.reunidos and j1.hitbox.colliderect(sala.puerta), "con todos, pasa"
+print("la puerta de la sala espera a que estén todos")
 
 dicho = entrar(g, sala)
 assert sala.estado == "votacion"
@@ -205,6 +249,24 @@ for j in g.jugadores:
 # Hablan de los niños y de lo que encontraron por el camino (2 pistas).
 from data.historia import PISTAS_EN_DIALOGO
 assert any("niños" in m for m in dicho), dicho
+# Las voces (juego/voces.py): la línea del Tecnomante suena con su voz y el
+# cuadro dura lo del audio; la de la Biomante (que no está) la dice otro: con
+# su propia voz si grabó esa línea (`ninos_1_<rol>.mp3`) y si no, sin voz
+# (nunca con la voz de otro personaje), y dura según el texto.
+from juego import voces
+hablantes = sala._hablantes
+assert hablantes[1].rol == "Tecnomante"
+assert sala.fin_lineas[1] - sala.fin_lineas[0] == voces.ms_en_pantalla("ninos_2"), sala.fin_lineas
+assert hablantes[0].rol != "Biomante"
+propia = voces.de_rol("ninos_1", hablantes[0].rol)
+if propia:
+    assert propia == f"ninos_1_{hablantes[0].rol.lower()}"
+    assert sala.fin_lineas[0] == voces.ms_en_pantalla(propia), (sala.fin_lineas, propia)
+else:
+    assert sala.fin_lineas[0] == sala.duracion_linea(sala._texto_linea(0))
+assert voces.de_rol("ninos_1", "Biomante") == "ninos_1" and voces.de_rol("ninos_1", "Forjador") is None
+assert not [e for e, _ in g.narrador.dichas if not e.startswith("sala_")][-1:] or \
+    all(e.startswith("sala_") for e, _ in g.narrador.dichas[-3:]), "NEILA no comenta otras cosas con los niños"
 # Con los niños no salen otros mensajes (NEXUS: "se volvió viral"...).
 j1 = g.jugadores[0]
 j1.avisar("¡Lo de la Biosfera se volvió viral!")
@@ -221,10 +283,16 @@ assert min(mitad) > 60, f"llegaron antes de tiempo: {min(mitad):.0f} px"
 assert any(mitad[i] < list(distancias.values())[i] - 50 for i in range(len(mitad))), "vienen acercándose"
 while sala.estado == "votacion":
     cuadros(g, DT)
-al_final = [math.dist(a.centro, (sala.sala.left, sala.pasillo.centery)) for a in g.aliens if sala.conduce(a)]
-print(f"al acabar el contador, el más cercano está a {min(al_final):.0f} px de la sala")
-assert min(al_final) < 80, "al acabar el contador llegan a la puerta de la sala"
-cuadros(g, 600)
+# Esperan afuera, frente a la puerta secreta (desde la sala no se ven):
+# ninguno en el pasillo ni en la sala antes de que se decida.
+vienen = [a for a in g.aliens if sala.conduce(a)]
+al_final = [math.dist(a.centro, (sala.puerta.centerx, sala.puerta.bottom + 60)) for a in vienen]
+print(f"al acabar el contador, el más cercano está a {min(al_final):.0f} px de la puerta secreta")
+assert min(al_final) < 120, "al acabar el contador llegan a la puerta secreta"
+assert not any(r.collidepoint(a.centro) for a in vienen for r in [sala.sala] + list(sala.pasillos)), \
+    "antes de decidir, ninguno entra al pasillo (no se ven desde la sala)"
+cuadros(g, 1400)
+assert any(sala.sala.collidepoint(a.centro) for a in vienen), "se quedan: entran corriendo por el pasillo"
 foto(g, "d_desenlace")
 final, resultado = terminar(g, sala)
 assert (final, resultado) == ("quedarse", "derrota"), (final, resultado)
@@ -236,6 +304,17 @@ assert sala.estado == "cerrada" and sala.puerta in g.mundo.paredes, "la ronda si
 # (el tercer puesto juega con mando: sin él no se mueve ni vota)
 g.jugadores[2].con_mando = g.jugadores[2].puede_moverse = True
 abrir(g, sala)
+# Dos llegan juntos a la puerta (y falta el tercero): los dos piensan que
+# deberían esperar, pero la frase suena una sola vez (una voz no pisa a otra).
+j1, j2, j3 = g.jugadores[:3]
+poner(j3, (sala.puerta.centerx + 2000, sala.puerta.bottom + 600))
+poner(j1, (sala.puerta.centerx - 30, sala.puerta.bottom - 12))
+poner(j2, (sala.puerta.centerx + 30, sala.puerta.bottom - 12))
+cuadros(g, 50)
+assert j1.mensaje == j2.mensaje == PUERTA_JUNTOS["esperar"], (j1.mensaje, j2.mensaje)
+assert [j1.mensaje_voz, j2.mensaje_voz].count(True) == 1, (j1.mensaje_voz, j2.mensaje_voz)
+print("dos en la puerta a la vez: los dos lo piensan, la voz suena una sola vez")
+poner(j3, (sala.puerta.centerx, sala.puerta.bottom + 80))
 entrar(g, sala)
 votar(g, g.jugadores[0], "escapar")
 votar(g, g.jugadores[1], "escapar")
@@ -258,7 +337,10 @@ assert sala.acortado and sala.quedan_ms <= max(VOTACION["segundos_si_votaron_tod
 while sala.estado == "votacion":
     cuadros(g, DT)
 assert sala.resultado == "escapar" and sala.a_la_capsula
-# Ganó escapar: los aliens no entran (se devuelven) y ellos caminan solos a la cápsula.
+# Ganó escapar: los aliens no entran (esperaban afuera: vuelven a donde
+# estaban, sin pasar por delante) y ellos caminan solos a la cápsula.
+assert not any(math.dist(a.centro, (sala.puerta.centerx, sala.puerta.bottom + 60)) < 150
+               for a in g.aliens if sala.conduce(a)), "ninguno queda frente a la puerta secreta"
 cerca_sala = []
 ms = 0
 while g.mision.resultado is None and ms < 20000:
@@ -267,6 +349,14 @@ while g.mision.resultado is None and ms < 20000:
     cerca_sala += [a for a in g.aliens if sala.conduce(a) and sala.sala.collidepoint(a.centro)]
 final, resultado = g.mision.final, g.mision.resultado
 assert not cerca_sala, "ganó escapar: ningún alien entró a la sala"
+assert sala.barrera() not in g.mundo.paredes, "al ir a la cápsula, la barrera se quita"
+from misiones.sala_secreta import CERCO_DESDE
+c = g.mision.capsula.center
+rodean = [a for a in g.aliens if sala.conduce(a) or sala._cerco.get(a.nombre)]
+assert sala.cerco_ms is not None and rodean and all(
+    math.dist(a.centro, c) < CERCO_DESDE for a in rodean if a.nombre in sala._cerco), \
+    "al subir a la cápsula, los aliens la rodean"
+foto(g, "e_cerco")
 zona = g.mision.capsula.inflate(40, 40)
 assert all(zona.colliderect(j.hitbox) for j in g.jugadores[:2]), \
     [j.hitbox.center for j in g.jugadores]
@@ -336,6 +426,14 @@ while sala.estado == "votacion":
     cuadros(g, DT)
 assert sala.resultado == "liberar", "empate: liberarlos (también es quedarse)"
 assert sala.fase_liberar == "romper" and sala.cola and set(sala.cola) == set(vivas), sala.cola
+# Donde el piloto deja de caminar (tocando la zona, no justo en el punto)
+# también rompe: antes se quedaba quieto al lado de la cápsula (Diego, nov 25).
+rompe = sala._rompedor()
+x, y = sala.lugar_golpe(sala.cola[0])
+poner(rompe, (x - rompe.hitbox.width // 2 - 3, y))
+assert sala._llego_golpe(rompe, sala.cola[0]) and math.dist(rompe.hitbox.center, (x, y)) > 14
+cuadros(g, 2500)
+assert sala.rota(sala.cola[0]), "rompió la primera desde donde paró"
 ms, en_sala, vistos = 0, [], set()
 while g.mision.resultado is None and ms < 60000:
     cuadros(g, DT)
@@ -345,6 +443,13 @@ while g.mision.resultado is None and ms < 60000:
     if sala.fase_liberar == "capsula" and "f_ninos" not in vistos and sala.fase_ms > 3000:
         vistos.add("f_ninos")
         foto(g, "f_ninos")
+    if sala.fase_liberar == "capsula" and "g_rodean" not in vistos and sala.quedan_ms < 700:
+        vistos.add("g_rodean")
+        foto(g, "g_rodean")
+        # Rodean la cápsula, dispersos (no en una sola fila).
+        metas = [d["destino"] for d in sala._caminos.values()]
+        assert len({round(p[1] / 40) for p in metas}) >= 3 and len({round(p[0] / 60) for p in metas}) >= 4, metas
+assert "g_rodean" in vistos
 assert not en_sala, "ganó liberar: ningún alien entró a la sala"
 assert all(sala.rota(i) for i in vivas), "rompió las cápsulas de todos los vivos"
 assert all(i in vistos for i in vivas), "cada niño salió"
@@ -353,6 +458,10 @@ assert not any(j.preso for j in g.jugadores), "nadie los atrapó mientras tanto"
 zona = g.mision.capsula.inflate(160, 160)
 assert all(zona.colliderect(j.hitbox) for j in g.jugadores[:2]), "se quedaron delante de la cápsula"
 assert (g.mision.final, g.mision.resultado) == ("liberados", "victoria"), (g.mision.final, g.mision.resultado)
+g.logros.al_terminar()
+for clave in ("letra_pequena", "detras_de_la_pared", "llamadas_perdidas", "ellos_primero"):
+    assert g.logros.tiene(clave), clave
+assert not g.logros.tiene("libertad"), "se quedaron atrás: no es escapar"
 print(f"liberar: rompieron {len(vivas)} cápsulas y los subieron en {ms / 1000:.1f} s")
 
 # Sin el martillo: la opción de siempre.
@@ -363,6 +472,61 @@ assert sala.claves == ["escapar", "quedarse"], sala.claves
 votar(g, g.jugadores[0], "quedarse")
 final, _ = terminar(g, sala)
 assert final == "quedarse", final
+
+# == 4c. Casos raros del martillo y del final ===================================================
+# Alguien (el del martillo) está encerrado: sin él no empieza lo de los
+# niños (el diálogo espera a que estén todos adentro).
+sala = partida(g)
+j1, j2 = g.jugadores[:2]
+j2.objetos.add("martillo")
+sala.baul["abierto"], sala.baul["con_martillo"] = True, False
+abrir(g, sala)
+g.mision.encarcelar(j2)
+assert j2.preso is not None
+for c in g.mision.celdas:          # (que no se fugue solo)
+    if c["preso"] is j2:
+        c["fuga_ms"] = None
+poner(j1, (sala.sala.left + 120, sala.pasillo.centery))
+cuadros(g, 500)
+assert sala.estado == "abierta", "con uno en la celda no empiezan a hablar"
+assert not sala.equipo_con_martillo(), "encerrado no puede usar el martillo"
+print("alguien en una celda: no empieza hasta que estén todos")
+
+# El del martillo se desconecta (red) a mitad de romper: otro toma el martillo y sigue.
+sala = partida(g)
+j1, j2 = g.jugadores[:2]
+j1.objetos.add("martillo")
+sala.baul["abierto"], sala.baul["con_martillo"] = True, False
+abrir(g, sala)
+entrar(g, sala)
+assert sala.claves == ["escapar", "liberar"]
+votar(g, j1, "liberar")
+while sala.estado == "votacion":
+    cuadros(g, DT)
+cuadros(g, 300)
+j1.desconectado = True
+cuadros(g, 50)
+assert sala._rompedor() is j2 and "martillo" in j2.objetos and "martillo" not in j1.objetos, \
+    (j2.objetos, j1.objetos)
+assert not sala.baul["con_martillo"], "no vuelve al baúl en medio de romper"
+ms = 0
+while g.mision.resultado is None and ms < 60000:
+    cuadros(g, DT)
+    ms += DT
+assert g.mision.final == "liberados", g.mision.final
+assert sum(j.objetos.get("martillo", 0) for j in g.jugadores) == 1, "un solo martillo"
+j1.desconectado = False
+print("se desconectó el del martillo: otro lo toma y los liberan igual")
+
+# Después de verlos ya no se pueden ir sin decidir: la barrera de la entrada
+# sigue mientras esperan el celular (solo se quita al ir a la cápsula).
+sala = partida(g)
+abrir(g, sala)
+entrar(g, sala)        # (llega hasta la votación: revisa el celular y lo cierra)
+assert sala.barrera() in g.mundo.paredes, "votando: la barrera sigue"
+final, _ = terminar(g, sala)
+assert final == "nadie", final
+print("con los niños nadie sale por la entrada hasta que se decide")
 
 # == 5. Escapan sin entrar ====================================================================
 sala = partida(g)

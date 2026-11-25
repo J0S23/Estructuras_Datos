@@ -158,7 +158,7 @@ try:
     assert teclado.error_dibujo is None and mandos.error_dibujo is None
     pygame.image.save(pantallas[0], os.path.join(CARPETA, "red_resultados_laptop1.png"))
     pygame.image.save(pantallas[1], os.path.join(CARPETA, "red_resultados_laptop2.png"))
-    # Los resultados se manejan como en el modo local: el primer Enter salta la
+    # Los resultados se manejan como en el modo local: Esc (solo Esc) salta la
     # escena del final (screens/final.py); el botón escogido es "Ver logros"
     # (antes cualquier Enter sacaba de la partida y no se podían ver).
     def tecla(k):
@@ -169,6 +169,8 @@ try:
     teclado.paso(pantallas[0], eventos=[])
     assert pantalla_resultados.en_intro()
     teclado.paso(pantallas[0], eventos=[tecla(pygame.K_RETURN)])
+    assert teclado.motivo is None and pantalla_resultados.en_intro(), "Enter ya no salta el final"
+    teclado.paso(pantallas[0], eventos=[tecla(pygame.K_ESCAPE)])
     assert teclado.motivo is None and not pantalla_resultados.en_intro()
     gr = teclado.espejo.g
     assert pantalla_resultados.opciones_resultados(gr.logros)[gr.resultados_sel][1] == "logros"

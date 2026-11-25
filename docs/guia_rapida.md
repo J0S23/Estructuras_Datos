@@ -24,7 +24,10 @@ python main.py
 ```
 
 Jugar → cuántos juegan (2, 3 o 4) → dificultad → (si hay mandos) con qué
-juega cada uno → rol de cada uno → pantalla de carga → partida. El mapa que
+juega cada uno → rol de cada uno → cinemática de apertura (la niña y el
+chat; mientras se ve, la partida se arma en otro hilo; se salta con
+cualquier tecla) → (si todavía no está lista, la pantalla de carga) →
+partida. Desde el menú, [H] vuelve a mostrar la cinemática. El mapa que
 se carga lo dice `Hitboxes/mapa_activo.json` (hoy `MapaFinal`); se cambia
 desde el editor de mapa con la tecla M.
 
@@ -32,9 +35,11 @@ desde el editor de mapa con la tecla M.
 
 | Tecla | Qué hace |
 |---|---|
+| F1 | en partida: el menú de admin para probar (apagón, eventos, invencible, abrir puertas, "Saltar a la cápsula reparada" para ver los finales de la sala de los niños, "Dar el martillo del baúl", ganar o perder ya). La partida en que se usa no guarda sus logros |
 | F11 | alterna entre ventana y pantalla completa |
 | F3 | primera vez: FPS y ms de actualizar y dibujar arriba a la derecha; segunda: además perfila cada cuadro y anota los tirones (más de 40 ms) en la consola y en `Guardado/tirones.txt`; tercera: apagado |
 | F9 | prende o apaga la segunda pantalla: con 3 o 4 jugadores, J3 y J4 se dibujan en otra ventana sin bordes en el otro monitor (en Windows tiene que estar en "Extender") |
+| F12 dos veces | vuelve al menú desde donde sea (sin resultados) |
 | ESC (o START en el mando) | en partida abre el menú de pausa (continuar, opciones, logros, terminar partida); en el menú principal cierra el juego |
 
 En Pausa > Opciones están las vistas para la sustentación: apagar el campo
@@ -46,7 +51,7 @@ Las teclas de cada jugador están en la tabla del README.
 ## Pruebas
 
 Las pruebas son scripts en `pruebas/` que corren sin abrir ventana. Para
-correrlas todas de una (hoy son 33 archivos `prueba_*.py`):
+correrlas todas de una (hoy son 78 archivos `prueba_*.py`):
 
 ```bash
 export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
@@ -60,8 +65,10 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 for f in pruebas/prueba_*.py; do python "$f" >/dev/null 2>&1 || echo FALLA $f; done
 ```
 
-Si no imprime ningún `FALLA`, pasaron todas. En una máquina de 4 núcleos la
-corrida completa tarda entre dos y tres minutos.
+Si no imprime ningún `FALLA`, pasaron todas. La corrida completa tarda un
+buen rato (las de red, la de la Feria y la de la sala de los niños juegan
+partidas enteras): mejor de a una o dos a la vez, que varias juntas se
+quedan sin memoria.
 
 Las variables `SDL_VIDEODRIVER=dummy` y `SDL_AUDIODRIVER=dummy` hacen que
 pygame no abra ventana ni busque parlantes. Con ellas, además, el juego no
@@ -77,6 +84,8 @@ python pruebas/prueba_nexus.py         # grafo de NEXUS, rumores, celular, barra
 python pruebas/prueba_vista_grafo.py   # la vista de los grafos
 python pruebas/prueba_logros.py        # árbol de logros y cuándo sale cada uno
 python pruebas/prueba_partida.py       # una ronda completa sin ventana
+python pruebas/prueba_sala_secreta.py  # la sala de los niños, el baúl, el martillo y cada final
+python pruebas/prueba_red_ninos.py     # lo mismo en red, normal y en modo feria
 ```
 
 `pruebas/probar_mando.py` no es una prueba automática: abre una ventana y

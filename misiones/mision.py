@@ -670,6 +670,11 @@ class Mision:
         if sala is not None and sala.activa and sala.estado == "espera" and sala.celular is not None:
             # Ya hablaron de los niños: la votación empieza al revisar el celular.
             return tuple(sala.celular), "Revisa el celular"
+        if sala is not None and sala.activa and (sala.en_secuencia or sala.en_la_sala(jugador)
+                                                 or any(jugador.hitbox.colliderect(p) for p in sala.pasillos)):
+            # Con los niños, la flecha no manda a la cápsula (Diego, nov 25):
+            # solo vuelve para el celular (arriba).
+            return None
         if self.fase == "huida":
             if bahia is not None:
                 distraer = bahia.punto_distraer(jugador)
@@ -1311,6 +1316,10 @@ class Mision:
                 self.motivo_fin = "escaparon"
                 if sala is not None and sala.activa and sala.se_abrio and not sala.entraron:
                     self.final = "sin_entrar"
+                elif sala is not None and sala.activa and sala.entraron:
+                    # Vieron a los niños y se fueron sin revisar el celular (sin
+                    # votación): es el final de escapar sabiendo lo que pasa.
+                    self.final = "escaparon"
                 for j in jugadores:
                     j.sumar_puntos(PUNTOS_ESCAPE // max(1, len(jugadores)))
 

@@ -12,6 +12,9 @@ las paredes, o el campo de visión seguía tapado), la sala pintada, el menú de
 la votación, los votos, el contador y el final. Al final se compara el
 dibujo del servidor y del cliente píxel por píxel durante la votación.
 
+`probar_voces`: las voces grabadas viajan al cliente y suenan una sola vez
+(dos en la puerta a la vez; cada línea del diálogo).
+
 `probar_liberar`: el baúl de la prisión desde el cliente (el teclado, el
 martillo al inventario), "liberar" en el menú en vez de "quedarse" y, al
 ganar, que el cliente vea las cápsulas rotas, a los niños caminando donde
@@ -258,10 +261,78 @@ def probar_liberar(feria):
     print(f"{nombre}: liberar -> final '{espejo.g.mision.final}' en el cliente")
 
 
+def probar_voces(feria):
+    """Las voces en red: suenan en el servidor, viajan como un sonido más
+    ("voz:...") y el cliente las toca. Dos llegan juntos a la puerta (falta el
+    tercero): la frase suena una sola vez. Y en el diálogo cada línea suena
+    una vez, con la voz del que la dice."""
+    nombre = "feria" if feria else "normal"
+    s = Servidor(3, avisar=lambda t: None, semilla=7, presentaciones=False, mapa="MapaFinal", feria=feria)
+    s.preparar_partida()
+    s.lista.set()
+    for p in s.puestos:
+        p.ocupado = True
+    g = s.juego
+    if g.tutorial is not None:
+        g.saltar_tutorial()
+    from juego.app import Game
+    from juego import voces
+    espejo = Espejo(Game(), s.bienvenida(s.puestos[0]))
+    espejo.preparar()
+    sala = g.sala_secreta
+    for j in g.jugadores:
+        j.invulnerable_ms = 10 ** 9
+    g.mision.abrir_puerta()
+    g.mision.empezar_huida()
+    cuadros(s, 200)
+    s.sonidos = []
+    tocadas = []
+    espejo.g.ambiente.sonar = lambda nombre, volumen=1.0, *a, **k: tocadas.append(nombre)
+
+    def voces_enviadas():
+        enviadas = [n for n, _ in s.sonidos if n.startswith(voces.PREFIJO)]
+        pasar(s, espejo)
+        espejo.sonar(s.sonidos)
+        s.sonidos = []
+        return enviadas
+
+    j1, j2, j3 = g.jugadores[:3]
+    poner(j3, (sala.puerta.centerx + 2000, sala.puerta.bottom + 600))
+    poner(j1, (sala.puerta.centerx - 30, sala.puerta.bottom - 12))
+    poner(j2, (sala.puerta.centerx + 30, sala.puerta.bottom - 12))
+    cuadros(s, 3)
+    enviadas = voces_enviadas()
+    assert len(enviadas) == 1 and enviadas[0].startswith(voces.PREFIJO + "sala_esperar"), enviadas
+    assert [t for t in tocadas if t.startswith(voces.PREFIJO)] == enviadas, "el cliente la toca una vez"
+    assert espejo.g.jugadores[0].mensaje == espejo.g.jugadores[1].mensaje, "los dos lo piensan (texto)"
+    print(f"{nombre}: dos en la puerta, la voz viaja y suena una sola vez ({enviadas[0][4:]})")
+    # Entran todos: cada línea del diálogo suena una vez, con la voz de quien la dice.
+    poner(j1, (sala.sala.left + 120, sala.pasillo.centery))
+    poner(j2, (sala.sala.left + 60, sala.pasillo.centery + 40))
+    poner(j3, (sala.sala.left + 60, sala.pasillo.centery - 40))
+    voces_enviadas()
+    tocadas.clear()
+    dichas = []
+    for _ in range(6000):
+        cuadros(s, 1)
+        dichas += voces_enviadas()
+        if sala.estado not in ("abierta", "dialogo"):
+            break
+    assert sala.estado == "espera", sala.estado
+    lineas = [d[len(voces.PREFIJO):] for d in dichas]
+    esperadas = [voces.de_rol(sala._voz_linea(i), sala._hablantes[i].rol) for i in range(len(sala._hablantes))]
+    esperadas = [e for e in esperadas if e]
+    assert lineas == esperadas, (lineas, esperadas)
+    assert [t[len(voces.PREFIJO):] for t in tocadas if t.startswith(voces.PREFIJO)] == lineas
+    print(f"{nombre}: diálogo en red, {len(lineas)} voces, cada una una vez y en orden")
+
+
 pygame.init()
 probar(False)
 probar(True)
 probar_liberar(False)
 probar_liberar(True)
+probar_voces(False)
+probar_voces(True)
 print(f"capturas en {CARPETA}")
 print("OK prueba_red_ninos")

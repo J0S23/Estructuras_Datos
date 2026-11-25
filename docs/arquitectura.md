@@ -27,6 +27,7 @@ flowchart TD
         partida["partida.py, paneles.py, celular.py"]
         vistas["arbol_alien.py, grafo_vista.py, logros.py, panel_habilidades.py"]
         resultados["resultados.py, pausa.py, ayuda.py, creditos.py"]
+        historia["cinematica.py, final.py, sala_secreta.py, arte_historia.py"]
     end
 
     subgraph entidades["entidades/"]
@@ -42,6 +43,7 @@ flowchart TD
         eventos["eventos.py: GestorEventos"]
         glogros["logros.py: GestorLogros"]
         otros["infiltrado.py, guardia.py, puertas.py, ia_nave.py"]
+        sala["sala_secreta.py: SalaSecreta (los niños, el baúl, los finales)"]
     end
 
     subgraph estructuras["Estructuras/"]
@@ -131,8 +133,10 @@ flowchart LR
     dificultad -->|"si hay mandos"| controles["controles"]
     dificultad -->|"sin mandos"| roles["roles"]
     controles --> roles
-    roles --> cargando["cargando (hilo aparte)"]
-    cargando --> partida["partida"]
+    roles --> intro["intro (cinemática; la partida se arma en otro hilo)"]
+    intro -->|"si ya está lista"| partida["partida"]
+    intro -->|"si no"| cargando["cargando"]
+    cargando --> partida
     partida -->|"ESC"| pausa["pausa (dentro de partida)"]
     pausa --> partida
     partida -->|"mision.resultado"| resultados["resultados"]
@@ -144,8 +148,10 @@ flowchart LR
 ```
 
 `Game.empezar_carga` arma la partida en un `threading.Thread` (el hilo llama
-`_preparar_partida`) para que la animación del Cambiaformas persiguiendo al
-Tecnomante no se congele; la pantalla dura al menos `MIN_CARGA_MS = 2000`.
+`_preparar_partida`) mientras se ve la cinemática de apertura
+(`screens/cinematica.py`); si al terminarla la partida no está lista, sale la
+pantalla de carga (el Cambiaformas persiguiendo al Tecnomante, al menos
+`MIN_CARGA_MS = 2000`).
 Sin ventana (las pruebas, con `SDL_VIDEODRIVER=dummy`) no hay hilo: llama
 `iniciar_partida()` de una. La pausa no es otra pantalla: es `self.pausa`
 (`juego/pausa.py: MenuPausa`) y, mientras existe, la partida no se actualiza.
@@ -198,9 +204,14 @@ Dentro de `_actualizar_partida` el orden importa:
    y los eventos de la nave (apagón, alarma, compuertas).
 6. Prisioneros (`npcs.actualizar`), NEXUS (`nexus.actualizar`, y el feed del
    celular si está abierto), minijuegos de escondite, pulso, salas, ambiente,
-   logros y la presentación de aliens nuevos.
-7. `mision.actualizar(dt)`. Si deja un `resultado`, se llama
-   `terminar_ronda()` y se pasa a resultados.
+   logros y la presentación de aliens nuevos. Mientras pasa lo de los niños
+   (`sala_secreta.en_secuencia`) NEXUS y los eventos se quedan quietos, los
+   aliens los mueve la sala y nadie atrapa a nadie.
+7. `sala_secreta.actualizar(dt)` (la sala oculta: la puerta, el diálogo, la
+   votación y cada final; `misiones/sala_secreta.py`) y
+   `mision.actualizar(dt)`. Si deja un `resultado`, se llama
+   `terminar_ronda()` y se pasa a resultados (con la escena del final:
+   `screens/final.py` y, los de la sala oculta, `screens/cinematica.py`).
 
 Con F3 se ve cuánto tarda cada parte: `_medir_cuadro` muestra los FPS y los
 ms de actualizar y dibujar, y `juego/diagnostico.py` anota los cuadros de más
@@ -208,10 +219,10 @@ de 40 ms en la consola y en `Guardado/tirones.txt`.
 
 ## Modo en red (cliente-servidor)
 
-Este modo **no está en `main`**: vive en la rama `claude/cliente-servidor`
-(su propio PR) con la carpeta `cliente_servidor/` y el diseño en
-`docs/cliente_servidor.md` de esa rama. Lo resumimos aquí para que la
-arquitectura quede completa. El modo local (`python main.py`) no cambia.
+Vive en la carpeta `cliente_servidor/` y el diseño completo está en
+`docs/cliente_servidor.md`; se entra desde el menú (**Jugar en red**). Lo
+resumimos aquí para que la arquitectura quede completa. El modo local
+(`python main.py` > Jugar) no cambia.
 
 La idea es que un **servidor** sin ventana sea el dueño de la partida y que el
 **cliente** solo lea la entrada y dibuje.

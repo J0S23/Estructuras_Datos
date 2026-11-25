@@ -147,6 +147,28 @@ def _escrito(texto, t, por_segundo=42):
     return texto[:max(0, int(t / 1000 * por_segundo))]
 
 
+def _linea_narrada(textos, t, total, voz=None, voz_desde=0):
+    """(índice, ms dentro de la línea, lo que dura la línea) del subtítulo
+    que va a los `t` ms de un tramo de `total` ms, o None (todavía no).
+    Con la narración grabada (`voz`, que empieza a los `voz_desde` ms), cada
+    línea sale cuando Lucas la empieza a decir (juego/voces.cortes); si no,
+    se reparten parejo, como antes."""
+    from juego import voces
+    if not textos:
+        return None
+    marcas = voces.cortes(voz, len(textos)) if voz else None
+    if marcas is None:
+        tramo = total / len(textos)
+        k = min(len(textos) - 1, int(max(0, t) // tramo))
+        return k, t - k * tramo, tramo
+    inicios = [voz_desde + m for m in marcas]
+    if t < inicios[0]:
+        return None
+    k = max(i for i, ini in enumerate(inicios) if t >= ini)
+    fin = inicios[k + 1] if k + 1 < len(inicios) else max(total, inicios[k] + 1500)
+    return k, t - inicios[k], fin - inicios[k]
+
+
 def _subtitulo(screen, area, texto, t, duracion):
     """El texto de abajo (como un documental): entra escribiéndose y se va
     desvaneciendo al final."""
@@ -155,7 +177,9 @@ def _subtitulo(screen, area, texto, t, duracion):
     from screens.paneles import partir_lineas
     f = _f(max(16, area.height * 0.034))
     texto = tr(texto)                      # (en inglés: se escribe ya traducido)
-    visible = _escrito(texto, t, 55)
+    # (se escribe a 55 letras por segundo; si la línea dura poco, como cuando
+    # la narra Lucas, más rápido: escrita entera a los 2/3 de su tiempo)
+    visible = _escrito(texto, t, max(55, len(texto) * 1000 / max(1.0, duracion * 0.66)))
     alfa = int(255 * min(1.0, (duracion - t) / 400)) if t > duracion - 400 else 255
     if alfa <= 0:
         return
@@ -199,7 +223,7 @@ def _pie_saltar(screen, area, t):
     if t < 1200:
         return
     f = _f(max(12, area.height * 0.02))
-    img = cache_dibujo.texto(f, "[ENTER] saltar", (150, 152, 170))
+    img = cache_dibujo.texto(f, "[ESC] saltar", (150, 152, 170))
     screen.blit(img, img.get_rect(bottomright=(area.right - 16, area.bottom - 10)))
 
 
@@ -352,33 +376,59 @@ def _burbuja(sup, texto, y, propia, w_max, f, color=None):
 # La cinemática de apertura
 # ===========================================================================================
 
+# El narrador (docs/guion_narrador.md): apertura_1..5 y apertura_frase en
+# Audio/Narrador. Cada escena dura lo que su texto o, si su narración es más
+# larga, lo que la narración (juego/voces.py): la voz y la imagen van juntas.
+VOZ_ESCENA_DESDE_MS = 500        # la narración entra después del fundido
+VOZ_FRASE_DESDE_MS = 300
+
+
+def duraciones_apertura():
+    """(ms de cada escena, ms de la frase), alargados si la narración es más larga."""
+    from juego import voces
+    escenas = [max(e["ms"], VOZ_ESCENA_DESDE_MS + voces.ms_en_pantalla(f"apertura_{i + 1}") + 300)
+               for i, e in enumerate(CINEMATICA)]
+    frase = max(FRASE_APERTURA_MS, VOZ_FRASE_DESDE_MS + voces.ms_en_pantalla("apertura_frase") + 700)
+    return escenas, frase
+
+
 class Cinematica:
     def __init__(self, sonar=None):
         self.t = 0
         self.terminada = False
         self.sonar = sonar or (lambda nombre, volumen=1.0: None)
         self._sonados = set()
+        self.duraciones, self.ms_frase = duraciones_apertura()
         self.inicios = []
         t = 0
-        for escena in CINEMATICA:
+        for ms in self.duraciones:
             self.inicios.append(t)
-            t += escena["ms"]
+            t += ms
         self.inicio_frase = t
-        self.total = t + FRASE_APERTURA_MS
+        self.total = t + self.ms_frase
+        self.sonidos = _sonidos_apertura(self.inicios, self.inicio_frase)
+        # Las narraciones: (ms, archivo).
+        self.voces = [(inicio + VOZ_ESCENA_DESDE_MS, f"apertura_{i + 1}") for i, inicio in enumerate(self.inicios)]
+        self.voces.append((self.inicio_frase + VOZ_FRASE_DESDE_MS, "apertura_frase"))
 
     def actualizar(self, dt):
         if self.terminada:
             return
+        antes = self.t
         self.t += dt
-        for momento, nombre, volumen in SONIDOS_APERTURA:
+        for momento, nombre, volumen in self.sonidos:
             if momento <= self.t and momento not in self._sonados:
                 self._sonados.add(momento)
                 self.sonar(nombre, volumen)
+        for momento, nombre in self.voces:
+            if antes < momento <= self.t or (momento == 0 and antes == 0):
+                _voz(nombre)
         if self.t >= self.total:
             self.terminada = True
 
     def saltar(self):
         self.terminada = True
+        _callar()
 
     def escena(self):
         """(índice, t dentro de la escena); índice = len(CINEMATICA) es la frase."""
@@ -392,21 +442,25 @@ class Cinematica:
     def dibujar(self, screen):
         i, t = self.escena()
         if i >= len(CINEMATICA):
-            _frase(screen, FRASE_APERTURA, t, FRASE_APERTURA_MS, ("mentira",))
+            _frase(screen, FRASE_APERTURA, t, self.ms_frase, ("mentira",))
             return
-        datos = CINEMATICA[i]
+        datos = dict(CINEMATICA[i], ms=self.duraciones[i])
         lienzo = Lienzo(screen)
         propia = arte.imagen(f"escena_{i + 1}")
-        ESCENAS[i](lienzo, t, propia)
+        anim = t
+        if i == 0:
+            anclas = _anclas_escena_1(self.duraciones[0])
+            if anclas:
+                anim = _interpolar(anclas, t)      # (al paso de la narración)
+        ESCENAS[i](lienzo, anim, propia)
         area = lienzo.area
         # Fundido de entrada y salida de cada escena.
         _vineta(screen, area)
         _lugar(screen, area, datos["lugar"], t)
-        textos = datos["textos"]
-        if textos:
-            tramo = datos["ms"] / len(textos)
-            k = min(len(textos) - 1, int(t // tramo))
-            _subtitulo(screen, area, textos[k], t - k * tramo, tramo)
+        linea = _linea_narrada(datos["textos"], t, datos["ms"], f"apertura_{i + 1}", VOZ_ESCENA_DESDE_MS)
+        if linea is not None:
+            k, dentro, tramo = linea
+            _subtitulo(screen, area, datos["textos"][k], dentro, tramo)
         negro = 0
         if t < 450:
             negro = 255 * (1 - t / 450)
@@ -417,16 +471,66 @@ class Cinematica:
         _pie_saltar(screen, area, self.t)
 
 
+def _voz(nombre):
+    """La narración `nombre` (Audio/Narrador), si está grabada."""
+    from juego import voces
+    if voces.ruta(nombre) is not None:
+        from juego.audio_manager import audio_manager
+        audio_manager.play_voz(nombre)
+
+
+def _callar():
+    from juego.audio_manager import audio_manager
+    if audio_manager.sonando_voz:
+        audio_manager.parar_voz()
+
+
+def _anclas_escena_1(duracion):
+    """La escena 1 va al paso de la narración de Lucas (apertura_1): el chat
+    llega mientras dice "una niña... chatea", la dirección se escribe cuando
+    dice "le escribe su dirección" y se envía con "y la envía". Pares (ms de
+    la escena, ms de la animación); sin la narración o sin sus marcas, la
+    animación va a su ritmo de siempre."""
+    from juego import voces
+    marcas = voces.cortes("apertura_1", len(CINEMATICA[0]["textos"]))
+    fin = CINEMATICA[0]["ms"]
+    if marcas is None or duracion <= fin:
+        return None
+    s0, s1 = VOZ_ESCENA_DESDE_MS + marcas[0], VOZ_ESCENA_DESDE_MS + marcas[1]
+    anclas = [(0, 0), (max(600, s0 - 1800), 1200), (s0 + 300, 2400), (s1, 6400),
+              (s1 + 2300, 8500), (s1 + 2700, 8900), (s1 + 3200, 9600), (duracion, fin)]
+    ok = all(b[0] > a[0] and b[1] > a[1] for a, b in zip(anclas, anclas[1:]))
+    return anclas if ok else None
+
+
+def _interpolar(anclas, x, de=0, a=1):
+    """De la columna `de` a la columna `a` de `anclas` (tramos rectos)."""
+    for p, q in zip(anclas, anclas[1:]):
+        if x <= q[de]:
+            u = (x - p[de]) / max(1, q[de] - p[de])
+            return p[a] + (q[a] - p[a]) * max(0.0, u)
+    return anclas[-1][a] + (x - anclas[-1][de])
+
+
 # Los sonidos de la apertura: (ms desde el principio, nombre, volumen).
-def _sonidos_apertura():
+def _sonidos_apertura(inicios=None, inicio_frase=None):
     sonidos = []
-    inicio = 0
+    if inicios is None:
+        inicios, t = [], 0
+        for escena in CINEMATICA:
+            inicios.append(t)
+            t += escena["ms"]
+        inicio_frase = t
     for i, escena in enumerate(CINEMATICA):
+        inicio = inicios[i]
         if i == 0:
-            sonidos += [(inicio + 2400, "nota", 0.5), (inicio + 3800, "nota", 0.6),
-                        (inicio + 5200, "nota", 0.6), (inicio + 6400, "tecleo", 0.6),
-                        (inicio + 7300, "tecleo", 0.6), (inicio + 8500, "menu_ok", 0.6),
-                        (inicio + 9700, "susurro", 0.7)]
+            anclas = _anclas_escena_1(inicios[1] - inicio if len(inicios) > 1 else escena["ms"])
+            for ms, nombre, volumen in ((2400, "nota", 0.5), (3800, "nota", 0.6), (5200, "nota", 0.6),
+                                        (6400, "tecleo", 0.6), (7300, "tecleo", 0.6),
+                                        (8500, "menu_ok", 0.6), (9700, "susurro", 0.7)):
+                # (al paso de la narración, si la hay: _anclas_escena_1)
+                cuando = _interpolar(anclas, ms, de=1, a=0) if anclas else ms
+                sonidos.append((inicio + int(cuando), nombre, volumen))
         elif i == 1:
             sonidos += [(inicio + 400, "nota", 0.5), (inicio + 1500, "menu_ok", 0.5),
                         (inicio + 3000, "foto", 0.5), (inicio + 5600, "nota", 0.6)]
@@ -438,12 +542,9 @@ def _sonidos_apertura():
         elif i == 4:
             sonidos += [(inicio + 600, "ia_voz", 0.5), (inicio + 6000, "menu_mover", 0.6),
                         (inicio + 7000, "puerta", 0.8)]
-        inicio += escena["ms"]
-    sonidos += [(inicio + 300, "tecleo", 0.5), (inicio + 1500, "susto", 0.35)]
+    sonidos += [(inicio_frase + 300, "tecleo", 0.5), (inicio_frase + 1500, "susto", 0.35)]
     return sonidos
 
-
-SONIDOS_APERTURA = _sonidos_apertura()
 
 
 # -- Escena 1: la habitación, 11:47 p. m. ---------------------------------------------------
@@ -1019,16 +1120,63 @@ TIEMPOS_FINAL = {
 ADELANTO_TEXTOS = {"sin_entrar": 1200, "liberados": 3400}
 
 
-def intro_final_ms(final):
+VOZ_FINAL_DESDE_MS = 300        # la narración entra un poco después que el primer texto
+
+
+def _voces_final(final):
+    """(narración de los textos, narración de la frase) de ese final (docs/guion_narrador.md)."""
+    frase = "final_frase_liberados" if FINALES.get(final, {}).get("frase") else "final_frase"
+    return f"final_{final}", frase
+
+
+def tiempos_final(final):
+    """(dibujo, textos, frase) en ms: los de TIEMPOS_FINAL o, si la narración
+    es más larga, lo que dura la narración (la voz y los textos van juntos)."""
+    from juego import voces
     a, b, c = TIEMPOS_FINAL.get(final, (0, 0, 0))
+    if not a:
+        return 0, 0, 0
+    adelanto = ADELANTO_TEXTOS.get(final, 0)
+    textos, frase = _voces_final(final)
+    if voces.duracion_ms(textos):
+        b = max(b, VOZ_FINAL_DESDE_MS + voces.ms_en_pantalla(textos) + 300 - adelanto)
+    if voces.duracion_ms(frase):
+        c = max(c, VOZ_FINAL_DESDE_MS + voces.ms_en_pantalla(frase) + 700)
+    return a, b, c
+
+
+def intro_final_ms(final):
+    a, b, c = tiempos_final(final)
     return a + b + c
+
+
+_narrando = {"final": None, "t": -1}
+
+
+def _narrar_final(final, t):
+    """Suena la narración del final cuando le toca (una vez cada una)."""
+    a, b, c = tiempos_final(final)
+    antes = _narrando["t"] if _narrando["final"] == final and _narrando["t"] <= t else -1
+    _narrando.update(final=final, t=t)
+    textos, frase = _voces_final(final)
+    desde = a - ADELANTO_TEXTOS.get(final, 0) + VOZ_FINAL_DESDE_MS
+    for momento, nombre in ((desde, textos), (a + b + VOZ_FINAL_DESDE_MS, frase)):
+        if antes < momento <= t:
+            _voz(nombre)
 
 
 def dibujar_final(screen, final, t, jugadores=(), de_fondo=False):
     """La escena de ese final a los `t` ms. Con `de_fondo` (ya pasó la intro y
     van los resultados encima) solo el dibujo, quieto."""
     from screens import final as escenas
-    a, b, c = TIEMPOS_FINAL[final]
+    a, b, c = tiempos_final(final)
+    if de_fondo:
+        if _narrando["final"] is not None:
+            # (si saltaron la escena, la narración se corta con ella)
+            _narrando.update(final=None, t=-1)
+            _callar()
+    else:
+        _narrar_final(final, t)
     textos = FINALES[final]["escena"]
     w, h = screen.get_size()
     area = screen.get_rect()
@@ -1074,12 +1222,14 @@ def dibujar_final(screen, final, t, jugadores=(), de_fondo=False):
                 _titular_falso(screen, t - a)
         adelanto = ADELANTO_TEXTOS.get(final, 0)
         if t >= a - max(1200, adelanto):
-            tramo = (b + adelanto) / max(1, len(textos))
             desde = a - adelanto
             dentro = t - desde
             if dentro >= 0:
-                k = min(len(textos) - 1, int(dentro // tramo))
-                _subtitulo(screen, area, textos[k], dentro - k * tramo, tramo)
+                linea = _linea_narrada(textos, dentro, b + adelanto, _voces_final(final)[0],
+                                       VOZ_FINAL_DESDE_MS)
+                if linea is not None:
+                    k, en_linea, tramo = linea
+                    _subtitulo(screen, area, textos[k], en_linea, tramo)
         if t > a - 300 and t < a + 300 and final in ("quedarse", "nadie", "liberados"):
             k = 1 - abs(t - a) / 300
             screen.blit(cache_dibujo.capa((w, h), (0, 0, 0, int(255 * k) // 8 * 8)), (0, 0))

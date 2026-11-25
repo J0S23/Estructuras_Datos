@@ -8,6 +8,7 @@
 3. En una partida suenan los nuevos: apagón, luz, pausa, recoger, logro...
 4. El zumbido de fondo suena en la partida, se calla en el apagón y se apaga
    al salir.
+5. En los resultados suena la música de ese final (Audio/Musica/).
 """
 
 import os, re, sys, glob
@@ -173,6 +174,35 @@ if pygame.mixer.get_init() is not None:
     assert audio_manager.sonando_musica == "musica_menu"
     audio_manager._sonidos.pop("musica_menu", None)
     print("música del menú: en el menú y sus pantallas, no en los resultados; en la partida, la de la nave")
+
+    # La música de cada final (juego/musica_final.py), en los resultados.
+    from juego import musica_final
+    from types import SimpleNamespace
+    for final, archivo in (("sin_entrar", "final_sin_entrar"), ("escaparon", "final_escaparon"),
+                           ("quedarse", "final_quedarse"), ("nadie", "final_quedarse"),
+                           ("liberados", "final_liberados"), (None, "final_derrota")):
+        mision = SimpleNamespace(activa=True, resultado="derrota" if final in (None, "quedarse", "nadie")
+                                 else "victoria", final=final)
+        assert musica_final.ruta(musica_final.clave(mision)), (final, "falta el archivo")
+        g.mision = mision
+        g.current_screen = "resultados"
+        g._sonido_de_fondo()
+        assert (audio_manager.sonando_cancion or "").endswith(archivo + ".ogg"), \
+            (final, audio_manager.sonando_cancion)
+    assert musica_final.clave(SimpleNamespace(activa=True, resultado="victoria", final=None)) == "victoria"
+    # Baja mientras habla el narrador, y se va al salir de los resultados.
+    audio_manager._agachar(True)
+    assert abs(pygame.mixer.music.get_volume() - musica_final.VOLUMEN * audio_manager.sfx_volume * 0.45) < 0.02
+    audio_manager._agachar(False)
+    g.current_screen = "menu"
+    g._sonido_de_fondo()
+    assert audio_manager.sonando_cancion is None, "en el menú ya no suena la del final"
+    g.current_screen = "resultados"
+    g._sonido_de_fondo()
+    g.current_screen = "partida"
+    g._sonido_de_fondo()
+    assert audio_manager.sonando_cancion is None, "ni en la partida siguiente"
+    print("música de los finales: cada final la suya en los resultados; baja con el narrador; se va al salir")
 else:
     print("(sin mezclador de audio: no se prueba el zumbido)")
 print("\nTODO OK")

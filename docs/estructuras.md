@@ -148,7 +148,7 @@ que cuestan `COSTO_NIVEL_2 = 15` puntos del equipo.
 | Rol | Raíz | Izquierda | Derecha |
 |---|---|---|---|
 | Tecnomante | CONEXION (estación) | HACKEO (estación) | ESCANEO (activa, 18 s) |
-| Forjador | INGENIO (pasiva) | REPARACION (estación) | FABRICACION (activa) |
+| Forjador | INGENIO (pasiva) | REPARACION (estación) | FABRICACION (activa: arma un cepo) |
 | Biomante | VINCULO (pasiva) | REGENERACION (activa) | IMPULSO (activa) |
 | Resonante | SINTONIA (pasiva) | INTERCEPCION (activa) | EMISION (activa) |
 
@@ -193,7 +193,7 @@ aliens. HACKEO queda en gris en el panel el resto de la ronda.
 | Pieza | Archivo | Qué tiene |
 |---|---|---|
 | Clase | `Estructuras/arbol_logros.py` | `ArbolLogros` (raíz, `indice` clave → nodo) |
-| Nodo | `Estructuras/nodo_logro.py` | `NodoLogro` (`hijos` como lista, `padre`, `obtenido`, `quien`, `por_camino`, `compuesto`, propiedad `visible`) |
+| Nodo | `Estructuras/nodo_logro.py` | `NodoLogro` (`hijos` como lista, `padre`, `obtenido`, `quien`, `por_camino`, `compuesto`, `estricto`, propiedad `visible`) |
 | Datos | `data/logros.py` | `ARBOL_LOGROS`, armado con la función `L(...)` |
 | Cuándo se consigue cada uno | `misiones/logros.py` | `GestorLogros` y la función `logro(juego, clave, jugador)` |
 | Dibujo | `screens/logros.py` | `render_aviso_logro`, `render_arbol_logros` |
@@ -212,12 +212,15 @@ repetido")`), hereda la `rama` del padre si el diccionario no trae una, y se
 llama a sí mismo con cada hijo. `GestorLogros.__init__` arma uno nuevo en
 cada partida, así que los logros arrancan de cero solos.
 
-Contado con el script: **51 logros** en 6 niveles (1, 8, 27, 12, 1 y 2 nodos
-por nivel) y 33 hojas. La raíz es `despertar` y tiene 8 hijos, uno por rama:
+Contado con el script: **60 logros** en 6 niveles (1, 10, 34, 12, 1 y 2 nodos
+por nivel) y 40 hojas. La raíz es `despertar` y tiene 10 hijos, uno por rama:
 `sigiloso` (sigilo), `codigo_roto` (escape), `conectado` (nexus), `una_mano`
 (equipo), `a_oscuras` (nave), `primer_encuentro` (aliens), `cara_a_cara`
-(cambiaformas) y `algo_no_cuadra` (caso). `una_mano` y `primer_encuentro`
-son "compuestos": se consiguen con el primero de sus hijos.
+(cambiaformas), `algo_no_cuadra` (caso), `detras_de_la_pared` (los niños de
+la sala oculta) y `letra_pequena` (el baúl de la prisión). `una_mano` y
+`primer_encuentro` son "compuestos": se consiguen con el primero de sus
+hijos. Los de las dos últimas ramas y `cepo` (aliens) son "estrictos"
+(`estricto=True` en `data/logros.py`): solo se consiguen si ya está su padre.
 
 ### Operaciones
 
@@ -237,9 +240,12 @@ son "compuestos": se consiguen con el primero de sus hijos.
 | `obtenidos()` | cuántos van | O(n) | recorre el índice |
 
 En `misiones/logros.py`, `GestorLogros.conseguir` primero busca el nodo
-(O(1)) y pregunta `falta_un_padre` (O(h)). Si el padre todavía no llega, no
-lo da enseguida: lo deja en la lista `pendientes` con `ESPERA_PADRE_MS =
-2500` ms y `_pendientes(dt)` lo revisa en cada cuadro. Los avisos que salen
+(O(1)) y pregunta `falta_un_padre` (O(h)). Si es estricto y le falta el
+padre, no lo da ni lo guarda: el hijo no sale sin haber pasado por el padre
+(`ellos_primero` sin haber abierto el baúl, por ejemplo). Si no es estricto
+y el padre todavía no llega, no lo da enseguida: lo deja en la lista
+`pendientes` con `ESPERA_PADRE_MS = 2500` ms y `_pendientes(dt)` lo revisa
+en cada cuadro. Los avisos que salen
 abajo al centro también son una lista que se usa como cola (`avisos`): se
 muestra el primero y, si hay varios esperando, duran menos
 (`DURACION_AVISO_EN_COLA_MS`).

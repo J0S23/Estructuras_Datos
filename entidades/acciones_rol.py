@@ -321,7 +321,11 @@ def _actualizar_trampas(juego, dt):
                 juego.trampas.remove(trampa)
             else:
                 alien = next((a for a in juego.aliens if a.nombre == trampa["alien"]), None)
-                if alien is not None:
+                if alien is not None and sala is not None and sala.conduce(alien):
+                    # Suena la alarma de los niños: ahí los mueve la sala (el
+                    # cepo no los puede tener amarrados mientras vienen).
+                    juego.trampas.remove(trampa)
+                elif alien is not None:
                     alien.hitbox.center = trampa["pos"]       # (sujeto del pie)
             continue
         pisa = pygame.Rect(0, 0, *TRAMPA_PISA)
@@ -333,6 +337,9 @@ def _actualizar_trampas(juego, dt):
                 continue
             if alien.hitbox.colliderect(pisa):
                 alien.aturdir(TRAMPA_MS)
+                forjador = next((j for j in juego.jugadores if j.rol == "Forjador"), None)
+                from misiones.logros import logro
+                logro(juego, "cepo", forjador)
                 alien.hitbox.center = trampa["pos"]
                 trampa["alien"], trampa["ms"] = alien.nombre, 0
                 _sonar(juego, "casillero_golpe", 1.0)

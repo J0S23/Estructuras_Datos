@@ -121,7 +121,7 @@ La instantánea completa es un diccionario de **secciones**:
 | `g` | lo legible: tiempo, fase, objetivo, resultado, piezas, cápsula, puntos, presentación de alien, y `G.*` (tiempo jugado, oscuridad...) |
 | `j0`..`j3` | cada jugador: lo legible (x, y, dirección, vidas, panel...) y `a.*` = todos los atributos de datos del `Jugador` (pulso, susto, mensajes, panel, cursor, inventario...), `h.*` = su árbol de habilidades, `lin` = ángulo de la linterna, `escondite` = índice |
 | `al` | por alien `"3": [x, y, ángulo]` (cambia siempre) y `"3d": [nombre, alcance, medio ángulo, {acción, alerta...}]` (casi nunca) |
-| `m`, `ev`, `eq`, `nx`, `inf`, `gp`, `tut`, `nar`, `lg`, `pr`, `npc`, `cf` | misión, eventos (apagón), equipo, NEXUS (celular), infiltrado, guardia y planta, tutorial, narrador, logros, presentación, NPC, cambiaformas: sus atributos de datos |
+| `m`, `ev`, `eq`, `nx`, `inf`, `gp`, `tut`, `nar`, `lg`, `pr`, `npc`, `cf`, `ss` | misión, eventos (apagón), equipo, NEXUS (celular), infiltrado, guardia y planta, tutorial, narrador, logros, presentación, NPC, cambiaformas y la sala oculta de los niños (estado, votos, cápsulas rotas, el baúl, los niños que caminan a la cápsula...): sus atributos de datos |
 | `pz`, `te`, `pa`, `tr`, `sl`, `pd`, `cp`, `es` | listas: piezas, terminales, paneles, cepos del Forjador, señales, puertas dobles, compuertas, escondites (`{"n": 3, "0": ..., "1": ...}`) |
 
 `estado.extraer` convierte los datos a JSON: números (floats a 2

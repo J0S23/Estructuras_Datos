@@ -50,10 +50,6 @@ def imagen(nombre, alto=None, ancho=None):
     return _guardar(("img", nombre, alto, ancho), armar)
 
 
-def hay(nombre):
-    return os.path.isfile(os.path.join(CARPETA, nombre + ".png"))
-
-
 def oscurecer(color, k):
     return tuple(max(0, min(255, int(c * k))) for c in color[:3])
 

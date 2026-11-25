@@ -45,6 +45,20 @@ LINEAS = [
     ("Música del menú: \"Ominous Sci-Fi Menu\"", "tenue"),
     ("de Eric Matyas · www.soundimage.org", "tenue"),
     ("", "espacio"),
+    ("Música de los finales", "titulo"),
+    # (CC BY: hay que dar el crédito así; juego/musica_final.py)
+    ("\"Disturbed Soundscape\" y \"Sci-Fi Close\"", "tenue"),
+    ("de Eric Matyas · www.soundimage.org", "tenue"),
+    ("\"The far side of Proxima Centauri\" de Sascha Ende", "tenue"),
+    ("ende.app · CC BY 4.0", "tenue"),
+    ("\"Bittersweet Ending\" de Arold Valda · CC BY 4.0", "tenue"),
+    ("\"Bittersweet\" de Emma M. Andersson (dominio público)", "tenue"),
+    ("", "espacio"),
+    ("Narrador", "titulo"),
+    ("Lucas Manjarrez", "nombre"),
+    # (el plan gratis de ElevenLabs pide dar el crédito: docs/guion_narrador.md)
+    ("Voces de los agentes generadas con ElevenLabs", "tenue"),
+    ("", "espacio"),
     ("", "espacio"),
     ("Gracias por jugar.", "titulo"),
 ]

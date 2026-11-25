@@ -158,6 +158,23 @@ g._manejar_click(fila.center)
 assert g.admin is None and ev.apagon
 print("3. con el mouse: el cursor sigue al mouse y el clic la hace: OK")
 
+# -- 3a. Saltar a la cápsula reparada (y el martillo): para ver los finales -----------------------
+escoger("Saltar a la cápsula reparada")
+assert g.mision.fase == "huida" and g.mision.resultado is None, g.mision.fase
+assert not any(j.preso for j in g.jugadores), "nadie se queda en una celda"
+guardia = getattr(g.guardia_planta, "guardia", None) if g.guardia_planta is not None else None
+assert guardia is None or guardia.comiendo, "el Guardia se fue a comer: no persigue"
+for _ in range(30):
+    g._actualizar_partida(16)
+sala = g.sala_secreta
+if sala is not None and sala.activa:
+    assert sala.estado in ("abriendo", "abierta"), sala.estado
+    assert all(abs(j.hitbox.centery - sala.puerta.bottom - 110) < 200 for j in g.jugadores), \
+        [j.hitbox.center for j in g.jugadores]
+    escoger("Dar el martillo")
+    assert any("martillo" in j.objetos for j in g.jugadores)
+print("3a. 'Saltar a la cápsula reparada' deja la sala de los niños abriéndose, con todos en la Bahía: OK")
+
 # -- 3b. Ganar ya: termina la partida y van los resultados (con la escena del final) ------------
 escoger("Ganar ya")
 assert g.mision.resultado == "victoria" and g.mision.motivo_fin == "escaparon"

@@ -62,6 +62,10 @@ class GestorLogros:
         # Un logro que llega antes que su padre (casi siempre en el mismo
         # instante) espera un momento a que llegue el padre: [clave, rol, ms].
         self.pendientes = []
+        # Mientras pasa lo de los niños (la sala oculta) los avisos esperan:
+        # no se encima el cartel ni su sonido al diálogo (se ven después, o
+        # en el árbol de los resultados).
+        self.callado = False
 
     # -- Conseguir -----------------------------------------------------------------------
 
@@ -70,6 +74,8 @@ class GestorLogros:
         nodo = self.arbol.buscar(clave)
         if nodo is None or nodo.obtenido:
             return []
+        if nodo.estricto and self.arbol.falta_un_padre(clave):
+            return []          # (sin su padre, no: ni espera ni marca el camino)
         if esperar and self.arbol.falta_un_padre(clave):
             if all(p[0] != clave for p in self.pendientes):
                 self.pendientes.append([clave, quien, ESPERA_PADRE_MS])
@@ -80,7 +86,7 @@ class GestorLogros:
         nuevos = self.arbol.conseguir(clave, quien)
         for nodo in nuevos:
             self.avisos.append([nodo, DURACION_AVISO_MS])
-        if nuevos and hasattr(self.juego, "sonar"):
+        if nuevos and hasattr(self.juego, "sonar") and not self._con_los_ninos():
             self.juego.sonar("logro", 0.6)
         return nuevos
 
@@ -107,8 +113,18 @@ class GestorLogros:
         self.capturas_fase += 1
 
     def al_terminar(self):
-        """Fin de la ronda: los logros de escapar."""
+        """Fin de la ronda: los logros de escapar (y los finales de los niños)."""
         mision = getattr(self.juego, "mision", None)
+        final = getattr(mision, "final", None) if mision is not None else None
+        if final == "escaparon":
+            self.conseguir("lo_vimos")
+        elif final == "quedarse":
+            self.conseguir("no_los_dejamos")
+        elif final == "liberados":
+            # Se quedaron atrás: no escaparon (sin los logros de escapar).
+            self.conseguir("ellos_primero")
+            self._pendientes(0, todos=True)
+            return
         if mision is None or mision.resultado != "victoria":
             return
         self.conseguir("libertad")
@@ -120,8 +136,13 @@ class GestorLogros:
 
     # -- Cada frame ----------------------------------------------------------------------
 
+    def _con_los_ninos(self):
+        sala = getattr(self.juego, "sala_secreta", None)
+        return bool(sala is not None and getattr(sala, "activa", False) and sala.en_secuencia)
+
     def actualizar(self, dt):
-        if self.avisos:
+        self.callado = self._con_los_ninos()
+        if self.avisos and not self.callado:
             self.avisos[0][1] -= dt
             if len(self.avisos) > 1:
                 self.avisos[0][1] = min(self.avisos[0][1], DURACION_AVISO_EN_COLA_MS)

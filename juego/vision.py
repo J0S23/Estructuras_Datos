@@ -53,43 +53,14 @@ def obstaculos(mundo, puertas_dobles=(), compuertas=()):
         muebles = getattr(mundo, "muebles", None)
         rects = ([p for p in mundo.paredes if not es_mueble(p)] if muebles and es_mueble
                  else list(mundo.paredes))
+        # (paredes que no tapan la vista: la barrera invisible de la sala de los niños)
+        no_tapan = getattr(mundo, "no_tapan", ())
+        if no_tapan:
+            rects = [p for p in rects if p not in no_tapan]
         rects += [p["rect"] for p in puertas_dobles if not p["abierta"]]
         rects += [c["rect"] for c in compuertas if c["cerrada"]]
         _obstaculos.update(firma=firma, rects=rects, clave=tuple(tuple(r) for r in rects))
     return _obstaculos["rects"]
-
-
-def _choque(cajas, c, s):
-    """Distancia a la que el rayo (c, s) entra a la primera caja, o infinito.
-
-    Las cajas van relativas al origen del rayo: (x0, y0, x1, y1) con el
-    origen en (0, 0). Si el origen queda dentro de una caja, esa se ignora.
-    """
-    mejor = math.inf
-    ic = 1 / c if abs(c) > 1e-9 else None
-    is_ = 1 / s if abs(s) > 1e-9 else None
-    for x0, y0, x1, y1 in cajas:
-        if ic is None:
-            if not x0 <= 0 <= x1:
-                continue
-            entra, sale = -math.inf, math.inf
-        else:
-            a, b = x0 * ic, x1 * ic
-            entra, sale = (a, b) if a < b else (b, a)
-        if is_ is None:
-            if not y0 <= 0 <= y1:
-                continue
-        else:
-            a, b = y0 * is_, y1 * is_
-            if a > b:
-                a, b = b, a
-            if a > entra:
-                entra = a
-            if b < sale:
-                sale = b
-        if 0 < entra <= sale and entra < mejor:
-            mejor = entra
-    return mejor
 
 
 def _info_caja(caja):
@@ -136,7 +107,7 @@ def _rebanadas(info):
 def _choque_rebanada(lista, c, s):
     """El primer choque del rayo (c, s) con las cajas de `lista` (ver
     _rebanadas), con la prueba de las losas escrita de corrido (sin llamar a
-    _choque por cada caja, que en Python cuesta)."""
+    una función por cada caja, que en Python cuesta)."""
     mejor = math.inf
     inf = math.inf
     if abs(c) > 1e-9:
@@ -195,7 +166,7 @@ def _cercanas(rects, ox, oy, radio):
 class Campo:
     """Lo que ve un jugador desde `origen`: el polígono y las paredes cercanas.
 
-    `cajas` son las paredes cercanas, relativas al origen (ver _choque).
+    `cajas` son las paredes cercanas, relativas al origen (como en _choque_rebanada).
     """
 
     def __init__(self, origen, rects, radio=RADIO_VISION):

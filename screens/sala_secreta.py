@@ -953,6 +953,15 @@ def precalentar(sala=None):
     _resplandor(40, (200, 40, 30))
     for i in range(len(arte.NINOS)):
         arte.capsula(i, ESCALA_CAPSULA)
+        # (lo del martillo: el vidrio roto, las grietas y el niño afuera)
+        arte.capsula_rota(i, ESCALA_CAPSULA)
+        arte.nino_grande(i, ESCALA_NINO, despierto=True)
+    vidrio = arte.vidrio_de_capsula(ESCALA_CAPSULA)
+    if vidrio is not None:
+        for i in range(len(arte.NINOS)):
+            for golpes in range(1, 3):
+                arte.grietas(i, golpes, vidrio.width, vidrio.height)
+    arte.martillo(48)
     if sala is not None and sala.activa:
         pintura(sala.juego.mundo, sala)
         for i in range(len(sala.capsulas)):

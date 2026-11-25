@@ -49,11 +49,12 @@ import random
 
 import pygame
 
+from juego import voces
 from data.historia import (SALAS_OCULTAS, NOMBRE_SALA, ABRIR_PARED_MS, CAPSULAS, AL_ABRIRSE,
                            DIALOGO_NINOS, PISTAS_EN_DIALOGO, DIALOGO_MS, DIALOGO_MS_POR_LETRA,
                            DIALOGO_MS_MAX, VOTACION, DESENLACE_MS,
                            FINALES, PISTAS, RADIO_PISTA, SUJETOS, APAGADAS, SE_APAGA, CELULAR_NINO,
-                           REGENERAR, BAUL, MARTILLO, LIBERAR)
+                           REGENERAR, BAUL, MARTILLO, LIBERAR, PUERTA_JUNTOS)
 
 COLOR_DIALOGO = (236, 240, 252)
 COLOR_PISTA = (255, 214, 64)
@@ -67,10 +68,23 @@ BASE_CAPSULA = (78, 34)
 VEL_MAX_ALIEN = 0.55
 # Al entrar en el desenlace, a esta velocidad (px por ms) entran a la sala.
 VEL_DESENLACE = 0.42
-# Si ganó escapar, los aliens se devuelven (a esta velocidad) y los agentes
-# caminan solos a la cápsula: termina cuando llegan todos, o a los ESCAPE_MAX_MS.
-VEL_RETIRADA = 0.5
+# ...después de entrar por el pasillo a esta (desde la puerta secreta, uno
+# detrás de otro cada ENTRADA_FILA_MS).
+VEL_ENTRADA = 0.95
+ENTRADA_FILA_MS = 90
+# Si ganó escapar, los agentes caminan solos a la cápsula: termina cuando
+# llegan todos, o a los ESCAPE_MAX_MS.
 ESCAPE_MAX_MS = 16000
+# Cuántos aliens buscan su camino por cuadro (con la alarma todos a la vez
+# pesaban ~9 ms por cuadro: bajones de FPS en la votación).
+BUSQUEDAS_POR_CUADRO = 1
+QUIETO_MAX_MS = 1500           # (liberar) quien rompe lleva esto sin moverse: rompe desde ahí
+BARRERA_ANCHO = 8              # la barrera invisible de la entrada de la sala (px)
+# Ganó escapar: cuando ya están en la cápsula, todos los aliens aparecen
+# alrededor, cerrándose sobre ella mientras despegan (Diego, nov 25).
+CERCO_MS = 2600
+CERCO_DESDE, CERCO_HASTA = 700, 300     # px del centro de la cápsula (a lo ancho, x1.4)
+RADIO_RODEAN = 240             # ganó liberarlos: a esta distancia rodean la cápsula (px)
 ESCAPE_ARRANCA_MS = 700        # (un respiro antes de que echen a andar)
 # Cada cuánto suenan los gritos de los que vienen (ms), del primero al último
 # (cada grito dura ~6.6 s: así se enciman dos o tres, no más).
@@ -232,6 +246,7 @@ class SalaSecreta:
         # que intenta regenerar una ([cápsula, ms] o None) y el celular del piso.
         self.apagadas = []
         self.fallando_ms = 0
+        self._apaga_desde = None         # (ms del diálogo) cuándo empieza a fallar: justo antes de "Esa luz..."
         self.regenera = None
         self.celular = None
         self.monitor_ms = 0
@@ -243,6 +258,8 @@ class SalaSecreta:
         self._origen = {}                # nombre del alien -> dónde estaba al sonar la alarma
         self._pilotos = {}               # puesto -> {"camino", "buscar_ms"} (caminar a la cápsula)
         self.baul = None                 # {"rect", "imagen", "codigo", "abierto", "con_martillo"}
+        self.reunidos = False            # ¿están todos frente a la puerta? (si no, no deja pasar)
+        self._avisos_puerta = {}
         self.claves = [o["clave"] for o in VOTACION["opciones"]]    # lo que se vota ("liberar" en vez de "quedarse")
         # Ganó liberarlos: "romper" -> "capsula". `rompe`: el puesto de quien
         # rompe; `cola`: las cápsulas que rompe, en orden; `ruta_ninos`: el
@@ -254,7 +271,12 @@ class SalaSecreta:
         self.cola = []
         self.ruta_ninos = []
         self.fin_ninos = 0
+        self.salen, self.entran = [], []     # (por niño de `cola`: cuándo sale y cuándo se sube)
         self._golpe_ms = 0
+        self._ultimo_lugar, self._quieto_ms = None, 0
+        self._busquedas = 0               # caminos de aliens buscados en este cuadro
+        self.cerco_ms = None              # ganó escapar: los aliens rodean la cápsula (ms)
+        self._cerco = {}                  # nombre del alien -> (desde, hasta)
         if geo is None:
             return
         self.puerta, self.pasillos, self.sala, self.capsulas = geo
@@ -319,10 +341,6 @@ class SalaSecreta:
         """Las cápsulas de los niños que siguen vivos."""
         return [i for i in range(len(self.capsulas)) if i not in self.apagadas]
 
-    def todos_libres(self):
-        """¿Rompieron las cápsulas de todos los que siguen vivos?"""
-        vivas = self.vivas()
-        return bool(vivas) and all(self.rota(i) for i in vivas)
 
     # -- Cada cuadro ----------------------------------------------------------------------
 
@@ -331,6 +349,7 @@ class SalaSecreta:
             return
         antes = self.estado_ms
         self.estado_ms += dt
+        self._busquedas = 0
 
         def paso(ms):                       # ¿se cruzó `ms` en este cuadro?
             return antes < ms <= self.estado_ms or (ms == 0 and antes == 0)
@@ -346,15 +365,24 @@ class SalaSecreta:
                     self._sonar(nombre, volumen)
             if self.estado_ms >= ABRIR_PARED_MS:
                 self._cambiar("abierta")
-                quien = self._hablante(None)
+                quien = self._hablante(None, "sala_abierta")
                 if quien is not None:
-                    self._decir_a_todos(quien, AL_ABRIRSE)
+                    self._decir_a_todos(quien, AL_ABRIRSE, voz="sala_abierta")
                 self._neila("sala_abierta")
         elif self.estado == "abierta":
-            dentro = [j for j in self.juego.jugadores
-                      if not j.preso and not getattr(j, "eliminado", False) and self.en_la_sala(j)]
-            if dentro:
+            self._puerta_juntos(dt)
+            # El diálogo empieza cuando TODOS los que siguen en la partida
+            # cruzaron la franja de la entrada de la sala (Diego, nov 25), y si
+            # alguien habla con voz, espera a que termine (no se pisan).
+            cuentan = self._cuentan()
+            dentro = [j for j in cuentan if j.preso is None and self.en_la_sala(j)]
+            hablando = any(j.mensaje_voz and j.mensaje_ms > 0 for j in self.juego.jugadores)
+            if dentro and len(dentro) == len(cuentan) and not hablando:
                 self.entraron = True
+                for j in dentro:
+                    self._logro("detras_de_la_pared", j)
+                if self.encontradas >= len(PISTAS):
+                    self._logro("eran_de_ellos", dentro[0])
                 self.linea = 0
                 self._cambiar("dialogo")
                 self._medir_lineas()
@@ -385,12 +413,15 @@ class SalaSecreta:
         elif self.estado == "desenlace" and self.resultado == "liberar":
             self._liberar(dt)
         elif self.estado == "desenlace" and self.a_la_capsula:
-            # Ganó escapar: los aliens se devuelven y ellos van a la cápsula.
-            self._retirar_aliens(dt)
+            # Ganó escapar: los aliens no vienen (los esconde _decidir) y
+            # ellos van a la cápsula.
+            self._quietos(dt)
             self.cerca = max(0.0, self.cerca - dt / 2500)
-            if self.estado_ms >= ESCAPE_ARRANCA_MS and (self._todos_en_capsula()
-                                                        or self.estado_ms >= ESCAPE_MAX_MS):
-                self._terminar()
+            if self.cerco_ms is not None:
+                self._cercar(dt)
+            elif self.estado_ms >= ESCAPE_ARRANCA_MS and (self._todos_en_capsula()
+                                                          or self.estado_ms >= ESCAPE_MAX_MS):
+                self._empezar_cerco()
         elif self.estado == "desenlace":
             self._mover_adentro(dt)
             self.cerca = 1.0
@@ -422,11 +453,13 @@ class SalaSecreta:
         """Mientras hablan: el pitido de los monitores, y la cápsula que se
         apaga (parpadea, su latido se corta, NEILA la archiva)."""
         i = SE_APAGA.get("capsula")
-        desde, dura = SE_APAGA.get("desde_ms", 0), SE_APAGA.get("dura_ms", 1)
-        viva = (i is not None and i < len(self.capsulas) and i not in self.apagadas
-                and not self.rota(i))
+        dura = SE_APAGA.get("dura_ms", 1)
+        desde = getattr(self, "_apaga_desde", None)
+        viva = self._puede_apagarse()
         if self.fallando_ms > 0 and not viva:
             self.fallando_ms = 0           # (la sacaron a tiempo: ya no se apaga)
+        if desde is None:
+            desde = 10 ** 9                # (sin el momento medido: no se apaga)
         if viva and paso(desde):
             self.fallando_ms = 1
             self._sonar("monitor_falla", 0.7)
@@ -451,6 +484,49 @@ class SalaSecreta:
                 self.monitor_ms = despues if i in self.apagadas else normal
                 self._sonar("monitor_bip", 0.25)
 
+    def _cuentan(self):
+        """Los que tienen que estar para entrar: los que siguen en la partida
+        y juegan (también el que está en una celda: hay que sacarlo antes)."""
+        return [j for j in self.juego.jugadores
+                if not getattr(j, "eliminado", False) and not getattr(j, "desconectado", False)
+                and (getattr(j, "puede_moverse", True) or j.preso is not None)]
+
+    def _aqui(self, j):
+        if j.preso is not None:
+            return False
+        c = j.hitbox.center
+        if any(z.collidepoint(c) for z in [self.sala] + list(self.pasillos)):
+            return True
+        return math.dist(c, self.puerta.midbottom) <= PUERTA_JUNTOS["radio"]
+
+    def _puerta_juntos(self, dt):
+        """La puerta abierta no deja pasar si falta alguien: al que la cruza
+        se le devuelve a la Bahía y piensa que debería esperar."""
+        cuentan = self._cuentan()
+        faltan = [j for j in cuentan if not self._aqui(j)]
+        self.reunidos = not faltan
+        for k in list(self._avisos_puerta):
+            self._avisos_puerta[k] -= dt
+        if self.reunidos:
+            return
+        for j in cuentan:
+            if j.preso is not None or not j.hitbox.colliderect(self.puerta):
+                continue
+            j.personaje.hitbox.top = self.puerta.bottom
+            j.personaje.sync_sprite_from_hitbox()
+            clave = getattr(j, "puesto", id(j))
+            if self._avisos_puerta.get(clave, 0) > 0 or (j.mensaje_voz and j.mensaje_ms > 0):
+                continue          # (ya lo dijo hace poco, o está hablando: no se pisa)
+            encerrado = next((o for o in faltan if o.preso is not None), None)
+            if encerrado is not None:
+                self._avisos_puerta[clave] = PUERTA_JUNTOS["cada_ms"]
+                j.avisar(PUERTA_JUNTOS["celda"].replace("{}", encerrado.rol), (210, 214, 236))
+                continue
+            # Lo piensa él (con su voz, si está grabada: juego/voces.py).
+            archivo = self._decir_a(j, PUERTA_JUNTOS["esperar"], (210, 214, 236), voz="sala_esperar")
+            self._avisos_puerta[clave] = max(PUERTA_JUNTOS["cada_ms"],
+                                             voces.ms_en_pantalla(archivo) + 1500 if archivo else 0)
+
     def _cambiar(self, estado):
         self.estado, self.estado_ms = estado, 0
 
@@ -470,6 +546,30 @@ class SalaSecreta:
             mundo.paredes.append(self.puerta)
         elif not cerrada and self.puerta in mundo.paredes:
             mundo.paredes[:] = [p for p in mundo.paredes if p != self.puerta]
+        # La barrera invisible de la entrada de la sala: desde que empieza el
+        # diálogo nadie sale (ni entra) hasta que arranca la caminata a la
+        # cápsula (escapar o sacar a los niños). Si gana quedarse, sigue.
+        barrera = self.barrera()
+        if barrera is None:
+            return
+        cerrar = self.estado in ("dialogo", "espera", "votacion", "desenlace", "fin") and not (
+            self.estado in ("desenlace", "fin") and (self.a_la_capsula or self.resultado == "liberar"))
+        if cerrar and barrera not in mundo.paredes:
+            mundo.no_tapan = [barrera]          # (no tapa la vista: juego/vision.py)
+            mundo.paredes.append(barrera)
+            for j in self.juego.jugadores:
+                if j.hitbox.colliderect(barrera):
+                    # (el que quedó encima de la franja, para adentro)
+                    j.personaje.hitbox.left = barrera.right + 1
+                    j.personaje.sync_sprite_from_hitbox()
+        elif not cerrar and barrera in mundo.paredes:
+            mundo.paredes[:] = [p for p in mundo.paredes if p != barrera]
+
+    def barrera(self):
+        """El Rect de la barrera de la entrada (sobre la franja de peligro)."""
+        if self.sala is None or self.pasillo is None:
+            return None
+        return pygame.Rect(self.sala.left - BARRERA_ANCHO, self.pasillo.top, BARRERA_ANCHO, self.pasillo.height)
 
     # -- Diálogo ----------------------------------------------------------------------------
 
@@ -477,16 +577,32 @@ class SalaSecreta:
         return [j for j in self.juego.jugadores
                 if not getattr(j, "eliminado", False) and not getattr(j, "desconectado", False)]
 
-    def _hablante(self, rol):
+    def _hablante(self, rol, voz=None, k=None):
+        """Quién dice algo: el de `rol` si está; si no, uno que tenga la
+        línea `voz` grabada con su propia voz (juego/voces.py: así nunca
+        suena la voz de otro personaje) y, si nadie, el que está en la sala
+        (o el primero), rotando con `k` para que no hable siempre el mismo."""
         presentes = self._presentes()
         if not presentes:
             return None
         for j in presentes:
             if j.rol == rol:
                 return j
-        # El que está en la sala (o el primero), rotando para que no hable siempre el mismo.
         adentro = [j for j in presentes if self.en_la_sala(j)] or presentes
-        return adentro[self.linea % len(adentro)]
+        if voz is not None:
+            con_voz = [j for j in adentro if voces.de_rol(voz, j.rol)] or \
+                [j for j in presentes if voces.de_rol(voz, j.rol)]
+            dueño = voces.POR_DEFECTO.get(voz)
+            con_voz.sort(key=lambda j: j.rol != dueño)
+            if con_voz:
+                return con_voz[0]
+        return adentro[(self.linea if k is None else k) % len(adentro)]
+
+    def _voz_linea(self, i):
+        """El nombre de la línea `i` del diálogo en el guion (ninos_1...)."""
+        if i == 3:
+            return f"ninos_4_pistas{min(3, self.encontradas)}"
+        return f"ninos_{i + 1}"
 
     def _texto_linea(self, i):
         n = min(3, self.encontradas)
@@ -498,32 +614,74 @@ class SalaSecreta:
         return int(min(DIALOGO_MS_MAX, max(DIALOGO_MS, 900 + DIALOGO_MS_POR_LETRA * len(texto))))
 
     def _medir_lineas(self):
-        fin, self.fin_lineas = 0, []
+        """Quién dice cada línea y cuándo termina: con su audio, lo que dura
+        el audio (el cuadro y la voz van juntos); sin audio, según el texto.
+        Se decide todo al empezar, así la línea siguiente nunca pisa a la
+        anterior."""
+        fin, self.fin_lineas, self._hablantes = 0, [], []
+        self._apaga_desde = None
+        antes = SE_APAGA.get("antes_de_linea")
         for i in range(len(DIALOGO_NINOS)):
-            fin += self.duracion_linea(self._texto_linea(i))
+            quien = self._hablante(DIALOGO_NINOS[i].get("rol"), self._voz_linea(i), k=i)
+            self._hablantes.append(quien)
+            fin += self._ms_linea(i, quien)
+            if antes is not None and i == antes - 1 and self._puede_apagarse():
+                # Terminó la línea de antes: un silencio en que la cápsula
+                # parpadea y se apaga; después, "Esa luz estaba prendida...".
+                self._apaga_desde = fin + 150
+                fin += 150 + SE_APAGA.get("dura_ms", 1) + SE_APAGA.get("pausa_ms", 0)
             self.fin_lineas.append(fin)
 
-    def _decir_linea(self, i):
-        datos = DIALOGO_NINOS[i]
-        quien = self._hablante(datos.get("rol"))
-        if quien is None:
-            return
-        texto = self._texto_linea(i)
-        self._decir_a_todos(quien, texto, ms=self.duracion_linea(texto))
+    def _puede_apagarse(self):
+        i = SE_APAGA.get("capsula")
+        return (i is not None and i < len(self.capsulas) and i not in self.apagadas
+                and not self.rota(i))
 
-    def _decir_a_todos(self, quien, texto, color=COLOR_DIALOGO, ms=None):
+    def _ms_linea(self, i, quien):
+        archivo = voces.de_rol(self._voz_linea(i), getattr(quien, "rol", None))
+        if archivo is not None:
+            return voces.ms_en_pantalla(archivo)
+        return self.duracion_linea(self._texto_linea(i))
+
+    def _decir_linea(self, i):
+        hablantes = getattr(self, "_hablantes", None) or []
+        quien = hablantes[i] if i < len(hablantes) else self._hablante(DIALOGO_NINOS[i].get("rol"),
+                                                                         self._voz_linea(i), k=i)
+        if quien is None or getattr(quien, "eliminado", False):
+            return
+        self._decir_a_todos(quien, self._texto_linea(i), ms=self._ms_linea(i, quien), voz=self._voz_linea(i))
+
+    def _decir_a(self, jugador, texto, color=COLOR_DIALOGO, voz=None):
+        """Lo que piensa `jugador`, solo en su pantalla (aunque esté en la
+        historia, donde `avisar` no muestra nada). Con `voz` (una línea del
+        guion) suena, si está grabada con su voz, y el cuadro dura lo del audio.
+        Si otro está diciendo algo en voz alta (p. ej. llegaron dos juntos a
+        la puerta), a este le sale solo el texto: una voz nunca corta a otra
+        ni se oye la misma frase dos veces seguidas."""
+        otro_habla = any(o is not jugador and o.mensaje_voz and o.mensaje_ms > 0
+                         for o in self.juego.jugadores)
+        archivo = voces.de_rol(voz, jugador.rol) if voz and not otro_habla else None
+        jugador._mostrar_mensaje(texto, color, None, ms=voces.ms_en_pantalla(archivo) if archivo else None,
+                                 voz=archivo is not None)
+        if archivo is not None:
+            self._sonar(voces.PREFIJO + archivo)
+        return archivo
+
+    def _decir_a_todos(self, quien, texto, color=COLOR_DIALOGO, ms=None, voz=None):
         """`quien` lo dice y todos lo ven, con su foto y su nombre (`ms`: lo
-        que dura en pantalla, si no el de siempre)."""
+        que dura en pantalla, si no el de siempre). Con `voz` (una línea del
+        guion grabada con la voz de `quien`), suena y el cuadro dura lo del audio."""
         rol = getattr(quien, "rol", "") or ""
+        archivo = voces.de_rol(voz, rol) if voz else None
+        if archivo is not None:
+            ms = voces.ms_en_pantalla(archivo)
+            self._sonar(voces.PREFIJO + archivo)
         for j in self.juego.jugadores:
             if getattr(j, "eliminado", False):
                 continue
-            if j is quien:
-                j._mostrar_mensaje(texto, color, None)
-            else:
-                j._mostrar_mensaje(texto, color, [rol, rol.upper()])
-            if ms is not None:
-                j.mensaje_ms = j.mensaje_total_ms = ms
+            j._mostrar_mensaje(texto, color, None if j is quien else [rol, rol.upper()],
+                               ms=ms, voz=archivo is not None)
+        return archivo
 
     def _neila(self, evento):
         decir = getattr(self.juego, "decir", None)
@@ -544,6 +702,10 @@ class SalaSecreta:
         if self.equipo_con_martillo():
             # Con el martillo, quedarse con ellos es sacarlos (Diego, nov 25).
             self.claves[self.claves.index("quedarse")] = VOTACION["liberar"]["clave"]
+        else:
+            for j in self.juego.jugadores:
+                if "martillo" in j.objetos and j.preso is not None and not getattr(j, "eliminado", False):
+                    self._decir_a(j, MARTILLO["encerrado"], COLOR_ALARMA)
         self.quedan_ms = self.total_ms = VOTACION["segundos"] * 1000
         self.votos = [None] * len(self.juego.jugadores)
         self.votantes = [self.puede_votar(j) for j in self.juego.jugadores]
@@ -679,22 +841,29 @@ class SalaSecreta:
         if self.resultado == "liberar":
             self._empezar_liberar()
         if self.a_la_capsula or self.resultado == "liberar":
-            # Los aliens no llegan: se devuelven por donde vinieron, y los
-            # agentes caminan solos a la cápsula (Diego, nov 24).
-            self._caminos = {n: {"puntos": None, "destino": o, "pedido_ms": 0}
-                             for n, o in self._origen.items()}
+            # Los aliens no llegan (esperaban afuera, sin que nadie los viera:
+            # vuelven a donde estaban) y los agentes caminan solos a la
+            # cápsula (Diego, nov 24-25).
+            self._esconder_aliens()
             self._pilotos = {}
             self._sonar("puerta", 1.0)
         else:
+            # Se quedan: entran corriendo por el pasillo.
+            ruta = self._ruta_adentro()
+            self._caminos = {a.nombre: {"puntos": [ruta[0]] + list(ruta[1:]), "destino": ruta[-1],
+                                        "pedido_ms": 0, "entrando": True}
+                             for a in self._aliens()}
             self._sonar("susto", 1.0)
         textos = {"escapar": "¡A la cápsula, ya! ¡Corran!",
                   "quedarse": "No los vamos a dejar solos.",
                   "liberar": "¡Rompe el vidrio! ¡Los sacamos de aquí!",
                   "nadie": "..."}
-        quien = self._hablante(None)
+        linea = {"escapar": "voto_escapar", "quedarse": "voto_quedarse",
+                 "liberar": "voto_liberar"}.get(self.resultado)
+        quien = self._hablante(None, linea)
         if quien is not None:
-            self._decir_a_todos(quien, textos[self.resultado],
-                                COLOR_ALARMA if self.resultado not in ("escapar", "liberar") else (255, 214, 64))
+            self._decir_a_todos(quien, textos[self.resultado], voz=linea,
+                                color=COLOR_ALARMA if self.resultado not in ("escapar", "liberar") else (255, 214, 64))
         if self.resultado == "nadie":
             self._sonar("guardia_esfuerzo_1", 1.0)
 
@@ -792,31 +961,100 @@ class SalaSecreta:
             j = self._rompedor()
             i = self._siguiente_rota()
             if j is not None and i is not None:
-                punto = self.lugar_golpe(i)
-                metas[getattr(j, "puesto", id(j))] = (punto, pygame.Rect(punto[0] - 6, punto[1] - 6, 12, 12))
+                metas[getattr(j, "puesto", id(j))] = (self.lugar_golpe(i), self._zona_golpe(i))
         elif self.fase_liberar == "capsula":
             for puesto, punto in self._puestos_bloqueo().items():
                 metas[puesto] = (punto, pygame.Rect(punto[0] - 6, punto[1] - 6, 12, 12))
         return metas
 
-    def _retirar_aliens(self, dt):
-        """Ganó escapar: los aliens se devuelven a donde estaban al sonar la alarma."""
-        for alien in self._aliens():
-            alien.tiempo_ms = getattr(alien, "tiempo_ms", 0) + dt
-            datos = self._caminos.get(alien.nombre)
-            if datos is None:
-                alien.moviendose = False
-                continue
-            if datos["puntos"] is None:
-                camino = self._buscar(alien, datos, dt)
-                if camino is None:
-                    alien.moviendose = False
+    def _alrededor(self, k, n, radio, usados=(), w=34, h=20):
+        """El puesto `k` de `n` aliens alrededor de la cápsula de escape: de
+        la derecha a la izquierda por abajo (arriba es pared), los pares más
+        cerca y los impares más lejos (no quedan en una línea). Nunca en la
+        sala de los niños (detrás de la pared), ni donde el piso libre más
+        cercano queda lejos del puesto, ni encima de otro (`usados`)."""
+        mundo = self.juego.mundo
+        c = self.juego.mision.capsula.center
+        prohibido = [self.sala] + list(self.pasillos)
+        r0 = radio * (1.0 if k % 2 == 0 else 1.3)
+        base = 5 + 170 * (k + 0.5) / max(1, n)
+        mejor, peor = None, None
+        for giro in (0, 9, -9, 18, -18):
+            angulo = math.radians(base + giro)
+            for escala in (1.0, 0.85, 1.15, 0.7):
+                r = r0 * escala
+                q = (c[0] + math.cos(angulo) * r * 1.4, c[1] + math.sin(angulo) * r * 0.75)
+                p = q
+                if hasattr(mundo, "punto_libre"):
+                    x, y = mundo.punto_libre((q[0] - w / 2, q[1] - h / 2), w, h)
+                    p = (x + w / 2, y + h / 2)
+                if any(rect.collidepoint(p) for rect in prohibido):
                     continue
-                datos["puntos"] = list(camino)
-            if not datos["puntos"]:
-                alien.moviendose = False
+                if peor is None:
+                    peor = p
+                if math.dist(p, q) <= 40 and all(math.dist(p, u) >= 90 for u in usados):
+                    mejor = p
+                    break
+            if mejor is not None:
+                break
+        punto = mejor or peor or (c[0], c[1] + radio * 0.75)
+        return (int(punto[0]), int(punto[1]))
+
+    def _empezar_cerco(self):
+        """Ya subieron: todos los aliens aparecen alrededor de la cápsula,
+        cerrándose sobre ella (por abajo y por los lados: arriba es pared)."""
+        mision = self.juego.mision
+        aliens = self._aliens()
+        if mision is None or mision.capsula is None or not aliens:
+            self._terminar()
+            return
+        self.cerco_ms = 0
+        self._sonar("gritos_aliens_1", 1.0)
+        self._sonar("alarma", 0.8)
+        mundo = self.juego.mundo
+        c = mision.capsula.center
+        n = len(aliens)
+        self._cerco = {}
+        from juego import navegacion
+        nav = navegacion.de_mundo(mundo, 34, 20)
+        prohibido = [self.sala] + list(self.pasillos)
+        usados = []
+        for k, alien in enumerate(aliens):
+            w, h = alien.hitbox.size
+            # A dónde llega: alrededor de la cápsula, disperso (`_alrededor`).
+            hasta = self._alrededor(k, n, CERCO_HASTA, usados, w, h)
+            usados.append(hasta)
+            # De dónde sale: más lejos en la misma dirección; del más lejos al
+            # más cerca, el primero fuera de la sala de los niños y que vea
+            # su puesto en línea recta (se acerca sin cruzar paredes).
+            desde = hasta
+            for escala in (CERCO_DESDE / CERCO_HASTA, 1.9, 1.5, 1.2):
+                q = (c[0] + (hasta[0] - c[0]) * escala, c[1] + (hasta[1] - c[1]) * escala)
+                x, y = mundo.punto_libre((q[0] - w / 2, q[1] - h / 2), w, h)
+                q = (x + w / 2, y + h / 2)
+                if not any(r.collidepoint(q) for r in prohibido) and nav.libre_entre(q, hasta):
+                    desde = q
+                    break
+            self._cerco[alien.nombre] = (desde, hasta)
+            alien.hitbox.center = (int(desde[0]), int(desde[1]))
+            alien.alerta = True
+
+    def _cercar(self, dt):
+        self.cerco_ms += dt
+        u = min(1.0, self.cerco_ms / CERCO_MS)
+        k = 1 - (1 - u) ** 2                      # llegan frenando: "a punto de alcanzarla"
+        for alien in self._aliens():
+            datos = self._cerco.get(alien.nombre)
+            if datos is None:
                 continue
-            self._avanzar(alien, datos, VEL_RETIRADA * dt)
+            (x0, y0), (x1, y1) = datos
+            alien.tiempo_ms = getattr(alien, "tiempo_ms", 0) + dt
+            alien.hitbox.center = (int(x0 + (x1 - x0) * k), int(y0 + (y1 - y0) * k))
+            alien.moviendose = u < 1
+            alien.angulo = math.atan2(y1 - y0, x1 - x0)
+        if self.cerco_ms >= CERCO_MS:
+            self._sonar("cohete", 1.0)
+            self._terminar()
 
     # -- Los aliens que vienen -----------------------------------------------------------------
 
@@ -830,11 +1068,46 @@ class SalaSecreta:
             alien.moviendose = False
 
     def _destino(self, k):
-        """El puesto `k` en la fila de aliens del pasillo (el 0, en la puerta de la sala)."""
-        x = self.sala.left - 34 - k * 46
-        x = max(self.pasillo.left + 30, x)
-        y = self.pasillo.centery + (22 if k % 2 else -22)
+        """El puesto `k` de los aliens que vienen: afuera, frente a la puerta
+        secreta (desde la sala no se ven). Antes esperaban en el pasillo, en
+        la entrada de la sala: si ganaba escapar o liberarlos tenían que
+        devolverse delante de los agentes y parecía que huían (Diego, nov 25).
+        Ahora entran al pasillo solo si se quedan (`_mover_adentro`)."""
+        mundo = self.juego.mundo
+        fila, col = divmod(k, 5)
+        x = self.puerta.centerx + (col - 2) * 46
+        y = self.puerta.bottom + 60 + fila * 44
+        if hasattr(mundo, "punto_libre"):
+            x, y = mundo.punto_libre((x - 17, y - 10), 34, 20)
+            x, y = x + 17, y + 10
         return (x, y)
+
+    def _ruta_adentro(self):
+        """El camino de la puerta secreta a la sala, por el pasillo (para
+        cuando se quedan: los aliens entran por ahí, corriendo)."""
+        from juego import navegacion
+        desde = (self.puerta.centerx, self.puerta.bottom + 30)
+        hasta = (self.sala.left - BARRERA_ANCHO - 24, self.pasillo.centery)
+        puntos = []
+        try:
+            nav = navegacion.de_mundo(self.juego.mundo, 34, 20)
+            puntos = list(nav.camino(desde, hasta, parcial=True) or [])
+        except Exception:
+            puntos = []
+        if not puntos:
+            puntos = [self.puerta.center] + [p.center for p in self.pasillos[:-1]]
+        return [desde] + puntos + [hasta, (self.sala.left + 40, self.pasillo.centery)]
+
+    def _esconder_aliens(self):
+        """Ganó escapar o liberarlos: los que esperaban frente a la puerta
+        secreta (nadie los ve: están todos en la sala) vuelven a donde estaban
+        al sonar la alarma, sin pasar por delante de los agentes."""
+        for alien in self._aliens():
+            origen = self._origen.get(alien.nombre)
+            if origen is not None:
+                alien.hitbox.center = (int(origen[0]), int(origen[1]))
+            alien.moviendose = False
+        self._caminos = {}
 
     def _mover_aliens(self, dt):
         aliens = sorted(self._aliens(), key=lambda a: math.dist(a.centro, self.pasillo.center))
@@ -867,6 +1140,9 @@ class SalaSecreta:
         sellos (si no, uno detrás de una puerta para dos se quedaba atascado o,
         peor, cruzaba las paredes en línea recta). None mientras busca."""
         from juego import navegacion
+        if self._busquedas >= BUSQUEDAS_POR_CUADRO:
+            return None          # (le toca en otro cuadro: uno a la vez, sin tirones)
+        self._busquedas += 1
         datos["pedido_ms"] += dt
         busqueda = datos.get("_busqueda")
         if busqueda is None:
@@ -932,6 +1208,14 @@ class SalaSecreta:
         adentro = [j for j in self.juego.jugadores if self.en_la_sala(j) and not getattr(j, "eliminado", False)]
         for k, alien in enumerate(self._aliens()):
             alien.tiempo_ms = getattr(alien, "tiempo_ms", 0) + dt
+            datos = self._caminos.get(alien.nombre)
+            if datos and datos.get("entrando") and datos["puntos"]:
+                # Primero por el pasillo (en fila: el k-ésimo sale un poco después).
+                if self.estado_ms >= k * ENTRADA_FILA_MS:
+                    self._avanzar(alien, datos, VEL_ENTRADA * dt)
+                else:
+                    alien.moviendose = False
+                continue
             if adentro:
                 meta = adentro[k % len(adentro)].hitbox.center
                 meta = (meta[0] + (k % 3 - 1) * 40, meta[1] + (k % 2) * 30 - 15)
@@ -950,9 +1234,14 @@ class SalaSecreta:
     # -- Ganó liberarlos: romper, a la cápsula y tapar el paso ------------------------------------
 
     def equipo_con_martillo(self):
-        """¿Alguien que sigue en la partida lleva el martillo?"""
-        return any("martillo" in j.objetos for j in self.juego.jugadores
-                   if not getattr(j, "eliminado", False) and not getattr(j, "desconectado", False))
+        """¿Alguien que sigue en la partida y está suelto (no en una celda)
+        lleva el martillo? Encerrado no puede ir a romper nada: entonces la
+        votación es la de siempre (escapar o quedarse)."""
+        return any(self._puede_usar_martillo(j) for j in self.juego.jugadores)
+
+    def _puede_usar_martillo(self, j):
+        return ("martillo" in j.objetos and not getattr(j, "eliminado", False)
+                and not getattr(j, "desconectado", False) and j.preso is None)
 
     def _rompedor(self):
         """Quien rompe: el del martillo (si puede caminar) o, si no, otro."""
@@ -963,10 +1252,33 @@ class SalaSecreta:
                 return j
         j = next((j for j in caminan if "martillo" in j.objetos), None) or (caminan[0] if caminan else None)
         self.rompe = getattr(j, "puesto", None) if j is not None else None
+        if j is not None:
+            self._pasar_martillo(j)
         return j
+
+    def _pasar_martillo(self, j):
+        """El martillo va a quien rompe. Si quien lo llevaba ya no puede (se
+        desconectó en medio de la red), lo toma otro: el que rompe siempre lo
+        tiene en la mano (y nunca hay dos)."""
+        if "martillo" in j.objetos:
+            return
+        for otro in self.juego.jugadores:
+            while "martillo" in otro.objetos:
+                otro.objetos.discard("martillo")
+        if self.baul is not None:
+            self.baul["abierto"], self.baul["con_martillo"] = True, False
+        j.objetos.add("martillo")
 
     def _siguiente_rota(self):
         return next((i for i in self.cola if not self.rota(i)), None)
+
+    def _zona_golpe(self, i):
+        punto = self.lugar_golpe(i)
+        return pygame.Rect(punto[0] - 6, punto[1] - 6, 12, 12)
+
+    def _llego_golpe(self, j, i):
+        """¿Ya está junto a la cápsula `i` (donde el piloto deja de caminar)?"""
+        return self._zona_golpe(i).colliderect(j.hitbox)
 
     def lugar_golpe(self, i):
         """Dónde se para quien rompe la cápsula `i` (a su izquierda)."""
@@ -986,14 +1298,14 @@ class SalaSecreta:
             self.cola.append(i)
             desde = self.lugar_golpe(i)
         self._golpe_ms = 0
+        self._ultimo_lugar, self._quieto_ms = None, 0
         self._sonar("menu_ok", 0.6)
 
     def _liberar(self, dt):
         self.fase_ms += dt
         if self.fase_liberar == "romper":
             self.cerca = max(0.0, self.cerca - dt / 2500)
-        if self.fase_liberar == "romper":
-            self._retirar_aliens(dt)
+            self._quietos(dt)
             i = self._siguiente_rota()
             j = self._rompedor()
             if i is None:
@@ -1005,7 +1317,16 @@ class SalaSecreta:
                     self.capsulas[k]["golpes"] = MARTILLO["golpes"]
                 self._sonar("vidrio_roto", 1.0)
                 return
-            if math.dist(j.hitbox.center, self.lugar_golpe(i)) > 14:
+            # Llegó: lo mismo que usa el piloto para dejar de caminar (antes
+            # aquí pedía estar a 14 px y el piloto paraba hasta a ~23: se
+            # quedaba quieto al lado de la cápsula y no rompía nada, Diego nov 25).
+            # Si lleva un rato sin avanzar (algo lo trabó), rompe desde ahí.
+            aqui = j.hitbox.center
+            if aqui != self._ultimo_lugar:
+                self._ultimo_lugar, self._quieto_ms = aqui, 0
+            else:
+                self._quieto_ms += dt
+            if not self._llego_golpe(j, i) and self._quieto_ms < QUIETO_MAX_MS:
                 self._golpe_ms = 0
                 return
             self._golpe_ms += dt
@@ -1043,18 +1364,25 @@ class SalaSecreta:
         nav = navegacion.de_mundo(self.juego.mundo, *demo.TAMANO_NAV)
         camino = nav.camino(desde, capsula.center, parcial=True, sellos=False) or []
         self.ruta_ninos = [tuple(map(int, p)) for p in [desde] + list(camino) + [capsula.center]]
-        self.fin_ninos = max((self._entra_nino(k) for k in range(len(self.cola))), default=0)
-        quien = self._rompedor() or self._hablante(None)
+        self.salen, self.entran = [], []
+        self.salen = [self._arranca_nino(k) for k in range(len(self.cola))]
+        self.entran = [self._entra_nino(k) for k in range(len(self.cola))]
+        self.fin_ninos = max(self.entran, default=0)
+        rompe = self._rompedor()
+        quien = rompe if rompe is not None and voces.de_rol("liberar_sube", rompe.rol) else \
+            (self._hablante(None, "liberar_sube") or rompe)
         if quien is not None:
-            self._decir_a_todos(quien, LIBERAR["sube"], (255, 214, 64))
+            self._decir_a_todos(quien, LIBERAR["sube"], (255, 214, 64), voz="liberar_sube")
         # Los aliens vuelven, ahora a la cápsula: llegan a los agentes justo
         # cuando se sube el último niño.
-        puestos = list(self._puestos_bloqueo().values()) or [capsula.midbottom]
+        # Rodean la cápsula (por abajo y por los lados, en dos filas
+        # alternadas), no en una fila delante de los agentes (Diego, nov 25).
         self._caminos = {}
-        for k, alien in enumerate(sorted(self._aliens(), key=lambda a: a.nombre)):
-            x, y = puestos[k % len(puestos)]
-            self._caminos[alien.nombre] = {"puntos": None, "destino": (x + (k // len(puestos)) * 30, y + 120),
-                                           "pedido_ms": 0}
+        aliens = sorted(self._aliens(), key=lambda a: a.nombre)
+        usados = []
+        for k, alien in enumerate(aliens):
+            usados.append(self._alrededor(k, len(aliens), RADIO_RODEAN, usados))
+            self._caminos[alien.nombre] = {"puntos": None, "pedido_ms": 0, "destino": usados[-1]}
         self.quedan_ms = max(2500, self.fin_ninos + 600)
         self._sonar("alarma", 0.7)
 
@@ -1080,7 +1408,10 @@ class SalaSecreta:
     def _arranca_nino(self, k):
         """Cuándo (ms de la fase "capsula") echa a andar el `k`-ésimo: en fila
         india, cada uno entra a la ruta `sale_ms` después del anterior (si no,
-        los que vienen de más lejos alcanzaban a los otros y se enciman)."""
+        los que vienen de más lejos alcanzaban a los otros y se enciman). Se
+        calcula una vez (`salen`, que viaja con la sala al espejo de la red)."""
+        if k < len(self.salen):
+            return self.salen[k]
         vel = LIBERAR["vel_nino"]
         entra_ruta, arranca = -LIBERAR["sale_ms"], 0
         for n in range(min(k, len(self.cola) - 1) + 1):
@@ -1093,6 +1424,8 @@ class SalaSecreta:
         """Cuándo (ms de la fase "capsula") se sube a la cápsula el `k`-ésimo."""
         if k >= len(self.cola):
             return 0
+        if k < len(self.entran):
+            return self.entran[k]
         largo = self._largo(self._camino_nino(self.cola[k]))
         return int(self._arranca_nino(k) + largo / LIBERAR["vel_nino"] + LIBERAR["entra_ms"])
 
@@ -1167,6 +1500,15 @@ class SalaSecreta:
         nota["texto"] = (nota.get("texto", "") + " " + BAUL["nota"].replace("{codigo}", codigo)).strip()
         return {"rect": hitbox, "imagen": imagen, "codigo": codigo, "abierto": False, "con_martillo": True}
 
+    def _rescate_cerca(self, jugador):
+        """¿Tiene al lado una celda con alguien adentro? (La última celda queda
+        junto al baúl: sacar al compañero va primero, misiones/mision.py.)"""
+        from misiones.mision import RADIO_RESCATE
+        mision = self.juego.mision
+        return mision is not None and any(
+            c["preso"] is not None and math.dist(jugador.hitbox.center, c["punto"]) <= RADIO_RESCATE
+            for c in getattr(mision, "celdas", ()))
+
     def baul_cerca(self, jugador):
         baul = self.baul
         if baul is None or jugador.preso or getattr(jugador, "eliminado", False):
@@ -1197,6 +1539,7 @@ class SalaSecreta:
             return
         if codigos[indice] == self.baul["codigo"]:
             self.baul["abierto"] = True
+            self._logro("letra_pequena", jugador)
             jugador.avisar(BAUL["abierto"], COLOR_PISTA)
             self._sonar("puerta", 0.7)
             self._sonar("acierto", 0.8)
@@ -1217,6 +1560,8 @@ class SalaSecreta:
         baul = self.baul
         if baul is None or not baul["abierto"] or baul["con_martillo"]:
             return
+        if self.resultado == "liberar" and self.estado in ("desenlace", "fin"):
+            return            # (lo lleva quien rompe: _rompedor se encarga)
         for j in self.juego.jugadores:
             if "martillo" not in j.objetos:
                 continue
@@ -1316,8 +1661,9 @@ class SalaSecreta:
 
     def capsula_apagada_cerca(self, jugador):
         """La cápsula apagada que el Biomante tiene al lado (su índice) o None."""
-        if getattr(jugador, "rol", None) != "Biomante" or not self._se_puede_revisar(jugador):
-            return None
+        if (getattr(jugador, "rol", None) != "Biomante" or not self._se_puede_revisar(jugador)
+                or self.estado == "dialogo"):
+            return None          # (mientras hablan, no: su línea pisaría el diálogo)
         for i in self.apagadas:
             base = self.capsulas[i]["base"]
             if math.dist(base.center, jugador.hitbox.center) <= RADIO_CAPSULA:
@@ -1328,7 +1674,7 @@ class SalaSecreta:
         """La pista abajo de la pantalla ("Revisar la mochila") si tiene una cerca."""
         if not self.activa or jugador.preso:
             return None
-        if self.baul_cerca(jugador):
+        if self.baul_cerca(jugador) and not self._rescate_cerca(jugador):
             if not self.baul["abierto"]:
                 return BAUL["pista"]
             if self.baul["con_martillo"]:
@@ -1347,7 +1693,7 @@ class SalaSecreta:
         """Revisar una pista (tecla de interactuar). True si había una."""
         if not self.activa:
             return False
-        if self.baul_cerca(jugador):
+        if self.baul_cerca(jugador) and not self._rescate_cerca(jugador):
             if not self.baul["abierto"]:
                 self._panel_baul(jugador)
                 return True
@@ -1362,22 +1708,28 @@ class SalaSecreta:
         if self.celular_cerca(jugador):
             jugador.panel = {"tipo": "celular_nino", "titulo": CELULAR_NINO["contacto"]}
             self.celular_visto = True
+            self._logro("llamadas_perdidas", jugador)
             self._sonar("recoger", 0.6)
             return True
         i = self.capsula_apagada_cerca(jugador)
         if i is not None:
-            if self.regenera is None:
+            if self.regenera is None and not (jugador.mensaje_voz and jugador.mensaje_ms > 0):
                 self.regenera = [i, 0]
+                self._logro("demasiado_tarde", jugador)
                 self._sonar("curar", 0.9)
                 self._sonar("fallo", 0.5)
-                self._decir_a_todos(jugador, REGENERAR["texto"])
+                self._decir_a_todos(jugador, REGENERAR["texto"], voz="regenerar")
             return True
         cerca = self.pista_cerca(jugador)
         if cerca is None:
-            if self.capsula_viva_cerca(jugador) is not None and self.estado in ("dialogo", "espera"):
-                # Una pista de que se puede (el baúl de la prisión).
-                jugador.avisar(MARTILLO["con_martillo"] if "martillo" in jugador.objetos
-                               else MARTILLO["sin_martillo"], (210, 210, 220))
+            if self.capsula_viva_cerca(jugador) is not None and self.estado == "espera":
+                # Una pista de que se puede (el baúl de la prisión). Solo
+                # cuando ya terminaron de hablar: no pisa el diálogo.
+                # (con avisar no saldría: con los niños no hay avisos, jugador.en_historia)
+                con = "martillo" in jugador.objetos
+                if not (jugador.mensaje_voz and jugador.mensaje_ms > 0):
+                    self._decir_a(jugador, MARTILLO["con_martillo" if con else "sin_martillo"], (210, 210, 220),
+                                  voz="vidrio_con_martillo" if con else "vidrio_sin_martillo")
                 return True
             return False
         datos = next(d for d in PISTAS if d["tipo"] == cerca["tipo"])
@@ -1389,6 +1741,10 @@ class SalaSecreta:
         return True
 
     # -- Sonido ---------------------------------------------------------------------------------
+
+    def _logro(self, clave, jugador=None):
+        from misiones.logros import logro
+        logro(self.juego, clave, jugador)
 
     def _sonar(self, nombre, volumen=1.0):
         sonar = getattr(self.juego, "sonar", None)

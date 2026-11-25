@@ -879,6 +879,8 @@ def abrir(juego):
             elif resultado == "crear" or (isinstance(resultado, tuple) and resultado[0] == "unirse"):
                 aviso = _jugar(juego, menu, resultado) or ""
                 aviso_hasta = time.time() + 6
+                from juego import musica_final
+                musica_final.parar()          # (la del final, de los resultados en red)
                 if not juego.running:
                     break
             if aviso and time.time() > aviso_hasta:
