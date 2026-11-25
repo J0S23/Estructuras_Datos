@@ -658,7 +658,17 @@ class Game:
         anterior = getattr(self, "_hilo_carga", None)
         if anterior is not None and anterior.is_alive():
             anterior.join(15)
-        self.transitions.request(self, "cargando")
+        if self.demo is None:
+            # La cinemática de la historia va al empezar cada partida (Diego,
+            # nov 24): mientras se ve, la partida se arma en el otro hilo.
+            # Cualquier tecla la salta; al terminar se pasa directo a jugar
+            # (o a la pantalla de carga, si todavía no está lista).
+            from screens.cinematica import Cinematica
+            self.intro = Cinematica(sonar=self.sonar)
+            self._intro_antes_de_partida = True
+            self.transitions.request(self, "intro")
+        else:
+            self.transitions.request(self, "cargando")
         self._hilo_carga = threading.Thread(target=cargar, daemon=True)
         self._hilo_carga.start()
 
@@ -2012,9 +2022,11 @@ class Game:
     # -- La cinemática de apertura (screens/cinematica.py) -----------------------------------
 
     def abrir_intro(self):
-        """La historia de los niños antes del menú (main.py), o con [H] desde el menú."""
+        """La historia de los niños con [H] desde el menú (al empezar cada
+        partida la abre empezar_carga)."""
         from screens.cinematica import Cinematica
         self.intro = Cinematica(sonar=self.sonar)
+        self._intro_antes_de_partida = False
         self.current_screen = "intro"
 
     def _actualizar_intro(self, dt):
@@ -2022,7 +2034,23 @@ class Game:
             return
         if self.intro is None or self.intro.terminada:
             self.intro = None
-            if self.transitions.is_idle():
+            if not self.transitions.is_idle():
+                return
+            if getattr(self, "_intro_antes_de_partida", False):
+                self._intro_antes_de_partida = False
+                carga = self.carga
+                if carga is not None and carga["listo"] and carga["error"] is None:
+                    # Ya está armada: a jugar.
+                    self.carga, self.carga_final = None, None
+                    self._sincronizar_mandos()
+                    self.transitions.request(self, "partida", estilo="glitch")
+                else:
+                    # Todavía no (o falló): la pantalla de carga se encarga, sin
+                    # volver a esperar su tiempo mínimo.
+                    if carga is not None:
+                        carga["ms"] = max(carga["ms"], self.MIN_CARGA_MS)
+                    self.transitions.request(self, "cargando")
+            else:
                 self.transitions.request(self, "menu")
             return
         self.intro.actualizar(dt)
@@ -2885,5 +2913,4 @@ class Game:
 
 if __name__ == "__main__":
     juego = Game()
-    juego.abrir_intro()
     juego.run()

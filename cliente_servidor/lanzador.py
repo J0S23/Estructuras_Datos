@@ -916,6 +916,27 @@ def abrir(juego):
     juego.current_screen = "menu"
 
 
+def _cinematica(juego):
+    """La cinemática de apertura (screens/cinematica.py), con su propio
+    bucle; cualquier tecla, botón o clic la salta."""
+    if os.environ.get("SDL_VIDEODRIVER") == "dummy":
+        return
+    from screens.cinematica import Cinematica
+    from juego.app import EVENTOS_SALIR_DEMO
+    intro = Cinematica(sonar=juego.sonar)
+    reloj = pygame.time.Clock()
+    while juego.running and not intro.terminada:
+        dt = reloj.tick(60)
+        for evento in pygame.event.get():
+            if evento.type == pygame.QUIT:
+                juego.running = False
+            elif evento.type in EVENTOS_SALIR_DEMO:
+                intro.saltar()
+        intro.actualizar(min(dt, 100))
+        intro.dibujar(juego.screen)
+        pygame.display.flip()
+
+
 def _levantar(menu):
     """El servidor en el 5050, o en el siguiente libre (hasta 5053, los que
     caben en el código)."""
@@ -1046,6 +1067,14 @@ def _jugar(juego, menu, resultado):
     if menu.buscador is not None:
         menu.buscador.cerrar()          # (se vuelve a abrir al regresar a "Unirse")
         menu.buscador = None
+    # La historia de los niños, como al empezar una partida en una sola
+    # laptop. Va antes de conectarse: el servidor (si es esta laptop) ya está
+    # arriba y espera, así que los demás ya pueden unirse mientras tanto.
+    _cinematica(juego)
+    if not juego.running:
+        if proceso is not None:
+            cerrar_servidor(proceso)
+        return ""
     try:
         motivo = cliente.jugar(juego, host, puerto, esquemas,
                                avisar=lambda t: print("[red]", t, flush=True), dibujar_espera=espera,
