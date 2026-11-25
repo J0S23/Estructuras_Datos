@@ -127,11 +127,22 @@ g._dibujar(); pygame.image.save(g.screen, os.path.join(OUT, "infiltrado_c_acusar
 for a in g.aliens:
     a.descanso_ms = 0
 puntos = j1.puntos
+red = g.nexus
+for n in red._presos()[:len(red._presos()) // 2]:
+    red.grafo.datos[n]["color"] = "verde"          # (la mitad confiaba)
+verde_antes = red.barras()[0]
 if inocente in j1.panel["candidatos"]:
     elegir(g, j1, inocente["nombre"])
 else:
     caso.acusar(j1, inocente)
 assert caso.estado == "fallido" and not caso.activo and j1.puntos < puntos
+# Sale en NEXUS (pestaña Equipo de los dos) y baja la confianza.
+from redes import celular as red_celular
+pub = next(p for p in red.publicaciones if p.tipo == "caso")
+assert pub.falsa and inocente["nombre"] in pub.texto
+assert all(pub in red_celular.equipo(red, j) for j in g.jugadores), "el equipo la ve"
+assert red.barras()[0] < verde_antes, ("acusar a un inocente baja la confianza", verde_antes, red.barras())
+print(f"acusar mal: sale en NEXUS y la confianza baja {verde_antes:.0%} -> {red.barras()[0]:.0%}")
 assert all(a.punto_ruido is not None for a in g.aliens if a is not g.cambiaformas), \
     "la nave delata al que acusó"
 assert g.cambiaformas.presa is j1, "y el Cambiaformas se entera: lo escoge de presa"
@@ -163,8 +174,16 @@ for a in g.aliens:
     a.descanso_ms = 0
 a_la_terminal(g, j2)
 g._tecla_en_partida(pygame.K_RETURN); elegir(g, j2, "El caso del Cambiaformas")
+red = g.nexus
+verde_antes = red.barras()[0]
 elegir(g, j2, "Subir")
 assert caso.estado == "expuesto" and len(caso.restantes()) == 1
+pub = next(p for p in red.publicaciones if p.tipo == "caso")
+assert not pub.falsa and caso.infiltrado["nombre"] in pub.texto
+from redes import celular as red_celular
+assert all(pub in red_celular.equipo(red, j) for j in g.jugadores), "el equipo la ve"
+assert red.barras()[0] > verde_antes, ("exponerlo sube la confianza", verde_antes, red.barras())
+print(f"expuesto: sale en NEXUS y la confianza sube {verde_antes:.0%} -> {red.barras()[0]:.0%}")
 assert all(a.confundido and a.descanso_ms >= CONFUSION_MS - 100 for a in g.aliens)
 assert g.cambiaformas.expuesto_ms > 0 and not g.cambiaformas.disfrazado, "expuesto: sin disfraz"
 g._actualizar_partida(DT)

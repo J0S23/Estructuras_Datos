@@ -39,7 +39,6 @@ from collections import deque
 import os
 import random
 import secrets
-import signal
 import socket
 import sys
 import threading
@@ -105,7 +104,7 @@ OBJETOS = {"m": "mision", "ev": "eventos", "eq": "equipo", "nx": "nexus", "inf":
            "gp": "guardia_planta", "tut": "tutorial", "nar": "narrador", "lg": "logros",
            "pr": "presentacion", "npc": "npcs", "cf": "cambiaformas",
            "ss": "sala_secreta"}      # la sala oculta de los niños (misiones/sala_secreta.py)
-LISTAS = {"pz": "piezas", "te": "terminales", "pa": "paneles", "sn": "senuelos", "sl": "senales",
+LISTAS = {"pz": "piezas", "te": "terminales", "pa": "paneles", "tr": "trampas", "sl": "senales",
           "pd": "puertas_dobles", "cp": "compuertas", "es": "escondites"}
 DEL_JUEGO = ("tiempo_jugado_ms", "tiempo_restante_ms", "oscuridad", "mostrar_arbol_alien",
              "alien_en_vista", "vista_grafo")
@@ -1257,6 +1256,7 @@ def forzar_fase_final(g):
     if not m.activa or m.capsula is None:
         return
     m.fase = "huida"
+    m.escape_confirmado = True      # (sin preguntar "¿Se van ya?": misiones/mision.py)
     for k, j in enumerate(g.jugadores):
         j.personaje.hitbox.center = (m.capsula.centerx - 20 + 14 * k, m.capsula.bottom + 20)
         j.personaje.sync_sprite_from_hitbox()

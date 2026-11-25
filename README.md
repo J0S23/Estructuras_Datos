@@ -183,7 +183,7 @@ el caso del infiltrado.
 
 En la sala de la capsula (la Bahia) hay un alien enorme, el **Guardia**: no sale
 de ahi, ve a todo el que entra, no se le puede atravesar y atrapa a quien alcanza.
-No le hacen nada el hackeo ni el señuelo. Hay dos formas de quitarlo:
+No le hacen nada el hackeo ni el cepo. Hay dos formas de quitarlo:
 
 - **Un rato (Resonante):** cerca de el, la tecla de interactuar (su Sintonia de
   señales) lo distrae 18 s: se va a un rincon a escuchar y no ve a nadie. Hay que

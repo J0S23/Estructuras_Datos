@@ -630,6 +630,9 @@ def _tarjeta(red, jugador, pestana, pub, f, fb, fc, ancho):
         chips.append(("Compartió", COLOR_MARCA))
     elif pub.tipo == "testimonio":
         chips.append(("Rescatado", COLOR_VERDE))
+    elif pub.tipo == "caso":
+        chips.append(("Acusó a un inocente", COLOR_ROJO) if pub.falsa
+                     else ("Expuso al Cambiaformas", COLOR_VERDE))
     if nuevo and pestana == "equipo":
         chips.append(("nuevo", (230, 150, 40)))
     texto = pub.texto
@@ -643,7 +646,7 @@ VACIO = {
     "misiones": ("Nada por verificar.",
                  "Cuando te llegue algo por verificar o alguien pida ayuda, aparece aquí. Verifica antes de compartir."),
     "equipo": ("Tu equipo no ha publicado nada.",
-               "Cuando alguien desmienta un rumor, confirme algo o rescate a un prisionero, sale aquí."),
+               "Cuando alguien desmienta un rumor, confirme algo, rescate a un prisionero o cierre el caso del Cambiaformas, sale aquí."),
     "red": ("La red está callada.", "Aquí sale lo que comentan los prisioneros."),
 }
 

@@ -209,15 +209,6 @@ def extraer(valor, profundidad=4):
     return NADA
 
 
-def _en_lista(valor, profundidad):
-    ref = _referencia(valor)
-    if ref is not None:
-        return {ref[0]: ref[1]}
-    if hasattr(valor, "__dict__") and profundidad > 2:
-        return atributos(valor, profundidad=profundidad - 2)
-    return extraer(valor, profundidad - 1)
-
-
 def atributos(objeto, saltar=(), profundidad=4):
     """Los atributos de un objeto que se pueden mandar (los que empiezan con
     _ son internos y no se dibujan)."""

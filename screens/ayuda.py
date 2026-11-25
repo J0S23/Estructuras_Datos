@@ -113,7 +113,7 @@ def _dibujar_paneles(screen):
         (None, ""),
         (COLOR_TITULO, "Los roles"),
         (COLOR_TENUE, "Tecnomante: terminales, hackeo y consolas."),
-        (COLOR_TENUE, "Forjador: piezas, sellos, señuelos y la cápsula."),
+        (COLOR_TENUE, "Forjador: piezas, sellos, cepos y la cápsula."),
         (COLOR_TENUE, "Biomante: siente el pulso, cura y recarga al equipo."),
         (COLOR_TENUE, "Resonante: oye a los aliens y les manda señales falsas."),
         (None, ""),

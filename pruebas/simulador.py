@@ -317,6 +317,11 @@ class Bot:
                 return m.capsula.center, 60
             return m.capsula.center, 140
         if m.fase == "huida":
+            # Con la sala oculta abierta hay que confirmar el escape: el bot,
+            # ya con todos en la cápsula, se va (sin entrar a ver a los niños).
+            if (m.confirmar_escape_pendiente() and m._en_zona_capsula(j) and m._todos_en_capsula()
+                    and j.panel is None):
+                m.confirmar_escape(j)
             return m.capsula.center, 40
         return None, 0
 

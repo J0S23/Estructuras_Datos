@@ -12,7 +12,7 @@ import math
 import pygame
 
 from juego.config import CARD, CARD_HOVER, CARD_BORDER, TEXT_MAIN
-from juego.fuentes import fuente, fuente_de_tamano
+from juego.fuentes import fuente
 
 
 COLOR_SOMBRA = (12, 11, 23)
@@ -64,30 +64,6 @@ def construir_botones(labels, ancho_pantalla, alto_pantalla,
         cx = ancho_pantalla // 2 if centro_x is None else int(centro_x)
         botones.append(Button((cx - ancho // 2, y, ancho, alto), texto, accion))
     return botones
-
-
-def dibujar_texto_ajustado(surface, texto, fuente_base, x, y, ancho_maximo, color):
-    """Dibuja una línea encogiendo la letra si no cabe en el ancho disponible.
-
-    Las pantallas del juego se dibujan tanto maximizadas como en la ventana
-    chica de F11, y una línea larga que en pantalla completa cabe sobrada se
-    sale del borde en la ventana pequeña. En vez de cortar el texto con puntos
-    suspensivos, se busca el primer tamaño de letra en el que cabe entero.
-
-    Devuelve la fuente que terminó usando, por si hay que seguir dibujando
-    debajo con el mismo tamaño.
-    """
-    f = fuente_base
-    if f.size(texto)[0] > ancho_maximo:
-        for px in range(f.get_height(), 9, -1):
-            candidata = fuente_de_tamano(px)
-            if candidata.size(texto)[0] <= ancho_maximo:
-                f = candidata
-                break
-        else:
-            f = fuente_de_tamano(10)
-    surface.blit(f.render(texto, True, color), (int(x), int(y)))
-    return f
 
 
 # -- Botones de vidrio (con los efectos prendidos) ---------------------------------------

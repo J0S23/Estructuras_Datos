@@ -8,6 +8,7 @@ del dibujo (ver `imagen`): para cambiar un dibujo por el de Anny basta con
 poner el archivo ahí (la lista de nombres está en Imagenes/Historia/LEEME.md).
 """
 
+import math
 import os
 import random
 
@@ -231,7 +232,6 @@ ARCHIVO_CAPSULA = "OBJ-039_Capsula_de_energia.png"
 CIAN = (51, 191, 224)
 BLANCO_RAYO = (232, 234, 231)
 VERDE = (78, 214, 128)
-VERDE_OSCURO = (40, 150, 92)
 FILA_VIDRIO = 30         # la fila de la hoja (ya recortada) que se repite
 ESTIRAR = 22             # cuántas filas de vidrio se agregan
 
@@ -382,6 +382,110 @@ def _sobre(fondo, color):
     a = color[3] / 255
     return (int(fondo.r * (1 - a) + color[0] * a), int(fondo.g * (1 - a) + color[1] * a),
             int(fondo.b * (1 - a) + color[2] * a), fondo.a)
+
+
+def capsula_rota(i, escala):
+    """La cápsula `i` con el vidrio reventado: el líquido se fue, adentro
+    oscuro y vacío, con picos de vidrio en el borde de arriba y de abajo."""
+    def armar():
+        img = capsula(i, escala)
+        if img is None:
+            return None
+        s = img.copy()
+        v = vidrio_de_capsula_px(img)
+        if v is None:
+            return s
+        azar = random.Random(i * 97 + 5)
+        w, h = s.get_size()
+        # El borde de arriba y el de abajo, mellados: el vidrio que quedó.
+        picos_arriba = [max(1, int(azar.uniform(0.04, 0.3) * v.height)) for _ in range(v.width)]
+        picos_abajo = [max(1, int(azar.uniform(0.02, 0.16) * v.height)) for _ in range(v.width)]
+        for k in range(1, v.width - 1):          # (que no sean ruido: picos)
+            picos_arriba[k] = (picos_arriba[k - 1] + picos_arriba[k] + picos_arriba[k + 1]) // 3
+        for x in range(v.left, v.right):
+            k = x - v.left
+            for y in range(v.top, v.bottom):
+                c = s.get_at((x, y))
+                if c.a == 0:
+                    continue
+                if y < v.top + picos_arriba[k] or y >= v.bottom - picos_abajo[k]:
+                    # Vidrio: claro, un poco verde.
+                    s.set_at((x, y), (150, 210, 190, 200))
+                else:
+                    # Adentro: oscuro, con un poco de humedad que brilla.
+                    hondo = (y - v.top) / max(1, v.height)
+                    s.set_at((x, y), (int(14 + 10 * hondo), int(24 + 16 * hondo), int(24 + 12 * hondo), 255))
+        # Gotas del líquido que quedan escurriendo.
+        for _ in range(max(3, v.width // 6)):
+            x = azar.randint(v.left + 2, v.right - 3)
+            y0 = azar.randint(v.top + v.height // 3, v.bottom - 6)
+            for y in range(y0, min(v.bottom, y0 + azar.randint(3, 9))):
+                s.set_at((x, y), (70, 170, 110, 255))
+        return s
+    return _guardar(("capsula_rota", i, escala), armar)
+
+
+def grietas(i, golpes, ancho, alto):
+    """Las grietas del vidrio tras `golpes` martillazos (líneas desde el punto
+    del golpe), en una capa transparente de ancho x alto."""
+    def armar():
+        capa = pygame.Surface((ancho, alto), pygame.SRCALPHA)
+        azar = random.Random(i * 13 + 3)
+        for g in range(golpes):
+            cx = ancho * azar.uniform(0.3, 0.7)
+            cy = alto * azar.uniform(0.3, 0.7)
+            for _ in range(5 + 3 * g):
+                angulo = azar.uniform(0, 2 * math.pi)
+                x, y = cx, cy
+                largo = azar.uniform(0.2, 0.55) * max(ancho, alto) * (0.6 + 0.3 * g)
+                pasos = 4
+                for _ in range(pasos):
+                    angulo += azar.uniform(-0.6, 0.6)
+                    nx = x + math.cos(angulo) * largo / pasos
+                    ny = y + math.sin(angulo) * largo / pasos
+                    pygame.draw.line(capa, (235, 255, 245, 220), (x, y), (nx, ny), 2)
+                    x, y = nx, ny
+            pygame.draw.circle(capa, (255, 255, 255, 230), (int(cx), int(cy)), 3 + g)
+        return capa
+    return _guardar(("grietas", i, golpes, ancho, alto), armar)
+
+
+# El martillo del baúl de la prisión (pixel art, 16x16).
+MARTILLO_PX = [
+    "......KKKKKK....",
+    ".....KSSSSSSK...",
+    "....KSWWSSSSSK..",
+    "....KSSSSSSSSK..",
+    "....KDDDDDDDDK..",
+    ".....KKKKMKKK...",
+    ".........MHK....",
+    "........KHHK....",
+    ".......KHhK.....",
+    "......KHhK......",
+    ".....KHhK.......",
+    "....KHhK........",
+    "...KHhK.........",
+    "..KHhK..........",
+    "..KGGK..........",
+    "...KK...........",
+]
+COLORES_MARTILLO = {"K": (24, 20, 28), "S": (168, 176, 190), "W": (236, 240, 246), "D": (102, 108, 124),
+                    "M": (70, 74, 86), "H": (176, 112, 60), "h": (122, 72, 36), "G": (60, 120, 200)}
+
+
+def martillo(alto=16):
+    """El martillo, a `alto` px (sin suavizar)."""
+    def armar():
+        propia = imagen("martillo")
+        if propia is not None:
+            return pygame.transform.scale(propia, (alto, alto))
+        s = pygame.Surface((16, 16), pygame.SRCALPHA)
+        for y, fila in enumerate(MARTILLO_PX):
+            for x, c in enumerate(fila):
+                if c in COLORES_MARTILLO:
+                    s.set_at((x, y), COLORES_MARTILLO[c])
+        return pygame.transform.scale(s, (alto, alto))
+    return _guardar(("martillo", alto), armar)
 
 
 # -- Las pistas del Acto 2 -------------------------------------------------------------------

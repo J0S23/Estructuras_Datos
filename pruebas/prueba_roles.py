@@ -4,7 +4,7 @@
 
 Recorre cada habilidad de la lámina de Anny y comprueba que hace lo que dice
 data/habilidades.py: terminales, hackeo y escaneo (Tecnomante); piezas,
-reparación y señuelo (Forjador); vínculo, regeneración e impulso (Biomante);
+reparación y cepo (Forjador); vínculo, regeneración e impulso (Biomante);
 sintonía, interceptación y señal falsa (Resonante). También que el árbol manda:
 la rama que no se escogió no funciona.
 
@@ -184,13 +184,32 @@ rol(j2, "Forjador", "FABRICACION"); j2.piezas = 1
 poner(j2, P(768, 900)); aliens_lejos()
 a2.hitbox.center = P(1000, 640)
 g._tecla_en_partida(pygame.K_RALT)
-assert len(g.senuelos) == 1 and j2.piezas == 0
+assert len(g.trampas) == 1 and j2.piezas == 0 and g.trampas[0]["alien"] is None
+cap("roles_f_cepo.png")
+# Sin ruido: ningún alien va hacia el cepo (antes el señuelo los atraía).
 g._actualizar_partida(DT)
-assert a2.punto_ruido == g.senuelos[0]["pos"], (a2.punto_ruido, a2.accion)
-assert a2.accion == "INVESTIGAR"
-print("Fabricación improvisada: el señuelo atrae al alien ->", a2.accion)
-cap("roles_f_senuelo.png")
-g.senuelos.clear()
+assert a2.punto_ruido != g.trampas[0]["pos"]
+# El primer alien que lo pisa queda atrapado ahí (no se mueve) y después se rompe.
+trampa = g.trampas[0]
+a2.hitbox.center = trampa["pos"]
+g._actualizar_partida(DT)
+assert trampa["alien"] == a2.nombre and a2.descanso_ms > 0 and a2.aturdido
+for _ in range(60):
+    g._actualizar_partida(DT)
+assert a2.hitbox.center == trampa["pos"], "atrapado: no se mueve"
+cap("roles_g_cepo_cerrado.png")
+from entidades.acciones_rol import TRAMPA_MS
+for _ in range(TRAMPA_MS // DT + 5):
+    g._actualizar_partida(DT)
+assert not g.trampas, "a los 6 s se rompe"
+print("Fabricación improvisada: el cepo atrapa al primer alien que lo pisa")
+# Dos armados como mucho: el tercero desarma el más viejo.
+for k in range(3):
+    j2.piezas, j2.recarga_ms = 1, 0
+    poner(j2, P(700 + k * 120, 900))
+    g._tecla_en_partida(pygame.K_RALT)
+assert len(g.trampas) == 2
+g.trampas.clear()
 
 # ---------- 5. Biomante ----------
 aliens_lejos()

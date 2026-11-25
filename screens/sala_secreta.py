@@ -14,7 +14,10 @@
 - `dibujar_piso`: la puerta, las pistas del Acto 2 (mochila, zapato,
   dibujo) con su brillo y el celular del piso de la sala.
 - `erguidos`: las cápsulas de cristal con los niños, con su monitor (las
-  apagadas, sin luz y con la línea plana; la que se apaga, parpadeando).
+  apagadas, sin luz y con la línea plana; la que se apaga, parpadeando; las
+  que rompe el martillo, con grietas y después reventadas), los niños que ya
+  sacaron (caminando a la cápsula si ganó "liberar") y el baúl de la prisión
+  (su teclado; abierto, con el martillo adentro).
 - `dibujar_luces`: la luz verde de las cápsulas, la de la puerta, la del
   Biomante que intenta regenerar y, con la alarma, las balizas rojas.
 - `render_vista_alarma`, `render_alarma`, `render_voto`, `render_celular_nino`:
@@ -385,7 +388,7 @@ def tick(sala):
         # Ya casi llegan: retumba el pasillo.
         efectos.golpe(*sala.pasillo.center, fuerza=2 + 5 * sala.cerca)
         ultimo = ahora
-    elif sala.estado == "desenlace" and ahora - ultimo > 300:
+    elif sala.estado == "desenlace" and not sala.a_la_capsula and ahora - ultimo > 300:
         efectos.golpe(*sala.sala.center, fuerza=9)
         ultimo = ahora
     _estado_visto[id(sala)] = (sala.estado, ms, ultimo)
@@ -627,14 +630,24 @@ def _capsula_apagada(sala, i, tiempo_ms):
     return False
 
 
+ESCALA_NINO = 2.4
+
+
 def erguidos(sala, camara, tiempo_ms, dueño=None):
-    if sala is None or not sala.activa or sala.estado == "cerrada" or revelado(sala, dueño) < 0.5:
+    if sala is None or not sala.activa:
         return []
     from juego import decoracion
-    lista = []
+    lista = _erguido_baul(sala, camara, tiempo_ms)
+    if sala.estado == "cerrada":
+        return lista
+    lista += _erguidos_ninos(sala, camara, tiempo_ms, dueño)
+    if revelado(sala, dueño) < 0.5:
+        return lista
     for i, capsula in enumerate(sala.capsulas):
-        apagada = _capsula_apagada(sala, i, tiempo_ms)
-        img = arte.capsula(capsula["nino"], ESCALA_CAPSULA, apagada)
+        rota = sala.rota(i)
+        apagada = not rota and _capsula_apagada(sala, i, tiempo_ms)
+        img = arte.capsula_rota(capsula["nino"], ESCALA_CAPSULA) if rota else \
+            arte.capsula(capsula["nino"], ESCALA_CAPSULA, apagada)
         if img is None:
             continue
         base = capsula["base"]
@@ -648,11 +661,37 @@ def erguidos(sala, camara, tiempo_ms, dueño=None):
 
 
 def _dibujar_capsula(screen, offset, sala, i, capsula, rect, img, apagada, tiempo_ms):
-    pos = rect.move(-offset[0], -offset[1])
+    temblor = capsula.get("temblor", 0)
+    dx = int(math.sin(tiempo_ms / 18) * 4 * temblor / 320) if temblor else 0
+    pos = rect.move(-offset[0] + dx, -offset[1])
     efectos.sombra(screen, (pos.centerx, pos.bottom - 6), pos.width * 0.8, 110)
+    rota = sala.rota(i)
+    if rota:
+        # El charco del líquido que se salió.
+        charco = _mancha(int(pos.width * 1.5), int(pos.width * 0.42), (40, 140, 90))
+        screen.blit(charco, charco.get_rect(center=(pos.centerx + 6, pos.bottom - 4)), special_flags=pygame.BLEND_RGB_ADD)
     screen.blit(img, pos)
-    _monitor(screen, pos, sala, i, capsula, tiempo_ms)
+    golpes = capsula.get("golpes", 0)
     vidrio = arte.vidrio_de_capsula(ESCALA_CAPSULA)
+    if golpes and not rota and vidrio is not None:
+        grietas = arte.grietas(capsula["nino"], golpes, vidrio.width, vidrio.height)
+        screen.blit(grietas, vidrio.move(pos.topleft))
+    _monitor(screen, pos, sala, i, capsula, tiempo_ms)
+    if temblor and vidrio is not None:
+        # El martillazo: el martillo contra el vidrio y unas chispas.
+        v = vidrio.move(pos.topleft)
+        golpe = (v.left + 4, v.centery)
+        martillo = arte.martillo(48)
+        angulo = 40 * temblor / 320
+        img_m = pygame.transform.rotate(martillo, -20 + angulo)
+        screen.blit(img_m, img_m.get_rect(midright=(golpe[0] + 6, golpe[1] - 10)))
+        azar = random.Random(int(tiempo_ms // 60) + i)
+        for _ in range(6):
+            a = azar.uniform(0, 2 * math.pi)
+            r = azar.uniform(4, 20) * (1 - temblor / 320 + 0.3)
+            pygame.draw.circle(screen, (230, 255, 240), (int(golpe[0] + math.cos(a) * r), int(golpe[1] + math.sin(a) * r)), 2)
+    if rota:
+        return
     if vidrio is None or not efectos.ACTIVOS or apagada:
         return
     v = vidrio.move(pos.topleft)
@@ -664,6 +703,129 @@ def _dibujar_capsula(screen, offset, sala, i, capsula, rect, img, apagada, tiemp
         x += int(math.sin((tiempo_ms + k * 300) / 260) * 2)
         r = 2 if k % 2 else 3
         pygame.draw.circle(screen, (190, 255, 215), (x, y), r, 1)
+
+
+def _erguidos_ninos(sala, camara, tiempo_ms, dueño):
+    """Los niños que ya sacaron de su cápsula (de pie al lado, o caminando a la cápsula)."""
+    from juego import decoracion
+    lista = []
+    for i, capsula in enumerate(sala.capsulas):
+        donde = sala.posicion_nino(i)
+        if donde is None:
+            continue
+        x, y, se_ve, mira = donde
+        img = arte.nino_grande(capsula["nino"], ESCALA_NINO, despierto=True)
+        if mira == "west":
+            img = _volteado(img)
+        alto = img.get_height()
+        if mira is not None:
+            y -= abs(math.sin(tiempo_ms / 90 + i)) * 4          # (caminando: rebota)
+        else:
+            y -= math.sin(tiempo_ms / 500 + i) * 1.2            # (quieto: respira)
+        rect = img.get_rect(midbottom=(int(x), int(y)))
+        pie = pygame.Rect(0, 0, 26, 12)
+        pie.midbottom = (int(x), int(donde[1]))
+        if not rect.inflate(40, 40).colliderect(camara) or oculto(sala, dueño, pie):
+            continue
+        if se_ve < 1:
+            # Subiéndose a la cápsula: se va hundiendo en ella.
+            img = img.subsurface((0, 0, img.get_width(), max(1, int(alto * se_ve)))).copy()
+            img.set_alpha(int(255 * se_ve))
+            rect = img.get_rect(midbottom=rect.midbottom)
+        lista.append(decoracion.Erguido(
+            pie, rect, lambda screen, offset, im=img, r=rect: (
+                efectos.sombra(screen, (r.centerx - offset[0], r.bottom - offset[1] - 2), r.width * 0.9, 90),
+                screen.blit(im, r.move(-offset[0], -offset[1])))))
+    return lista
+
+
+def _volteado(img):
+    clave = ("volteado", id(img))
+    hecho = _cache.get(clave)
+    if hecho is None:
+        hecho = _cache[clave] = pygame.transform.flip(img, True, False)
+    return hecho
+
+
+# -- El baúl de la prisión ------------------------------------------------------------------------
+
+def _erguido_baul(sala, camara, tiempo_ms):
+    baul = getattr(sala, "baul", None)
+    if not baul or not baul["imagen"].colliderect(camara.inflate(60, 60)):
+        return []
+    from juego import decoracion
+    rect = baul["imagen"]
+    return [decoracion.Erguido(baul["rect"], rect,
+                               lambda screen, offset: _dibujar_baul(screen, offset, baul, tiempo_ms))]
+
+
+def _dibujar_baul(screen, offset, baul, tiempo_ms):
+    rect = baul["imagen"].move(-offset[0], -offset[1])
+    if baul["abierto"]:
+        img = _baul_abierto(rect.size)
+        if img is not None:
+            screen.blit(img, img.get_rect(bottomleft=rect.bottomleft))
+        if baul["con_martillo"]:
+            # El martillo asomándose, con un brillito que pasa.
+            m = arte.martillo(max(16, rect.width // 3))
+            sitio = m.get_rect(midbottom=(rect.centerx + rect.width // 10, rect.y + int(rect.height * 0.39)))
+            screen.blit(m, sitio)
+            if (tiempo_ms // 140) % 12 == 0:
+                brillo = _resplandor(14, (120, 120, 90))
+                screen.blit(brillo, brillo.get_rect(center=sitio.topright), special_flags=pygame.BLEND_RGB_ADD)
+    # El teclado del frente: rojo cerrado (parpadea), verde abierto.
+    k = rect.width / 64
+    teclado = pygame.Rect(0, 0, max(6, int(10 * k)), max(5, int(7 * k)))
+    teclado.center = (rect.x + int(46 * k), rect.y + int(40 * k))
+    pygame.draw.rect(screen, (24, 26, 34), teclado.inflate(2, 2), border_radius=2)
+    pygame.draw.rect(screen, (46, 52, 66), teclado, border_radius=2)
+    for fila in range(2):
+        for col in range(3):
+            pygame.draw.rect(screen, (120, 130, 150), (teclado.x + 2 + col * teclado.width // 3,
+                                                       teclado.y + 2 + fila * teclado.height // 2, max(1, int(k)), max(1, int(k))))
+    abierto = baul["abierto"]
+    prendida = abierto or (tiempo_ms // 600) % 2 == 0
+    color = (80, 240, 130) if abierto else (240, 60, 60)
+    luz = (teclado.right + max(3, int(3 * k)), teclado.centery)
+    if prendida:
+        brillo = _resplandor(max(5, int(6 * k)), tuple(c // 3 for c in color))
+        screen.blit(brillo, brillo.get_rect(center=luz), special_flags=pygame.BLEND_RGB_ADD)
+    pygame.draw.circle(screen, color if prendida else (90, 30, 30), luz, max(2, int(1.6 * k)))
+
+
+def _baul_abierto(tam):
+    """El baúl de la decoración, con la tapa levantada y oscuro por dentro."""
+    clave = ("baul_abierto", tam)
+    if clave in _cache:
+        return _cache[clave]
+    import os
+    ruta = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "Imagenes", "Objetos", "OBJ-027_Caja_de_seguridad.png")
+    try:
+        src = pygame.image.load(ruta).convert_alpha()
+    except (pygame.error, FileNotFoundError, OSError):
+        _cache[clave] = None
+        return None
+    # En px de la hoja (64x64): la tapa va de la fila 8 a la 22; el cuerpo, de
+    # la 23 abajo. Abierto tapa del todo la tapa cerrada de la decoración.
+    s = pygame.Surface((64, 64), pygame.SRCALPHA)
+    s.blit(src, (0, 23), pygame.Rect(0, 23, 64, 41))
+    # Por dentro: la pared del fondo (oscura, más clara arriba) y el borde.
+    for y in range(9, 26):
+        k = (y - 9) / 16
+        pygame.draw.line(s, (int(44 - 26 * k), int(48 - 28 * k), int(60 - 30 * k)), (4, y), (59, y))
+    pygame.draw.rect(s, (24, 26, 34), (4, 9, 56, 17), 1)
+    pygame.draw.line(s, (170, 176, 190), (4, 25), (59, 25))
+    pygame.draw.line(s, (90, 96, 110), (4, 26), (59, 26))
+    # La tapa, levantada hacia atrás: se ve por debajo (más corta y oscura).
+    tapa = src.subsurface(pygame.Rect(0, 8, 64, 15)).copy()
+    tapa = pygame.transform.flip(tapa, False, True)
+    tapa = pygame.transform.scale(tapa, (64, 10))
+    tapa.fill((120, 122, 138, 255), special_flags=pygame.BLEND_RGBA_MULT)
+    s.blit(tapa, (0, 0))
+    img = pygame.transform.scale(s, tam)
+    _cache[clave] = img
+    return img
 
 
 def _monitor(screen, pos, sala, i, capsula, tiempo_ms):
@@ -871,7 +1033,7 @@ def dibujar_luces(screen, vista, camara, offset, sala, tiempo_ms, dueño=None):
     if sala.regenera is not None:
         _luz_regenera(screen, offset, sala)
     # La alarma: balizas rojas que giran (una en la sala, otra en el pasillo).
-    if sala.estado in ("votacion", "desenlace"):
+    if sala.estado == "votacion" or (sala.estado == "desenlace" and not sala.a_la_capsula):
         rapido = 1.0 + 1.5 * sala.cerca
         for k, (cx, cy) in enumerate(((sala.sala.centerx, sala.sala.top + 10),
                                       (sala.pasillo.centerx, sala.pasillo.top + 4))):
@@ -931,10 +1093,13 @@ def render_vista_alarma(screen, vista, sala):
     if sala is None or not sala.activa or sala.estado not in ("votacion", "desenlace"):
         return
     t = pygame.time.get_ticks()
-    if sala.estado == "desenlace":
+    if sala.estado == "desenlace" and sala.resultado == "liberar" and sala.fase_liberar == "capsula":
+        pass                # (los aliens vuelven: el viñeteado rojo, como en la votación)
+    elif sala.estado == "desenlace":
         k = 1 - min(1.0, sala.estado_ms / DESENLACE_MS)
-        color = (255, 255, 255) if sala.resultado == "escapar" else (160, 10, 10)
-        alfa = int(150 * k * k) if sala.resultado == "escapar" else int(60 + 90 * (1 - k))
+        sale = sala.resultado in ("escapar", "liberar")
+        color = (255, 255, 255) if sale else (160, 10, 10)
+        alfa = int(150 * k * k) if sale else int(60 + 90 * (1 - k))
         if alfa > 0:
             screen.blit(cache_dibujo.capa(vista.size, (*color, alfa // 4 * 4)), vista.topleft)
         return
@@ -973,6 +1138,8 @@ def render_alarma(screen, sala, centro_x, arriba, ancho_max):
     gif de Campo. Devuelve su rect (o None)."""
     if sala is None or not sala.activa or sala.estado not in ("votacion", "desenlace"):
         return None
+    if sala.estado == "desenlace" and (sala.a_la_capsula or sala.resultado == "liberar"):
+        return None         # (ganó escapar o sacarlos: se apagó la alarma)
     t = pygame.time.get_ticks()
     e = max(0.6, min(1.25, screen.get_height() / 900))
     w = int(min(ancho_max, 360 * e))
@@ -1088,6 +1255,8 @@ def render_voto(screen, vista, jugador, sala):
     voto = sala.votos[i] if 0 <= i < len(sala.votos) else None
     e = max(0.62, min(1.3, min(vista.width / 900, vista.height / 520)))
     ancho = int(min(vista.width - 30, 620 * e))
+    claves = list(getattr(sala, "claves", None) or [o["clave"] for o in VOTACION["opciones"]])
+    from misiones.sala_secreta import opcion as datos_opcion
     alto = int(min(vista.height * 0.58, 270 * e))
     caja = pygame.Rect(0, 0, ancho, alto)
     # (por encima del pulso y las vidas, que van abajo a la izquierda)
@@ -1100,15 +1269,16 @@ def render_voto(screen, vista, jugador, sala):
     arriba = caja.top + int(14 * e) + titulo.get_height()
     tarjetas = []
     hueco = int(14 * e)
-    tw = (caja.width - 3 * hueco) // 2
+    tw = (caja.width - (len(claves) + 1) * hueco) // max(1, len(claves))
     th = caja.bottom - arriba - int(44 * e)
     f = fuente_de_tamano(max(12, int(17 * e)))
     f_chica = fuente_de_tamano(max(10, int(13 * e)))
     t = pygame.time.get_ticks()
-    for k, opcion in enumerate(VOTACION["opciones"]):
+    for k, clave in enumerate(claves):
+        opcion = datos_opcion(clave)
         r = pygame.Rect(caja.left + hueco + k * (tw + hueco), arriba, tw, th)
-        elegida = jugador.cursor % len(VOTACION["opciones"]) == k
-        color = (255, 214, 64) if opcion["clave"] == "escapar" else (120, 240, 170)
+        elegida = jugador.cursor % len(claves) == k
+        color = {"escapar": (255, 214, 64), "liberar": (120, 200, 255)}.get(clave, (120, 240, 170))
         if elegida:
             r = r.move(0, -int(3 * e * (0.5 + 0.5 * math.sin(t / 200))))
         estilo.tarjeta(screen, r, elegido=elegida, color=color, franja=False)
@@ -1150,6 +1320,21 @@ def _icono_opcion(clave, alto):
         if clave == "escapar":
             from juego import sprites_objetos
             img = sprites_objetos.imagen("nave_completa.png", alto=alto)
+        elif clave == "liberar":
+            # El martillo contra la cápsula, y el niño ya afuera.
+            capsula = arte.capsula_rota(0, 1)
+            nino = arte.nino(0, despierto=True)
+            if capsula is not None:
+                k = alto / capsula.get_height()
+                cap = pygame.transform.scale(capsula, (max(1, int(capsula.get_width() * k)), alto))
+                kn = alto * 0.62 / nino.get_height()
+                chico = pygame.transform.scale(nino, (max(1, int(nino.get_width() * kn)),
+                                                      max(1, int(nino.get_height() * kn))))
+                img = pygame.Surface((cap.get_width() + chico.get_width() + 4, alto), pygame.SRCALPHA)
+                img.blit(cap, (0, 0))
+                img.blit(chico, chico.get_rect(bottomright=img.get_rect().bottomright))
+                m = arte.martillo(max(16, alto // 2))
+                img.blit(m, (cap.get_width() - m.get_width() // 2, alto // 6))
         else:
             capsula = arte.capsula(0, 1)
             if capsula is not None:

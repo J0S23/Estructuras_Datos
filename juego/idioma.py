@@ -47,10 +47,6 @@ _PUNTUACION = re.compile(r"^([¡¿\[(\"'«\s-]*)(.*?)([.:!?…)\]\"'»\s]*)$", r
 _HUECO = re.compile(r"\{(\w*)\}")
 
 
-def es_ingles():
-    return IDIOMA == "en"
-
-
 def tr(texto):
     """El texto en el idioma del juego (en español, tal cual)."""
     if IDIOMA == "es" or not texto or not isinstance(texto, str):

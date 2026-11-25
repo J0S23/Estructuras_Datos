@@ -333,7 +333,7 @@ class Game:
         self._nuevo_ambiente()
         # Lo de las habilidades de los roles (acciones_rol.py).
         self.terminales, self.paneles, self.piezas = [], [], []
-        self.senuelos, self.senales = [], []
+        self.trampas, self.senales = [], []
         self.arbol_alien = None
         self.mostrar_arbol_alien = False
         self.vista_grafo = None      # None, "nexus" o "nave" (screens/grafo_vista.py)
@@ -790,7 +790,7 @@ class Game:
 
         self._preparar_escondites()
         self.terminales, self.paneles, self.piezas = acciones_rol.preparar_estaciones(self.mundo, self.objetos)
-        self.senuelos, self.senales = [], []
+        self.trampas, self.senales = [], []
         self._crear_aliens()
         # Las hojas de sprites de los aliens se cargan aquí, mientras carga el
         # mapa: antes se cargaban la primera vez que uno salía en pantalla y
@@ -869,6 +869,12 @@ class Game:
         from juego import perfiles
         perfiles.precargar()
         guardia.imagenes_planta()
+        # Las hojas de TODOS los aliens (el Guardia, la Sombra...): antes se
+        # cargaban y escalaban la primera vez que uno salía en pantalla, un
+        # tirón de ~0.3 s en medio de la partida (medido nov 24).
+        from entidades.alien import SPRITES_ALIEN, sprites_de
+        for tipo in SPRITES_ALIEN:
+            sprites_de(tipo)
         try:
             principal, _ = self._reparto_pantallas()
             dibujo_celular.precalentar(self.screen.get_size(), len(principal), principal,
@@ -1058,12 +1064,6 @@ class Game:
             jugador.avisar("¡La Sombra me apagó la linterna!", (176, 150, 236))
         self.decir("sombra_linterna", jugador.rol, forzar=True)
 
-    def quitar_sombra(self):
-        """Saca a la Sombra de la partida (pruebas que miden otra cosa)."""
-        if self.sombra in self.aliens:
-            self.aliens.remove(self.sombra)
-        self.sombra = None
-
     def quitar_cambiaformas(self):
         """Saca al Cambiaformas de la partida. Para las pruebas que miden otra
         cosa (los aliens de ruta, la misión...): él va por su cuenta."""
@@ -1217,6 +1217,12 @@ class Game:
         """Lo llama un alien cuando su árbol llega a la hoja ATRAPAR."""
         if jugador is None:
             return
+        sala = self.sala_secreta
+        if (sala is not None and sala.activa and sala.estado == "desenlace"
+                and sala.resultado in ("escapar", "liberar")):
+            # Ya decidieron en la sala de los niños: caminan solos y nadie los
+            # atrapa (ni el Guardia ni la Sombra), el final ya está escrito.
+            return
         donde = jugador.hitbox.center
         if self.logros is not None:
             self.logros.al_atrapar(jugador)
@@ -1321,6 +1327,12 @@ class Game:
             teclas = self.demo.teclas(self, dt)     # el piloto automático (juego/demo.py)
         else:
             teclas = self.mandos.envolver(pygame.key.get_pressed())
+        auto = None
+        if self.sala_secreta is not None:
+            # Ganó escapar en la sala de los niños: caminan solos a la cápsula.
+            auto = self.sala_secreta.teclas_escape(dt)
+            if auto is not None:
+                teclas = auto
         en_tutorial = self.en_tutorial
         if en_tutorial:
             self.tutorial.actualizar(dt)
@@ -1331,7 +1343,10 @@ class Game:
                 # Sus teclas de moverse mueven el cursor del mapa de la Emisión.
                 dx, dy = jugador.personaje.leer_movimiento(teclas)
                 acciones_rol.mover_cursor_emision(self, jugador, dx, dy, dt or 16)
-            jugador.actualizar(teclas, colisiona=self._colisiona_para(jugador))
+            # (caminando solos a la cápsula los mueve la sala; las teclas solo animan)
+            # (que no se mueva de donde lo puso: "choca" en cualquier otro lugar)
+            jugador.actualizar(teclas, colisiona=(lambda r, aqui=jugador.hitbox.center: r.center != aqui)
+                               if auto is not None else self._colisiona_para(jugador))
             jugador.zona_cerca = self.zona_bajo(jugador)
             jugador.actualizar_mensaje(dt)
             jugador.info = acciones_rol.linea_de_estado(jugador)
@@ -1452,7 +1467,10 @@ class Game:
                 self.eventos.actualizar(dt)
         if self.npcs is not None:
             self.npcs.actualizar(dt)
-        if self.nexus is not None:
+        historia = self.sala_secreta is not None and self.sala_secreta.en_secuencia
+        if self.nexus is not None and not historia:
+            # (con los niños NEXUS se queda quieto: nada de "se volvió viral"
+            # ni "me llegó algo" en medio del diálogo; Diego, nov 24)
             self.nexus.actualizar(dt)
             for jugador in self.jugadores:
                 panel = jugador.panel or {}
@@ -1489,10 +1507,25 @@ class Game:
             self.tiempo_jugado_ms += dt
             if self.tiempo_restante_ms is not None:
                 self.tiempo_restante_ms -= dt
-        # En la Feria hay reloj: avisa y, al llegar a 0, se pierde por tiempo.
-        feria.actualizar(self)
+        sala = self.sala_secreta
+        if sala is not None and sala.activa and self.tiempo_restante_ms is not None:
+            if sala.estado == "votacion":
+                # Si al reloj de la partida le queda menos que a la votación, se
+                # alarga: los dos llegan a 0 juntos (Diego, nov 24).
+                if self.tiempo_restante_ms <= sala.total_ms:
+                    self.tiempo_restante_ms = sala.quedan_ms
+            elif sala.estado == "espera" and self.tiempo_restante_ms <= 0:
+                # Se acabó el tiempo con ellos en la sala, sin haber revisado el
+                # celular: la nave los descubre igual (no se corta la historia).
+                sala.empezar_votacion()
+                self.tiempo_restante_ms = sala.quedan_ms
+        # En la Feria hay reloj: avisa y, al llegar a 0, se pierde por tiempo
+        # (no con los niños: ahí el final lo decide la votación).
+        if not (sala is not None and sala.bloquea_fin()):
+            feria.actualizar(self)
         # Solo en un mapa sin misión (o en la Feria) se acaba la ronda por tiempo.
-        if self.tiempo_restante_ms is not None and self.tiempo_restante_ms <= 0:
+        if (self.tiempo_restante_ms is not None and self.tiempo_restante_ms <= 0
+                and not (sala is not None and sala.bloquea_fin())):
             self.tiempo_restante_ms = 0
             self.terminar_ronda()
 
@@ -1500,7 +1533,7 @@ class Game:
         """Lo del mapa que dibujan las habilidades (screens/roles.py)."""
         return {
             "terminales": self.terminales, "paneles": self.paneles, "piezas": self.piezas,
-            "senuelos": self.senuelos, "senales": self.senales, "mision": self.mision,
+            "trampas": self.trampas, "senales": self.senales, "mision": self.mision,
             "puertas_dobles": self.puertas_dobles, "compuertas": self.compuertas,
             "eventos": self.eventos, "tutorial": self.tutorial, "infiltrado": self.infiltrado,
             "guardia_planta": self.guardia_planta,
@@ -1633,8 +1666,16 @@ class Game:
             if indice < len(tipos):
                 self._soltar_objeto(jugador, tipos[indice])
             return
+        if accion == "escapar":
+            jugador.cerrar_panel()
+            if indice == 0 and self.mision is not None:
+                self.mision.confirmar_escape(jugador)
+            return
         if accion == "codigo" and self.mision is not None:
             self.mision.resolver_codigo(jugador, indice)
+        elif accion == "codigo_baul" and self.sala_secreta is not None:
+            # El baúl de la prisión (misiones/sala_secreta.py).
+            self.sala_secreta.resolver_baul(jugador, indice)
         elif accion in ("infiltrado_menu", "infiltrado_acusar"):
             self._resolver_infiltrado(jugador, panel, indice)
         elif accion in ("ayuda_menu", "ayuda_tema"):
@@ -2225,7 +2266,7 @@ class Game:
             # Encima, la música: de tensión si un alien persigue a alguien, en
             # un apagón o en la huida a la cápsula; si no, la tranquila.
             sala = self.sala_secreta
-            if sala is not None and sala.estado == "dialogo":
+            if sala is not None and sala.estado in ("dialogo", "espera"):
                 # Al ver a los niños: la música tranquila, bajita.
                 audio_manager.musica("musica_calma", 0.08 if self.pausa is not None else 0.2)
             else:
@@ -2373,6 +2414,13 @@ class Game:
             # (y para el minijuego de una tarea, tareas.py).
             jugador = next((j for j in self.jugadores if j.esquema == puesto), None)
             if self.current_screen == "partida" and jugador is not None and tareas.de(jugador) is not None:
+                self._manejar_tecla(tecla_virtual(puesto, accion))
+                return
+            if (self.current_screen == "partida" and jugador is not None and jugador.panel
+                    and jugador.panel.get("tipo") == "votacion"):
+                # La votación de la sala oculta (misiones/sala_secreta.py): con
+                # el mando también se escoge con izquierda/derecha. Antes aquí
+                # se perdía y con mando no se podía cambiar el voto (Joseph, nov 24).
                 self._manejar_tecla(tecla_virtual(puesto, accion))
                 return
             if (self.current_screen == "partida" and jugador is not None and jugador.panel

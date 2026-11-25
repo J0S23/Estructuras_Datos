@@ -62,3 +62,13 @@ PUNTOS_ACUSACION_FALSA = -10
 
 # Recompensa: los aliens quedan confundidos (quietos) este tiempo.
 CONFUSION_MS = 20000
+# Al cerrar el caso sale una publicación del equipo en NEXUS (pestaña Equipo)
+# y cambia la confianza (Diego, nov 24): si lo expusieron, esta fracción de
+# los prisioneros que no confiaban pasa a confiar; si acusaron a un inocente,
+# esta fracción de los que confiaban deja de hacerlo.
+CONFIANZA_EXPONER = 0.15
+CONFIANZA_ACUSACION_FALSA = 0.15
+TEXTO_EXPUESTO = ("¡Descubrimos al Cambiaformas! Se hacía pasar por {nombre}. "
+                  "No le crean nada a esa cuenta.")
+TEXTO_ACUSACION_FALSA = ("Acusamos a {nombre} de ser el Cambiaformas... y era inocente. "
+                         "Nos equivocamos.")

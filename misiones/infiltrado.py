@@ -30,7 +30,7 @@ import pygame
 from misiones.logros import logro
 from data.infiltrado import (CUENTAS, RASGOS, PRUEBAS, SOSPECHOSOS_POR_PARTIDA,
                              PUNTOS_SUBIR_PRUEBA, PUNTOS_EXPONER, PUNTOS_ACUSACION_FALSA,
-                             CONFUSION_MS)
+                             CONFUSION_MS, TEXTO_EXPUESTO, TEXTO_ACUSACION_FALSA)
 
 TAMANO_PRUEBA = (30, 30)
 DISTANCIA_RECOGER = 22
@@ -263,6 +263,7 @@ class CasoInfiltrado:
             otro.avisar(f"¡Cambiaformas expuesto! Aliens confundidos {CONFUSION_MS // 1000} s",
                         COLOR_BIEN)
         self._limpiar()
+        self._publicar(jugador, True, TEXTO_EXPUESTO.format(nombre=self.infiltrado["nombre"]))
         self._decir("infiltrado_expuesto", jugador.rol)
 
     def fallar(self, jugador, sospechoso):
@@ -278,6 +279,7 @@ class CasoInfiltrado:
             if otro is not jugador:
                 otro.avisar(f"{jugador.rol} acusó a un inocente", COLOR_MAL)
         self._limpiar()
+        self._publicar(jugador, False, TEXTO_ACUSACION_FALSA.format(nombre=sospechoso["nombre"]))
         self._decir("acusacion_falsa", jugador.rol)
 
     def _limpiar(self):
@@ -315,6 +317,12 @@ class CasoInfiltrado:
         if self.estado == "fallido":
             return f"Cambiaformas: acusaron a {self.acusado['nombre']}; era {nombre}"
         return f"Cambiaformas: no lo descubrieron (era {nombre}, {len(self.subidas)}/3 pruebas)"
+
+    def _publicar(self, jugador, acierto, texto):
+        """Lo cuenta el equipo en NEXUS (y sube o baja la confianza: redes/nexus.py)."""
+        red = getattr(self.juego, "nexus", None)
+        if red is not None and hasattr(red, "publicar_caso"):
+            red.publicar_caso(jugador, acierto, texto)
 
     def _sonar(self, nombre, volumen=1.0):
         if hasattr(self.juego, "sonar"):

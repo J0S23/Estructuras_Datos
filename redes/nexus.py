@@ -88,8 +88,9 @@ class Publicacion:
         self.id = Publicacion._siguiente
         self.autor = autor          # nodo que la publicó
         self.tipo = tipo            # "rumor", "noticia" (verdadera), "normal", "desmentido",
-                                    # "confirmacion", "compartido", "trampa" (suplantación)
-                                    # o "testimonio" (rescatado)
+                                    # "confirmacion", "compartido", "trampa" (suplantación),
+                                    # "testimonio" (rescatado) o "caso" (el caso del
+                                    # Cambiaformas: `falsa` si acusaron a un inocente)
         self.texto = texto
         self.falsa = falsa
         self.rumor = rumor          # dict de RUMORES o de NOTICIAS (rumores y noticias)
@@ -952,6 +953,37 @@ class RedNexus:
                         "El Cambiaformas quedó al descubierto", COLOR_BIEN)
         return (f"NEXUS confirmó que {self.usuario(pub.autor)} no escribió eso: era el "
                 "Cambiaformas usando su nombre. Quedó al descubierto un rato.", PUNTOS_SUPLANTACION)
+
+    def publicar_caso(self, jugador, acierto, texto):
+        """El caso del Cambiaformas se cerró (misiones/infiltrado.py): el equipo
+        lo cuenta en NEXUS. Si lo expusieron, confían más en ustedes (una parte
+        de los que no confiaban se pone verde, y se propaga como un
+        desmentido); si acusaron a un inocente, una parte de los que confiaban
+        deja de hacerlo. Devuelve la publicación."""
+        from data.infiltrado import CONFIANZA_EXPONER, CONFIANZA_ACUSACION_FALSA
+        nodo = self.nodo_de(jugador)
+        pub = Publicacion(nodo, "caso", texto, falsa=not acierto)
+        # Le llega a todo el equipo (sale en su pestaña Equipo).
+        pub.alcanzados.update(self.nodo_de(j) for j in self.juego.jugadores)
+        self.publicaciones.append(pub)
+        presos = self._presos()
+        if acierto:
+            dudan = [n for n in presos if self.color(n) != VERDE]
+            for n in self.rng.sample(dudan, min(len(dudan), round(len(presos) * CONFIANZA_EXPONER))):
+                self.grafo.datos[n]["color"] = VERDE
+            self.propagaciones.append(Propagacion(pub, nodo, VERDE, max_niveles=NIVELES_DESMENTIDO,
+                                                  prob=PROB_CONVENCER))
+            self._sonar("senal", 0.6)
+        else:
+            confian = [n for n in presos if self.color(n) == VERDE]
+            perdidos = self.rng.sample(confian, min(len(confian),
+                                                    round(len(presos) * CONFIANZA_ACUSACION_FALSA)))
+            for n in perdidos:
+                self.grafo.datos[n]["color"] = GRIS
+            self.desconfiaron += len(perdidos)
+            self.propagaciones.append(Propagacion(pub, nodo, None, max_niveles=2))
+        self._revisar_umbrales()
+        return pub
 
     def publicar_testimonio(self, nodo, texto):
         """Un prisionero rescatado cuenta en NEXUS que ustedes lo salvaron."""

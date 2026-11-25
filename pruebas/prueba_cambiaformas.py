@@ -402,6 +402,41 @@ frames(g, 60 * 3)
 assert not cf.disfrazado, "desenmascarado no se puede disfrazar enseguida"
 print("reportar la suplantación:", texto)
 
+# La emboscada: ya esperando en el lugar, se le pone al lado al que llega y
+# se transforma a los dos segundos (no antes), aunque no esté de espaldas;
+# pero solo si llegó solo: acompañado no ataca.
+from data.npcs import EMBOSCADA_MS
+g = nueva_partida()
+cf, red = g.cambiaformas, g.nexus
+j1, j2 = g.jugadores
+cf.calma_ms = 0
+cf.disfrazado, cf.presa = True, None
+cf.trampa_ms = 10 ** 9
+pub = cf.suplantar()
+lugar = g.mundo.punto_libre(pub.lugar, 30, 30)
+cf.hitbox.center = (lugar[0] + 60, lugar[1])
+poner(j1, lugar)
+poner(j2, (lugar[0] - 40, lugar[1] + 10))        # acompañado: no ataca
+cf.visible_para = lambda j: True
+for _ in range(int((EMBOSCADA_MS + 1500) // DT)):
+    g._actualizar_partida(DT)
+    poner(j2, (j1.hitbox.centerx - 40, j1.hitbox.centery + 10))
+assert cf.disfrazado and cf.presa is j1, "acompañado: espera disfrazado, sin atacar"
+poner(j2, (5, 5))                                # se quedó solo
+ms, revelado_ms, cerca = 0, None, []
+while ms < EMBOSCADA_MS + 1500 and revelado_ms is None:
+    g._actualizar_partida(DT)
+    ms += DT
+    if cf.disfrazado:
+        cerca.append(math.dist(cf.centro, j1.hitbox.center))
+    elif revelado_ms is None:
+        revelado_ms = ms
+del cf.visible_para
+assert cf.presa is j1 and revelado_ms is not None, "se transformó junto al que llegó"
+assert EMBOSCADA_MS <= revelado_ms <= EMBOSCADA_MS + 400, revelado_ms
+assert max(cerca[len(cerca) // 2:]) < 120, ("se queda a su lado mientras espera", max(cerca))
+print(f"emboscada: se transformó a los {revelado_ms} ms, a {min(cerca):.0f}-{max(cerca[len(cerca) // 2:]):.0f} px")
+
 # El celular ofrece reportarla desde "¿De dónde salió esto?".
 g = nueva_partida()
 cf, red = g.cambiaformas, g.nexus

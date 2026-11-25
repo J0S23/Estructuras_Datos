@@ -12,7 +12,7 @@ Tres formas de uso (campo `uso` de cada nodo en data/habilidades.py):
 - activa: tecla de habilidad, en cualquier lado, con recarga.
 
 Todo se apoya en lo que ya hacían los aliens: el escaneo y la interceptación
-muestran su cono y su árbol; el señuelo y la señal falsa usan el mismo "oír un
+muestran su cono y su árbol; la señal falsa usa el mismo "oír un
 ruido" que un latido; la regeneración baja el pulso, que es lo que delata.
 """
 
@@ -30,8 +30,13 @@ RADIO_HACKEO = 520                    # Hackeo básico
 DURACION_HACKEO_MS = 5000
 RECARGA_HACKEO_MS = 15000
 DURACION_ESCANEO_MS = 6000            # Escaneo de sistemas
-DURACION_SENUELO_MS = 7000            # Fabricación improvisada
-RADIO_SENUELO = 600
+# Fabricación improvisada: el cepo del Forjador (antes un señuelo que atraía a
+# los aliens... hacia él; Diego, nov 24). Con una pieza lo deja en el piso, sin
+# ruido: el primer alien que lo pisa queda atrapado TRAMPA_MS. Como mucho
+# TRAMPAS_MAX armados a la vez (el más viejo se desarma).
+TRAMPA_MS = 6000
+TRAMPAS_MAX = 2
+TRAMPA_PISA = (44, 30)               # lo que hay que pisar (px del mundo, centrado en el cepo)
 MARGEN_TERMINAL = 16                  # a cuánto de las patas de la terminal se la usa
 RADIO_AYUDA = 230                     # Regeneración e Impulso: hasta dónde llegan
 CALMA_REGENERACION = 35
@@ -269,7 +274,7 @@ def usar_habilidad(juego, jugador):
 
     usar = {
         "ESCANEO": _escaneo,
-        "FABRICACION": _fabricar_senuelo,
+        "FABRICACION": _fabricar_trampa,
         "REGENERACION": _regeneracion,
         "IMPULSO": _impulso,
         "INTERCEPCION": _intercepcion,
@@ -290,16 +295,52 @@ def _escaneo(juego, jugador):
     return True
 
 
-def _fabricar_senuelo(juego, jugador):
+def _fabricar_trampa(juego, jugador):
     if jugador.piezas <= 0:
-        jugador.avisar("Necesito una pieza para el señuelo.", COLOR_MAL)
+        jugador.avisar("Necesito una pieza para armar el cepo.", COLOR_MAL)
         return False
     jugador.piezas -= 1
-    juego.senuelos.append({"pos": jugador.hitbox.center, "ms": DURACION_SENUELO_MS,
-                           "duracion": DURACION_SENUELO_MS})
-    jugador.avisar("Armé un señuelo: los aliens van a venir por el ruido.", COLOR_BIEN)
-    _sonar(juego, "senal", 0.7)
+    armadas = [t for t in juego.trampas if t["alien"] is None]
+    if len(armadas) >= TRAMPAS_MAX:
+        juego.trampas.remove(armadas[0])          # (el más viejo se desarma)
+    x, y = jugador.hitbox.midbottom
+    juego.trampas.append({"pos": (x, y - 4), "alien": None, "ms": 0})
+    jugador.avisar("Armé un cepo: el primer alien que lo pise se queda atrapado.", COLOR_BIEN)
+    _sonar(juego, "encajar", 0.8)
     return True
+
+
+def _actualizar_trampas(juego, dt):
+    """El cepo: el primer alien que lo pisa queda atrapado TRAMPA_MS (no se
+    mueve, no ve ni oye); después el cepo se rompe."""
+    sala = getattr(juego, "sala_secreta", None)
+    for trampa in list(juego.trampas):
+        trampa["ms"] += dt
+        if trampa["alien"] is not None:
+            if trampa["ms"] >= TRAMPA_MS:
+                juego.trampas.remove(trampa)
+            else:
+                alien = next((a for a in juego.aliens if a.nombre == trampa["alien"]), None)
+                if alien is not None:
+                    alien.hitbox.center = trampa["pos"]       # (sujeto del pie)
+            continue
+        pisa = pygame.Rect(0, 0, *TRAMPA_PISA)
+        pisa.center = trampa["pos"]
+        for alien in juego.aliens:
+            if getattr(alien, "tipo", "") == "guardia" or getattr(alien, "oculta", False):
+                continue
+            if sala is not None and sala.conduce(alien):
+                continue
+            if alien.hitbox.colliderect(pisa):
+                alien.aturdir(TRAMPA_MS)
+                alien.hitbox.center = trampa["pos"]
+                trampa["alien"], trampa["ms"] = alien.nombre, 0
+                _sonar(juego, "casillero_golpe", 1.0)
+                _sonar(juego, "hackeo", 0.7)
+                from juego import efectos
+                efectos.golpe(*trampa["pos"], fuerza=5)
+                efectos.chispas(*trampa["pos"], 12)
+                break
 
 
 def _regeneracion(juego, jugador):
@@ -456,7 +497,7 @@ def _actualizar_sellos(juego):
 
 
 def actualizar(juego, dt):
-    """Recargas, efectos, piezas, señuelos y la línea de estado del HUD."""
+    """Recargas, efectos, piezas, cepos y la línea de estado del HUD."""
     _actualizar_sellos(juego)
     for terminal in juego.terminales:
         terminal["recarga_ms"] = max(0, terminal["recarga_ms"] - dt)
@@ -493,13 +534,7 @@ def actualizar(juego, dt):
         jugador.estacion_cerca = (None if jugador.escondido or jugador.zona_cerca
                                   else estacion_bajo(juego, jugador))
 
-    # El señuelo hace ruido todo el rato que dura.
-    for senuelo in juego.senuelos:
-        senuelo["ms"] -= dt
-        for alien in juego.aliens:
-            if _distancia(alien.centro, senuelo["pos"]) <= RADIO_SENUELO:
-                alien.oir(senuelo["pos"])
-    juego.senuelos = [s for s in juego.senuelos if s["ms"] > 0]
+    _actualizar_trampas(juego, dt)
     for senal in juego.senales:
         senal["ms"] -= dt
     juego.senales = [s for s in juego.senales if s["ms"] > 0]

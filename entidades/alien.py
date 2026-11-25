@@ -428,7 +428,7 @@ class Alien:
         self.objetivo = None
 
     def oir(self, punto):
-        """Un ruido que no viene de un latido: señuelo o señal falsa.
+        """Un ruido que no viene de un latido: un código equivocado o una señal falsa.
 
         Si está persiguiendo a alguien, revisando un escondite o fuera de
         combate, no le hace caso: una distracción no le gana a lo que tiene

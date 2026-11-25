@@ -41,6 +41,7 @@ from data.npcs import (DANIO_SABOTAJE, DISTANCIA_REVELARSE, DISTANCIA_COMPANIA, 
                        EXPUESTO_MS, DESCANSO_TRAS_FALLAR_MS, GLITCH_CADA_MS, GLITCH_DURA_MS,
                        TRANSFORMARSE_MS, DISFRAZARSE_MS, ESPERA_INICIAL_MS, ENFRIAMIENTO_CAZA_MS,
                        TRAMPAS, PRIMERA_TRAMPA_MS, TRAMPA_CADA_MS, DESENMASCARADO_MS,
+                       EMBOSCADA_MS, EMBOSCADA_CERCA, EMBOSCADA_SE_FUE, EMBOSCADA_AL_LADO,
                        DISTANCIA_SEGUIR_CF, TRAICION_SOLO_MS, RADIO_SABOTAJE,
                        SUSURRO_RADIO, SUSURRO_CADA_MS, MANADA_MS,
                        ESTUDIO_NECESARIO_MS, RADIO_ESTUDIO, DISTANCIA_PASADA, PASADA_MAX_MS,
@@ -168,6 +169,10 @@ class Cambiaformas(Alien):
         self.siguiendo_solo_ms = 0
         self.burbuja, self.burbuja_ms = None, 0
         self.trampa_ms = PRIMERA_TRAMPA_MS * self._ajuste("cf_trampas", 1.0)
+        # La emboscada de la trampa: a quién espera (el que llegó) y cuánto
+        # lleva a su lado (se transforma a los EMBOSCADA_MS).
+        self.emboscada = None
+        self.emboscada_ms = 0
         self.susurro_ms = 0
         self.manada_ms = 0
         self._manada_ahora = False
@@ -250,6 +255,10 @@ class Cambiaformas(Alien):
                 self.calma_ms = 0
                 # Era su plan: a este lo atacó sin tener que estudiarlo más.
                 self.conocimiento[self.presa] = self._necesario(self.presa)
+                self.emboscada, self.emboscada_ms = self.presa, 0
+        if self.emboscada is not None and (self.emboscada is not self.presa or not self.disfrazado
+                                           or self.siguiendo is not None):
+            self.emboscada, self.emboscada_ms = None, 0
         if (self.presa is None and self.descanso_ms == 0 and self.huida_ms == 0
                 and self.calma_ms == 0):
             self.presa = self._elegir_presa(jugadores)
@@ -324,6 +333,14 @@ class Cambiaformas(Alien):
         la_conoce = presa is not None and self.conocimiento.get(presa, 0) >= self._necesario(presa)
         momento = (la_conoce and ve_presa and sola and distancia <= DISTANCIA_REVELARSE
                    and (self.expuesto_ms > 0 or self.desprevenida(presa)))
+        # La emboscada: el que llegó a la trampa lo tiene al lado; a los
+        # EMBOSCADA_MS de estar a solas con él, se transforma. Si llegó
+        # acompañado no ataca (Diego, nov 24): espera disfrazado a que se quede solo.
+        self._emboscada_sola = sola
+        if self.emboscada is not None:
+            if distancia > EMBOSCADA_SE_FUE or not sola:
+                self.emboscada_ms = 0
+            momento = momento or (self.emboscada_ms >= EMBOSCADA_MS and sola and not presa.escondido)
         return {
             "recuperandose": self.descanso_ms > 0,
             "huyendo": self.huida_ms > 0,
@@ -381,6 +398,10 @@ class Cambiaformas(Alien):
             self.apariencia.animar(dx, dy, dt)
         self.burbuja_ms = max(0, self.burbuja_ms - dt)
         self._aprender(dt)
+        if self.emboscada is not None:
+            cerca = _d(self.emboscada.hitbox.center, self.centro) <= EMBOSCADA_CERCA
+            sola = getattr(self, "_emboscada_sola", True)
+            self.emboscada_ms = self.emboscada_ms + dt if cerca and sola else 0
         self._susurrar(dt)
         if self._manada_ahora:
             self.manada_ms += dt
@@ -532,6 +553,9 @@ class Cambiaformas(Alien):
             self.revisando = esc
             super()._ejecutar("REVISAR_ESCONDITE", dt, factor, mundo, al_atrapar, al_revisar)
             return
+        if self.emboscada is not None and presa is self.emboscada and accion in ("ESTUDIAR", "RONDAR"):
+            self._al_lado(presa, dt, factor, mundo)
+            return
         if accion == "ESTUDIAR":
             self._estudiar(dt, factor, mundo)
             return
@@ -558,6 +582,17 @@ class Cambiaformas(Alien):
                      getattr(mundo, "colisiona_alien", None))
 
     # -- Acciones ---------------------------------------------------------------------------
+
+    def _al_lado(self, presa, dt, factor, mundo):
+        """La emboscada: se le pone al lado al que llegó a la trampa, como un
+        prisionero que lo estaba esperando (y lo sigue si se mueve)."""
+        px, py = presa.hitbox.center
+        lado = 1 if self.centro[0] >= px else -1
+        destino = (px + lado * EMBOSCADA_AL_LADO, py)
+        if _d(self.centro, destino) > 14:
+            lejos = _d(self.centro, destino) > 200
+            velocidad = self.datos["vel_patrulla"] * (1.7 if lejos else 1.2)
+            self._ir_por_camino(destino, velocidad * factor, dt, mundo)
 
     def _estudiar(self, dt, factor, mundo):
         """Una "pasada": se acerca a su presa sin correr, como un prisionero
@@ -695,6 +730,7 @@ class Cambiaformas(Alien):
 
     def _revelarse(self):
         self.revelaciones += 1
+        self.emboscada, self.emboscada_ms = None, 0
         self.disfrazado = False
         self.rafaga_ms = RAFAGA_MS
         self.transformando_ms = TRANSFORMARSE_MS

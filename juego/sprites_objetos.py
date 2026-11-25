@@ -31,7 +31,6 @@ ARCHIVOS = {
     # Lo que se lleva en el inventario.
     "kit": "OBJ-022_Maletin_de_herramientas.png",
     "decodificador": "OBJ-033_Dispositivo_de_comunicacion.png",
-    "senuelo": "OBJ-038_Radio_portatil.png",              # el señuelo del Forjador
     "nexus": "terminal.png",                              # las terminales NEXUS
 }
 MODELOS_ESCONDITE = 2

@@ -38,7 +38,7 @@ FERIA = {
     # convence con menos probabilidad ("convencer", abajo y en
     # data/dificultad.AJUSTES; los que no, la frenan y el siguiente desmentido
     # vuelve a intentar con ellos) y en la feria se pide al menos el 70 %.
-    # Hacen falta unos 3 desmentidos o confirmaciones (medido:
+    # Hacen falta unos 2 desmentidos o confirmaciones con el 70 % (medido:
     # pruebas/prueba_feria.py, sección 6).
     # Nov 21, Diego: "que la confianza suba más rápido, ahora sube muy lento":
     # la verdad avanza un nivel cada `tick_verde_ms` (0.6 s; en el juego normal
@@ -47,7 +47,8 @@ FERIA = {
     # Simulado (8 semillas, un rumor por minuto desmentido a los 35 s): verde
     # al minuto 1 / 2 / 3, 14 / 35 / 57 % -> 46 / 74 / 85 %; los planos, con 3
     # desmentidos (mediana; antes 4-5) a los ~3 minutos (antes ~4-5).
-    "umbral_planos_min": 0.80,      # % de verdes para los planos (si la dificultad pide más, lo de ella)
+    # Nov 24, Diego: "baja un poquito el nivel de confianza necesario": 80 -> 70 %.
+    "umbral_planos_min": 0.70,      # % de verdes para los planos (si la dificultad pide más, lo de ella)
     "tick_verde_ms": 600,           # cada cuánto avanza un nivel la verdad (desmentidos y confirmaciones)
     "limite_s": 12 * 60,            # (Diego, nov 21: 12 min; antes 9) se acaba el tiempo -> termina la partida (None = sin reloj)
     "avisos_s": (120, 60),          # "Nos quedan 2 minutos", "1 minuto"

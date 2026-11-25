@@ -105,6 +105,14 @@ TRAMPAS = [
 PRIMERA_TRAMPA_MS = 60000
 TRAMPA_CADA_MS = (55000, 80000)
 DESENMASCARADO_MS = 20000       # al reportar la suplantación, este rato sin disfraz
+# La emboscada en el lugar de la trampa: cuando llega alguien SOLO, el
+# Cambiaformas (disfrazado) se le pone al lado y se transforma a los
+# EMBOSCADA_MS de tenerlo cerca (Diego, nov 24). Si llega acompañado no ataca. "Cerca" es a esta distancia; si se le aleja más de
+# EMBOSCADA_SE_FUE, vuelve a esperar.
+EMBOSCADA_MS = 2000
+EMBOSCADA_CERCA = 170
+EMBOSCADA_SE_FUE = 450
+EMBOSCADA_AL_LADO = 48          # a cuánto se le pone al lado (px)
 # Escoltado (lo llevan creyendo que es un prisionero): traiciona.
 DISTANCIA_SEGUIR_CF = 38        # camina demasiado pegado (una pista)
 TRAICION_SOLO_MS = 3500         # si quien lo lleva se queda solo este rato, ataca

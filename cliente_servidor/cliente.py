@@ -107,10 +107,6 @@ class Medidas:
         return (len(lista) - 1) / dt, (lista[-1][1] - lista[0][1]) / dt
 
 
-class Cancelado(Exception):
-    """El jugador pulsó Esc mientras se conectaba."""
-
-
 class Cancelacion(threading.Event):
     """Un Event que además corta el saludo en curso: si el Esc llega mientras
     se espera la bienvenida (el servidor arma la partida), cerrar el socket
@@ -545,9 +541,11 @@ def _esperar_tecla(pantalla, lineas, segundos=4.0):
 
 
 class Cancelado(Exception):
-    """Esc (o cerrar la ventana) mientras se conectaba."""
+    """Esc (o cerrar la ventana) mientras se conectaba. (Había dos clases con
+    este nombre: la segunda tapaba a la primera y `raise Cancelado()`, sin
+    motivo, fallaba con TypeError al cancelar mientras se conectaba.)"""
 
-    def __init__(self, motivo):
+    def __init__(self, motivo="menu"):
         super().__init__(motivo)
         self.motivo = motivo
 
@@ -694,33 +692,6 @@ class Sesion:
         # controles del espejo (Espejo.controles).
         self.controles = {c.jugador: e for c, e in zip(self.conexiones, self.esquemas)}
         self.avisar("conectado como " + ", ".join(f"J{c.jugador + 1}" for c in self.conexiones))
-
-    def _en_otro_hilo(self, pantalla, trabajo, lineas, cancelar=None):
-        """Corre `trabajo` en otro hilo mientras la ventana sigue dibujando y
-        leyendo eventos. Esc (o cerrar la ventana) llama `cancelar` y sale con
-        Cancelado sin esperar al hilo (el trabajo se entera por `cancelar`)."""
-        resultado = {}
-
-        def correr():
-            try:
-                resultado["ok"] = trabajo()
-            except BaseException as error:        # (se relanza en este hilo)
-                resultado["error"] = error
-        hilo = threading.Thread(target=correr, daemon=True)
-        hilo.start()
-        while hilo.is_alive():
-            for ev in pygame.event.get():
-                if ev.type == pygame.QUIT or (ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE):
-                    self.motivo = "salir" if ev.type == pygame.QUIT else "menu"
-                    if cancelar is not None:
-                        cancelar()
-                    raise Cancelado()
-            aviso(pantalla, list(lineas) + ["", "Esc para cancelar"])
-            pygame.display.flip()
-            hilo.join(1 / 30)
-        if "error" in resultado:
-            raise resultado["error"]
-        return resultado["ok"]
 
     # -- La sala: elegir rol y esperar a que se arme la nave ----------------------------
 
@@ -919,7 +890,6 @@ class Sesion:
     def paso(self, pantalla, eventos=None):
         """Un cuadro. Devuelve False cuando la sesión terminó (ver `motivo`)."""
         eventos = pygame.event.get() if eventos is None else eventos
-        estado_fin = None
         for ev in eventos:
             if ev.type == pygame.QUIT:
                 self.motivo = "salir"

@@ -541,7 +541,17 @@ def _armar_resplandor(radio, color):
         return sup
 
 
-def _escena_celdas(screen, t, jugadores):
+# Quién patrulla por delante de las celdas: (carpeta, hoja, cuadros por segundo, alto).
+PATRULLAS = {
+    "cazador": ("Alien_Rapido", "walking", 9, 0.3),
+    "cambiaformas": ("Alien_Cambiaformas", "running", 12, 0.27),
+}
+
+
+def _escena_celdas(screen, t, jugadores, patrulla="cazador"):
+    """Los agentes encerrados, cada uno en su celda, y un alien que patrulla por
+    delante. `patrulla` (PATRULLAS): el Cazador en la derrota normal, el
+    Cambiaformas en el final "quedarse" de la sala oculta."""
     from data.roles import ROLES_POR_NOMBRE
     w, h = screen.get_size()
     n = max(1, len(jugadores))
@@ -617,10 +627,11 @@ def _escena_celdas(screen, t, jugadores):
         k = u * 2 if derecha else (1 - u) * 2
         x = -w * 0.1 + k * w * 1.2
         lado = "east" if derecha else "west"
-        cuadros = _hoja(os.path.join("Imagenes", "Aliens", "Alien_Rapido", f"Alien_Rapido_walking_{lado}.png"),
-                        int(h * 0.3))
+        carpeta, hoja, fps, alto = PATRULLAS.get(patrulla, PATRULLAS["cazador"])
+        cuadros = _hoja(os.path.join("Imagenes", "Aliens", carpeta, f"{carpeta}_{hoja}_{lado}.png"),
+                        int(h * alto))
         if cuadros:
-            img = cuadros[int(t / 1000 * 9) % len(cuadros)]
+            img = cuadros[int(t / 1000 * fps) % len(cuadros)]
             pie = (int(x), int(h * 0.94))
             pygame.draw.ellipse(screen, (8, 8, 12), pygame.Rect(0, 0, img.get_width(), 14).move(
                 pie[0] - img.get_width() // 2, pie[1] - 7))

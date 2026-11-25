@@ -135,6 +135,59 @@ REGENERAR = {
     "ms": 2200,
 }
 
+# -- El baúl de la prisión y el martillo (Diego, nov 25) -------------------------------------
+# El baúl de la prisión (la "Caja de seguridad" de la decoración) pide un
+# código de 4 números que está escrito en una nota normal cualquiera del mapa
+# (no en las de tachuela de las puertas). Adentro hay un martillo, para
+# cualquier rol. Si alguien del equipo (de los que siguen en la partida) lo
+# lleva al votar con los niños, la opción "quedarse" cambia por "liberar":
+# romper las cápsulas, subir a los niños a la cápsula y quedarse atrás.
+BAUL = {
+    "decoracion": "OBJ-027",       # (el prefijo de la imagen en el mapa)
+    "sala": "Prisión",
+    "radio": 70,                   # a cuánto se alcanza el teclado (px del mundo)
+    "pista": "Abrir el baúl",
+    "pista_martillo": "Sacar el martillo del baúl",
+    "titulo": "Baúl con candado",
+    "cuerpo": ["Tiene un teclado de cuatro números.",
+               "Si te equivocas, suena la alarma."],
+    "abierto": "¡El baúl se abrió! Adentro hay un martillo pesado.",
+    "recogido": "Recogí: Martillo. Pesa bastante... sirve para romper algo.",
+    "vacio": "El baúl está vacío.",
+    "volvio": "El martillo volvió al baúl de la prisión.",
+    # Lo que se agrega al final de la nota donde quedó el código.
+    "nota": "Al margen, rayado con algo filoso: \"baúl de la prisión: {codigo}\".",
+}
+MARTILLO = {
+    "golpes": 3,                   # martillazos para romper un vidrio
+    "golpe_ms": 420,               # entre martillazo y martillazo
+    # Al revisar una cápsula viva en la sala (pista de que se puede).
+    "sin_martillo": "El vidrio es grueso. Con algo pesado se podría romper...",
+    "con_martillo": "Con el martillo podría romper el vidrio... Hay que decidirlo juntos.",
+}
+# Ganó liberarlos (misiones/sala_secreta.py): quien lleva el martillo rompe
+# las cápsulas (sin aliens: se devuelven), los niños y los agentes van a la
+# cápsula, los niños se suben y los agentes se quedan delante, tapándoles el
+# paso a los aliens que llegan.
+LIBERAR = {
+    "romper_max_ms": 30000,        # (si algo se traba, se rompen solas)
+    "sale_ms": 520,                # cada cuánto arranca el siguiente niño a la cápsula
+    "vel_nino": 0.24,              # px por ms (lo que camina un agente)
+    "entra_ms": 420,               # lo que tarda en meterse a la cápsula
+    "despega_ms": 1900,            # desde que entra el último hasta que se van
+    "sube": "¡Arriba, rápido! ¡Nosotros nos quedamos!",
+}
+
+# Llegar a la cápsula con la sala oculta abierta (y sin haber entrado): no se
+# van solos, alguien lo confirma en la cápsula (misiones/mision.py).
+ESCAPE = {
+    "pista": "Subir a la cápsula y escapar",
+    "faltan": "Falta alguien: esperen a todos en la cápsula.",
+    "titulo": "¿Se van ya?",
+    "cuerpo": "La puerta que se abrió en la Bahía sigue abierta. Si suben ahora, nunca sabrán qué había detrás.",
+    "opciones": ["Escapar ahora", "Todavía no"],
+}
+
 # Lo que dicen al abrirse la pared (un agente cualquiera, a todos).
 AL_ABRIRSE = "¿Escucharon eso? Algo se abrió en la pared, al lado de la cápsula..."
 # (Lo que dice NEILA, la IA de la nave, va en data/ia_nave.py: "sala_abierta"
@@ -149,6 +202,7 @@ DIALOGO_NINOS = [
     {"rol": "Resonante", "texto": "Esa niña tiene el celular en la mano. Le escribieron haciéndose pasar por alguien famoso."},
     {"rol": "Forjador", "texto": "{pistas} Las cápsulas no se abren: están soldadas a la nave."},
     {"rol": "Biomante", "texto": "Esa luz estaba prendida hace un momento..."},
+    {"rol": "Resonante", "texto": "¿Oyen eso? Hay un celular en el piso, en medio de la sala. No para de vibrar."},
 ]
 PISTAS_EN_DIALOGO = {
     3: "La mochila, el zapato, el dibujo... eran de ellos.",
@@ -156,7 +210,11 @@ PISTAS_EN_DIALOGO = {
     1: "Lo que encontramos en la nave era de uno de ellos.",
     0: "Por eso nadie hablaba de ellos en NEXUS.",
 }
-DIALOGO_MS = 3600              # cuánto se ve cada línea
+# Cuánto se ve cada línea: según lo larga que sea, para alcanzar a leerla
+# (Diego, nov 24: "un poquito más lento"; antes 3.6 s todas).
+DIALOGO_MS = 4800              # lo mínimo
+DIALOGO_MS_POR_LETRA = 62
+DIALOGO_MS_MAX = 8500
 
 # -- La votación -----------------------------------------------------------------------
 VOTACION = {
@@ -168,6 +226,9 @@ VOTACION = {
         {"clave": "escapar", "texto": "Correr a la cápsula", "detalle": "Escapar sabiendo lo que pasa con los niños"},
         {"clave": "quedarse", "texto": "Quedarnos con ellos", "detalle": "No dejarlos solos, aunque nos alcancen"},
     ],
+    # Si el equipo tiene el martillo, esta reemplaza a "quedarse".
+    "liberar": {"clave": "liberar", "texto": "Romper las cápsulas y sacarlos",
+                "detalle": "Ellos se van en la cápsula; ustedes se quedan atrás"},
     "nota": "Gana lo que más voten. Empate: se quedan. Si nadie vota, la nave decide.",
     "alarma": "¡ALERTA!",
     "alarma_sub": "LOS ALIENS VIENEN",
@@ -198,9 +259,18 @@ FINALES = {
         "victoria": False,
         "titular": "SE QUEDARON CON LOS NIÑOS",
         "motivo": "Votaron por quedarse. Los aliens los alcanzaron junto a los niños.",
-        "escena": ["Los aliens los alcanzan junto a las cápsulas.",
+        "escena": ["Los encierran en la nave, junto a los niños.",
                    "La pantalla se apaga y NEXUS sigue publicando como si nada.",
                    "En la Tierra nadie sabrá nunca lo que encontraron."],
+    },
+    "liberados": {
+        "victoria": True,
+        "titular": "LOS NIÑOS VOLVIERON A CASA",
+        "motivo": "Rompieron las cápsulas, subieron a los niños a la cápsula y se quedaron atrás.",
+        "escena": ["Los niños se van en la cápsula. Los agentes se quedan atrás, tapando la puerta.",
+                   "A la mañana siguiente, en la Tierra, una niña despierta en su cuarto.",
+                   "Los agentes no volvieron. Pero esta vez, todos hablan de los niños."],
+        "frase": "Ellos compartieron su dirección. Ustedes compartieron su lugar.",
     },
     "nadie": {
         "victoria": False,

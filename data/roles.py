@@ -23,7 +23,7 @@ ROLES = [
         "nombre": "Forjador",
         "lema": "Ingenio que mantiene al equipo",
         "objetivo": "Junta piezas y repara los paneles de la nave.",
-        "resumen": "Recoge piezas, repara y fabrica señuelos.",
+        "resumen": "Recoge piezas, repara y arma cepos.",
         "color": (255, 170, 50),
     },
     {

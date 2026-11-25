@@ -253,7 +253,6 @@ TEXTOS = {
     "SINTONIA": "ATTUNEMENT",
     "Sintonía de señales": "Signal attunement",
     "Tecla de habilidad: abre el mapa y escoges dónde cae una señal falsa que los aliens van a revisar.": "Skill key: opens the map and you choose where a fake signal lands for the aliens to check out.",
-    "Tecla de habilidad: con 1 pieza arma un señuelo que atrae a los aliens.": "Skill key: with 1 part, builds a decoy that draws the aliens.",
     "Tecla de habilidad: devuelve una vida a los compañeros cercanos (cada 40 s), calma su pulso y le quita amenaza a un escondite revisado. +5": "Skill key: gives a life back to nearby teammates (every 40 s), calms their pulse and lowers the threat on a hiding spot being searched. +5",
     "Tecla de habilidad: mapa con los aliens y sus conos, en cualquier lado.": "Skill key: map with the aliens and their vision cones, anywhere.",
     "Tecla de habilidad: recarga al instante la habilidad de los compañeros cercanos (también la Reparación) y reinicia todas las terminales para un nuevo hackeo. +5": "Skill key: instantly recharges nearby teammates' skills (Repair too) and resets every terminal for a new hack. +5",
@@ -642,7 +641,6 @@ TEXTOS = {
     "Mantén al equipo calmado y en pie.": "Keep the team calm and on their feet.",
     "Oye a los aliens y emite señales falsas.": "Hears the aliens and sends fake signals.",
     "Puente entre mundos": "Bridge between worlds",
-    "Recoge piezas, repara y fabrica señuelos.": "Collects parts, repairs and builds decoys.",
     "Siente el pulso de todos y los calma.": "Feels everyone's pulse and calms them.",
     "Usa las terminales para vigilar y frenar a los aliens.": "Uses terminals to watch and stop the aliens.",
     "Vida que sostiene al equipo": "The life that holds the team together",
@@ -686,7 +684,6 @@ TEXTOS = {
     "La Biomante te devolvió una vida.": "The Biomancer gave you a life back.",
     "La terminal está apagada. ": "The terminal is off. ",
     "Nada necesita energía ahora.": "Nothing needs energy right now.",
-    "Necesitas una pieza para el señuelo.": "You need a part for the decoy.",
     "Señuelo armado: los aliens vendrán por el ruido.": "Decoy set: the aliens will come for the noise.",
     "Te falta una pieza para repararlo.": "You need a part to repair it.",
     "Tu habilidad se usa en el mapa, no con esta tecla.": "Your skill is used on the map, not with this key.",
@@ -1184,7 +1181,6 @@ TEXTOS = {
     "Despiertan encerradas y tienen que escapar juntas,": "They wake up locked in and have to escape together,",
     "El Cambiaformas": "The Shapeshifter",
     "Estructuras de datos que usa el juego": "Data structures the game uses",
-    "Forjador: piezas, sellos, señuelos y la cápsula.": "Forger: parts, seals, decoys and the pod.",
     "Grafo de NEXUS (la red social)": "NEXUS graph (the social network)",
     "Grafo de la nave (A*)": "Ship graph (A*)",
     "La IA de los aliens, las habilidades y los logros se": "The aliens' AI, the skills and the achievements",
@@ -1692,7 +1688,6 @@ TEXTOS = {
     "¡Me encerraron! Me queda{} {} vida{}.": lambda n, v, s: f"They locked me up! I have {v} {'lives' if s else 'life'} left.",
     # Los avisos en primera persona (los dice el mismo jugador, nov 20).
     'Abrí el candado: el casillero ya se puede usar.': 'I broke the padlock: the locker can be used again.',
-    'Armé un señuelo: los aliens van a venir por el ruido.': 'I set up a decoy: the aliens will come for the noise.',
     'Calmé a {} compañero(s).': 'I calmed down {} teammate(s).',
     'Curé a {} compañero(s): +1 vida.': 'I healed {} teammate(s): +1 life.',
     'El alien se fue de mi escondite.': 'The alien left my hiding spot.',
@@ -1731,7 +1726,6 @@ TEXTOS = {
     'Necesito Reparación básica ([{}])': 'I need Basic Repair ([{}])',
     'Necesito al Forjador o un kit de herramientas.': 'I need the Forger or a toolkit.',
     'Necesito al Tecnomante o un decodificador.': 'I need the Technomancer or a decoder.',
-    'Necesito una pieza para el señuelo.': 'I need a part for the decoy.',
     'No llevo nada que soltar.': "I'm not carrying anything to drop.",
     'No puedo escanear: sin luz no hay sistemas.': "I can't scan: without power there are no systems.",
     'Ocupado: {} se metió aquí por el rumor de los casilleros. Tengo que desmentirlo en NEXUS.': 'Taken: {} hid in here because of the locker rumor. I have to debunk it on NEXUS.',
@@ -1984,7 +1978,7 @@ TEXTOS.update({
     "SE QUEDARON CON LOS NIÑOS": "YOU STAYED WITH THE CHILDREN",
     "Votaron por quedarse. Los aliens los alcanzaron junto a los niños.":
         "You voted to stay. The aliens caught you next to the children.",
-    "Los aliens los alcanzan junto a las cápsulas.": "The aliens catch them next to the capsules.",
+    "Los encierran en la nave, junto a los niños.": "They're locked up on the ship, next to the children.",
     "La pantalla se apaga y NEXUS sigue publicando como si nada.": "The screen goes dark and NEXUS keeps posting as if nothing happened.",
     "En la Tierra nadie sabrá nunca lo que encontraron.": "On Earth, no one will ever know what they found.",
     "NADIE DECIDIÓ": "NOBODY DECIDED",
@@ -2019,6 +2013,70 @@ TEXTOS.update({
     "Te dejé la luz del cuarto prendida": "I left your bedroom light on for you",
     "y {} más": "and {} more",
     "cerrar": "close",
+    "Revisa el celular": "Check the phone",
+    # El baúl de la prisión, el martillo y el final "liberados".
+    "Abrir el baúl": "Open the chest",
+    "Sacar el martillo del baúl": "Take the hammer out of the chest",
+    "Baúl con candado": "Locked chest",
+    "Tiene un teclado de cuatro números.": "It has a four-digit keypad.",
+    "¡El baúl se abrió! Adentro hay un martillo pesado.": "The chest opened! There's a heavy hammer inside.",
+    "Recogí: Martillo. Pesa bastante... sirve para romper algo.":
+        "Picked up: Hammer. It's heavy... good for breaking something.",
+    "El baúl está vacío.": "The chest is empty.",
+    "El martillo volvió al baúl de la prisión.": "The hammer went back to the prison chest.",
+    "Martillo": "Hammer",
+    "Martillos": "Hammers",
+    "El vidrio es grueso. Con algo pesado se podría romper...":
+        "The glass is thick. Something heavy could break it...",
+    "Con el martillo podría romper el vidrio... Hay que decidirlo juntos.":
+        "With the hammer I could break the glass... We have to decide together.",
+    "Romper las cápsulas y sacarlos": "Break the capsules and get them out",
+    "Ellos se van en la cápsula; ustedes se quedan atrás": "They leave in the capsule; you stay behind",
+    "¡Rompe el vidrio! ¡Los sacamos de aquí!": "Break the glass! We're getting them out!",
+    "¡Arriba, rápido! ¡Nosotros nos quedamos!": "Get in, quick! We're staying!",
+    "LOS NIÑOS VOLVIERON A CASA": "THE CHILDREN CAME HOME",
+    "Rompieron las cápsulas, subieron a los niños a la cápsula y se quedaron atrás.":
+        "You broke the capsules, put the children in the escape capsule and stayed behind.",
+    "Los niños se van en la cápsula. Los agentes se quedan atrás, tapando la puerta.":
+        "The children leave in the capsule. The agents stay behind, blocking the way.",
+    "A la mañana siguiente, en la Tierra, una niña despierta en su cuarto.":
+        "The next morning, on Earth, a girl wakes up in her room.",
+    "Los agentes no volvieron. Pero esta vez, todos hablan de los niños.":
+        "The agents never came back. But this time, everyone is talking about the children.",
+    "Ellos compartieron su dirección. Ustedes compartieron su lugar.":
+        "They shared their address. You gave up your place.",
+    "Volvieron los niños desaparecidos. Dicen que unos agentes los sacaron de la nave.":
+        "The missing children are back. They say some agents got them off the ship.",
+    "#NoVolvieron": "#TheyDidntComeBack",
+    "Los agentes se quedaron arriba para que ellos pudieran bajar.":
+        "The agents stayed up there so the children could come down.",
+    # El cepo del Forjador (antes el señuelo).
+    "Tecla de habilidad: con 1 pieza arma un cepo: el primer alien que lo pisa queda atrapado 6 s.":
+        "Skill key: with 1 part, sets a trap: the first alien that steps on it is stuck for 6 s.",
+    "Recoge piezas, repara y arma cepos.": "Collects parts, repairs and sets traps.",
+    "Forjador: piezas, sellos, cepos y la cápsula.": "Forger: parts, seals, traps and the pod.",
+    "Necesito una pieza para armar el cepo.": "I need a part to set the trap.",
+    "Armé un cepo: el primer alien que lo pise se queda atrapado.": "I set a trap: the first alien that steps on it gets stuck.",
+    # El caso del Cambiaformas en NEXUS (data/infiltrado.py).
+    "¡Descubrimos al Cambiaformas! Se hacía pasar por {}. No le crean nada a esa cuenta.":
+        "We found the Shapeshifter! It was pretending to be {}. Don't believe anything from that account.",
+    "Acusamos a {} de ser el Cambiaformas... y era inocente. Nos equivocamos.":
+        "We accused {} of being the Shapeshifter... and they were innocent. We were wrong.",
+    "Expuso al Cambiaformas": "Exposed the Shapeshifter",
+    "Acusó a un inocente": "Accused an innocent",
+    "Cuando alguien desmienta un rumor, confirme algo, rescate a un prisionero o cierre el caso del Cambiaformas, sale aquí.":
+        "When someone debunks a rumor, confirms something, rescues a prisoner or closes the Shapeshifter case, it shows up here.",
+    "Revisa el celular del medio de la sala.": "Check the phone in the middle of the room.",
+    "¿Oyen eso? Hay un celular en el piso, en medio de la sala. No para de vibrar.":
+        "Do you hear that? There's a phone on the floor, in the middle of the room. It won't stop buzzing.",
+    # Confirmar el escape (data/historia.ESCAPE).
+    "Subir a la cápsula y escapar": "Board the capsule and escape",
+    "Falta alguien: esperen a todos en la cápsula.": "Someone's missing: wait for everyone at the capsule.",
+    "¿Se van ya?": "Leaving already?",
+    "La puerta que se abrió en la Bahía sigue abierta. Si suben ahora, nunca sabrán qué había detrás.":
+        "The door that opened in the Bay is still open. If you board now, you'll never know what was behind it.",
+    "Escapar ahora": "Escape now",
+    "Todavía no": "Not yet",
     # (las palabras de las frases finales que fallan como glitch)
     "mentira": "lies",
     "dirección": "address",

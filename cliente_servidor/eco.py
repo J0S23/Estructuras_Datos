@@ -57,6 +57,12 @@ def _hacer(g, j, accion, solo=None):
         return None
     if panel.get("tipo") == "celular" and accion in ("izquierda", "derecha"):
         return None            # (cambiar de pestaña: lo arma el servidor)
+    if panel.get("tipo") == "votacion" and accion in ("arriba", "abajo"):
+        # (como misiones/sala_secreta.SalaSecreta.tecla: 2 opciones, o 3 si
+        # liberaron a los niños)
+        n = max(1, len((panel.get("filas") or [[0, 1]])[0]))
+        j.cursor = (j.cursor + (1 if accion == "abajo" else -1)) % n
+        return "cursor"
     filas = panel.get("filas")
     if filas:
         if accion not in MOSAICO:

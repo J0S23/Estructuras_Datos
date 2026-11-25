@@ -88,11 +88,18 @@ No todos lo lograron, aunque nadie lo dice: algunas cápsulas ya no brillan y su
 
 En ese momento suenan todas las alarmas y todos los aliens de la nave van hacia ellos: se ven y se oyen venir, y llegan justo cuando se acaba el tiempo. Las cápsulas de cristal no se abren y no hay tiempo de sacar a nadie. Los agentes tienen 20 segundos para votar, cada uno en su pantalla: **correr a la cápsula y escapar, o quedarse con los niños y morir.** Gana lo que más voten; en un empate, se quedan.
 
+### El baúl de la prisión y el martillo
+
+En la prisión hay un baúl con un teclado de cuatro números. El código no está en las notas de las puertas: está rayado al margen de una nota cualquiera del mapa, así que hay que leerlas con cuidado para encontrarlo (si se equivocan, suena la alarma). Adentro hay un martillo, y lo puede llevar cualquiera, sin importar su rol. Si quien lo lleva queda fuera, el martillo vuelve al baúl.
+
+Si alguien del equipo lleva el martillo cuando suena la alarma en la sala de los niños, la segunda opción de la votación deja de ser "quedarse con ellos" y pasa a ser **romper las cápsulas y sacarlos**. Si gana, los aliens no llegan: el que lleva el martillo va solo a cada cápsula de un niño vivo y rompe el vidrio (tres martillazos cada una). Después todos van a la cápsula de escape: los niños se suben uno por uno y los agentes se quedan delante, tapándoles el paso a los aliens que vuelven.
+
 ## Los finales
 
 - **Escapan sin entrar:** exponen a los famosos alienígenas y NEXUS deja de ser la voz de la nave. Pero nunca sabrán lo que había detrás del agujero, y los niños siguen arriba.
 - **Entran y escapan:** salen vivos con lo que vieron. Por primera vez NEXUS habla de los niños: la noticia es real y millones de personas la comparten. Los niños siguen arriba, pero ya nadie puede esconderlos.
-- **Entran y se quedan:** los aliens los alcanzan junto a los niños. La pantalla se apaga y NEXUS sigue publicando como si nada. En la Tierra nadie sabrá nunca lo que encontraron.
+- **Entran y se quedan:** los encierran en las celdas de la nave, junto a los niños, y el Cambiaformas patrulla por delante. La pantalla se apaga y NEXUS sigue publicando como si nada. En la Tierra nadie sabrá nunca lo que encontraron.
+- **Los liberan (con el martillo):** los niños se van en la cápsula y los agentes se quedan atrás. A la mañana siguiente, en la Tierra, una niña despierta en su cuarto; en NEXUS la noticia de que volvieron se comparte millones de veces, y debajo, #NoVolvieron: los agentes se quedaron arriba. La frase final cambia: "Ellos compartieron su dirección. Ustedes compartieron su lugar."
 - **Nadie decide:** si se acaba el tiempo sin votos, se quedan en la nave: el Guardia de la Bahía suelta la fruta, destruye la cápsula y los capturan.
 - **Derrota:** atrapan a todos los agentes o se quedan sin vidas. Esa noche NEXUS publica: "Agentes colombianos difundían noticias falsas". El Cambiaformas gana sin pelear.
 

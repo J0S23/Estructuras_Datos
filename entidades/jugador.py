@@ -517,6 +517,8 @@ class Jugador:
         recuadro de diálogo con su foto, screens/paneles.render_mensaje).
         `quien` = [nombre, clave de su foto] si lo dice otro (un prisionero
         que le habla)."""
+        if getattr(self, "en_historia", False):
+            return      # (la sala de los niños: no se interrumpe el diálogo; misiones/sala_secreta.py)
         if (self.mensaje and self.mensaje_ms > 0 and texto != self.mensaje
                 and es_instruccion(self.mensaje) and not es_instruccion(texto)
                 and self.mensaje_total_ms - self.mensaje_ms < INSTRUCCION_PROTEGIDA_MS):

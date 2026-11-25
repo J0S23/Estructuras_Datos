@@ -11,6 +11,11 @@ se revisa que el cliente vea lo mismo: la pared abierta (y sin su losa en
 las paredes, o el campo de visión seguía tapado), la sala pintada, el menú de
 la votación, los votos, el contador y el final. Al final se compara el
 dibujo del servidor y del cliente píxel por píxel durante la votación.
+
+`probar_liberar`: el baúl de la prisión desde el cliente (el teclado, el
+martillo al inventario), "liberar" en el menú en vez de "quedarse" y, al
+ganar, que el cliente vea las cápsulas rotas, a los niños caminando donde
+mismo que en el servidor y el final "liberados".
 """
 
 import json
@@ -173,8 +178,90 @@ def probar(feria):
     print(f"{nombre}: final '{espejo.g.mision.final}' en el cliente")
 
 
+def probar_liberar(feria):
+    nombre = "feria" if feria else "normal"
+    s = Servidor(2, avisar=lambda t: None, semilla=5, presentaciones=False, mapa="MapaFinal", feria=feria)
+    s.preparar_partida()
+    s.lista.set()
+    for p in s.puestos:
+        p.ocupado = True
+    g = s.juego
+    if g.tutorial is not None:
+        g.saltar_tutorial()
+    from juego.app import Game
+    espejo = Espejo(Game(), s.bienvenida(s.puestos[0]))
+    espejo.preparar()
+    s.juego.screen = espejo.g.screen
+    sala, sala_c = g.sala_secreta, espejo.g.sala_secreta
+    for j in g.jugadores:
+        j.invulnerable_ms = 10 ** 9
+    j1, j2 = g.jugadores[:2]
+    baul = sala.baul
+    assert baul is not None, "el baúl de la prisión"
+    poner(j1, (baul["rect"].centerx, baul["rect"].bottom + 30))
+    s._pulsar(j1, "interactuar")
+    cuadros(s, 2)
+    pasar(s, espejo)
+    panel = espejo.g.jugadores[0].panel or {}
+    assert panel.get("titulo") == "Baúl con candado" and len(panel.get("opciones", [])) == 4, panel
+    j1.cursor = j1.panel["codigos"].index(baul["codigo"])
+    s._pulsar(j1, "interactuar")
+    cuadros(s, 2)
+    s._pulsar(j1, "interactuar")
+    cuadros(s, 2)
+    pasar(s, espejo)
+    assert sala_c.baul["abierto"] and not sala_c.baul["con_martillo"], sala_c.baul
+    assert "martillo" in espejo.g.jugadores[0].objetos, "el martillo en el inventario del cliente"
+
+    g.mision.abrir_puerta()
+    g.mision.empezar_huida()
+    cuadros(s, 200)
+    poner(j1, (sala.sala.left + 120, sala.pasillo.centery))
+    poner(j2, (sala.celular[0] - 30, sala.celular[1]))
+    cuadros(s, 3)
+    while sala.estado == "dialogo":
+        cuadros(s, 1)
+    s._pulsar(j2, "interactuar")
+    cuadros(s, 2)
+    s._pulsar(j2, "interactuar")
+    cuadros(s, 30)
+    pasar(s, espejo)
+    assert sala_c.estado == "votacion" and sala_c.claves == ["escapar", "liberar"], sala_c.claves
+    textos = [o["texto"] for o in (espejo.g.jugadores[0].panel or {}).get("opciones", [])]
+    assert textos == ["Correr a la cápsula", "Romper las cápsulas y sacarlos"], textos
+    for j in (j1, j2):
+        s._pulsar(j, "abajo")                       # (con el stick: la otra opción)
+        s._pulsar(j, "interactuar")
+    cuadros(s, 2)
+    assert sala.votos == ["liberar", "liberar"], sala.votos
+    while sala.estado == "votacion":
+        cuadros(s, 1)
+    assert sala.resultado == "liberar"
+    revisado = False
+    while g.mision.resultado is None:
+        cuadros(s, 1)
+        if sala.fase_liberar == "capsula" and sala.fase_ms > 2500 and not revisado:
+            revisado = True
+            pasar(s, espejo)
+            assert all(sala_c.rota(i) for i in sala.vivas()), "las cápsulas rotas en el cliente"
+            for i in sala.vivas():
+                a, b = sala.posicion_nino(i), sala_c.posicion_nino(i)
+                assert (a is None) == (b is None) and (a is None or abs(a[0] - b[0]) + abs(a[1] - b[1]) < 1), \
+                    (i, a, b)
+            red = pygame.Surface(TAMANO)
+            espejo.g._dibujar_partida_en(red, list(espejo.g.jugadores), espejo.g._extras_dibujo())
+            pygame.image.save(red, os.path.join(CARPETA, f"ninos_{nombre}_liberar_red.png"))
+    assert revisado
+    pasar(s, espejo)
+    assert (espejo.g.mision.final, espejo.g.mision.resultado) == ("liberados", "victoria"), \
+        (espejo.g.mision.final, espejo.g.mision.resultado)
+    print(f"{nombre}: liberar -> final '{espejo.g.mision.final}' en el cliente")
+
+
 pygame.init()
 probar(False)
 probar(True)
+probar_liberar(False)
+probar_liberar(True)
 print(f"capturas en {CARPETA}")
 print("OK prueba_red_ninos")

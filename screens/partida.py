@@ -11,7 +11,6 @@ confianza, avisos de la IA y de eventos, y cómo va cada uno.
 """
 
 import math
-import os
 from contextlib import contextmanager
 
 import pygame

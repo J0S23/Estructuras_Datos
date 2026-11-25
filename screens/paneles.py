@@ -21,7 +21,6 @@ import re
 import pygame
 
 from juego.fuentes import fuente_de_tamano
-from juego import idioma
 from juego.idioma import tr
 from juego import perfiles
 from juego import cache_dibujo
@@ -1197,13 +1196,6 @@ COLOR_ZONA_VERDE = (96, 200, 120)
 _cache_escondido = {}
 
 
-@idioma.al_cambiar
-def _limpiar_textos():
-    """Al cambiar de idioma: las capas guardadas que llevan texto."""
-    _cache_escondido.clear()
-    _capas_eliminado.clear()
-
-
 def render_escondido(screen, vista, jugador):
     """Adentro del escondite: todo oscuro salvo una rendija a la altura de los ojos."""
     if not getattr(jugador, "escondido", False):
@@ -1322,12 +1314,6 @@ def _pintar_corazon(screen, centro, r, lleno, color):
     pygame.draw.line(screen, borde, (cx + 2 * r, cy - r // 3), (cx, cy + int(r * 1.9)), 1)
     if lleno:
         pygame.draw.circle(screen, (255, 200, 210), (cx - r, cy - r), max(1, r // 3))
-
-
-def render_vidas(screen, vista, jugador, tapado=None):
-    """Las vidas ya no van solas: se dibujan dentro del recuadro del pulso
-    (render_pulso). Se deja el nombre para quien la llame."""
-    return
 
 
 def _dibujar_vidas(screen, vista, jugador, inicio):
@@ -1491,6 +1477,10 @@ def _icono_objeto(screen, tipo, centro, tam):
         pygame.draw.rect(screen, (90, 60, 34), saco, 2, border_radius=6)
         pygame.draw.line(screen, (90, 60, 34), (saco.x + 4, saco.y + 5), (saco.right - 4, saco.y + 5), 2)
         pygame.draw.circle(screen, (100, 190, 80), (cx, cy + 4), max(2, tam // 9))
+    elif tipo == "martillo":
+        from screens import arte_historia
+        img = arte_historia.martillo(max(14, int(tam * 0.95)) // 16 * 16 or 16)
+        screen.blit(img, img.get_rect(center=(cx, cy)))
     elif tipo.startswith("prueba_"):
         from screens.infiltrado_dibujo import icono_prueba
         icono_prueba(screen, tipo, centro, tam)
@@ -1501,6 +1491,8 @@ NOMBRE_OBJETO = {"pieza": ("Pieza", "Piezas"),
                  "kit": ("Kit de herramientas", "Kits de herramientas"),
                  "fruta": ("Fruta (para el Guardia)", "Frutas"),
                  "abono": ("Abono (para la planta)", "Abonos"),
+                 # El del baúl de la prisión (misiones/sala_secreta.py).
+                 "martillo": ("Martillo", "Martillos"),
                  # Las pruebas del infiltrado (data/infiltrado.py).
                  "prueba_audio": ("Audio interceptado", "Audios interceptados"),
                  "prueba_expediente": ("Expediente", "Expedientes"),
@@ -1512,7 +1504,7 @@ def _objetos_de(jugador):
     if getattr(jugador, "piezas", 0) > 0:
         objetos.append(("pieza", jugador.piezas))
     inventario = getattr(jugador, "objetos", {})
-    for tipo in ("decodificador", "kit", "fruta", "abono",
+    for tipo in ("decodificador", "kit", "fruta", "abono", "martillo",
                  "prueba_audio", "prueba_expediente", "prueba_captura"):
         cantidad = inventario.get(tipo, 0) if hasattr(inventario, "get") else int(tipo in inventario)
         if cantidad > 0:
@@ -1540,7 +1532,8 @@ def render_inventario(screen, vista, jugador):
     f = fuente_de_tamano(max(11, min(15, vista.width // 60)))
     tam = max(18, min(26, vista.width // 40))
     titulo = None
-    if hasattr(jugador, "nombre_tecla"):
+    if hasattr(jugador, "nombre_tecla") and any(t != "martillo" for t, _ in objetos):
+        # (el martillo no se suelta: si queda fuera, vuelve al baúl)
         titulo = f.render(f"[{jugador.nombre_tecla('soltar')}] soltar", True, COLOR_TENUE)
     textos = [f.render(f"x{n} {NOMBRE_OBJETO[t][n > 1]}", True, COLOR_TEXTO) for t, n in objetos]
     ancho = max([titulo.get_width() if titulo else 0] + [tam + 8 + t.get_width() for t in textos]) + 16

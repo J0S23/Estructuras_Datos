@@ -640,11 +640,3 @@ def _de(lista, indice):
         return lista[indice]
     return None
 
-
-def captura_local(juego, locales):
-    """Lo que dibuja el modo local para `locales`, sin pasar por la red (para
-    comparar en pruebas/prueba_red_capturas.py)."""
-    pantalla = pygame.Surface(juego.screen.get_size())
-    dueños = [juego.jugadores[i] for i in locales]
-    juego._dibujar_partida_en(pantalla, dueños, juego._extras_dibujo())
-    return pantalla

@@ -6,7 +6,7 @@
    escoja: un solo código, una consola (la más cercana CAMINANDO), tres
    piezas, con el Guardia, la planta, las puertas para dos y el caso del
    Cambiaformas (como en el juego normal),
-   el primer rumor pronto, los planos con más confianza (80 %), la
+   el primer rumor pronto, los planos con más confianza (70 %), la
    confianza que sube más rápido (la verdad avanza cada 0.6 s) y un reloj (12 min) en
    el HUD; avisa a los 2 minutos y a 1, y al llegar a 0 termina ("Se acabó el
    tiempo"). Las vidas y los aliens, los de la dificultad. Sin el
@@ -155,10 +155,10 @@ _panel = _cel_feria.panel_ayuda(g, _j, None) if hasattr(_cel_feria, "panel_ayuda
 if _panel is not None:
     assert any(a == ("infiltrado", None) for a in _panel.get("acciones", [])), "la Terminal NEXUS no muestra el caso"
 assert g.nexus.reloj_rumor_ms == FERIA["primer_rumor_s"] * 1000
-# Los planos piden más confianza (al menos el 80 %), la verdad convence menos que
+# Los planos piden más confianza (al menos el 70 %), la verdad convence menos que
 # sin dificultad y corre más rápido que en el juego normal.
 assert normal.nexus.umbral_planos == normal.dificultad.umbral_planos
-assert g.nexus.umbral_planos == max(g.dificultad.umbral_planos, FERIA["umbral_planos_min"]) >= 0.80
+assert g.nexus.umbral_planos == max(g.dificultad.umbral_planos, FERIA["umbral_planos_min"]) >= 0.70
 from data.feria import AJUSTES_FERIA
 assert g.nexus.factor_convencer() == AJUSTES_FERIA["convencer"] < 1
 assert normal.nexus.factor_convencer() == normal.dificultad.valor("convencer") < 1
@@ -538,8 +538,9 @@ sin = [desmentidos_para_planos(False, s) for s in range(8)]
 feria.ACTIVO = False
 con_ok, sin_ok = sorted(x for x in con if x), sorted(x for x in sin if x)
 assert len(con_ok) >= 6 and len(sin_ok) >= 6, (con, sin)
-assert con_ok[len(con_ok) // 2] >= 3, f"en la feria los planos salen con muy pocos desmentidos: {con}"
-assert min(con_ok) >= 2, f"en la feria un solo desmentido dio los planos: {con}"
+# (Nov 24, Diego bajó la confianza de la feria a 70 %: la mediana pasó de 3 a
+# 2 desmentidos, y alguna vez basta con uno.)
+assert con_ok[len(con_ok) // 2] >= 2, f"en la feria los planos salen con muy pocos desmentidos: {con}"
 # Sin el modo feria también hacen falta varios (antes bastaba uno: Diego llegó
 # al 85 % con una foto sin recortar).
 assert sin_ok[len(sin_ok) // 2] >= 3, f"en Normal los planos salen con muy pocos desmentidos: {sin}"

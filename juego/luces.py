@@ -5,7 +5,7 @@ alarma (juego/efectos.py tiene el resto de los efectos).
   de color que respiran, pegadas con BLEND_RGB_ADD. Las de las cosas del juego
   salen del estado (consolas prendidas o apagadas, terminales, NEXUS, la
   cápsula, cajas de fusibles, paneles rotos y reparados, sellos, puertas,
-  compuertas, señuelos y señales) y las del mapa de data/luces_mapa.py (el
+  compuertas, cepos y señales) y las del mapa de data/luces_mapa.py (el
   reactor, la incubadora, el ventanal, las pantallas de General y Control, los
   tubos del laboratorio y cada lámpara de los pasillos, que se encuentran
   solas por su color). Cada luz se multiplica por la luz que hay donde está
@@ -407,10 +407,11 @@ def _armar_fuentes(extras, zonas):
             r = compuerta["rect"]
             luces.append(Luz(r.centerx, r.centery, 160, COLOR_ROJO, 0.4, 0.5, 1.7, electrica=False,
                              semilla=_semilla(r), emergencia=True))
-    for senuelo in extras.get("senuelos", ()) or ():
-        x, y = senuelo["pos"]
-        luces.append(Luz(x, y, 130, (255, 170, 50), 0.35, 0.4, 2.5, electrica=False, semilla=int(x + y),
-                         emergencia=True))
+    for trampa in extras.get("trampas", ()) or ():
+        x, y = trampa["pos"]
+        if trampa.get("alien") is not None:     # atrapó a uno: chispea
+            luces.append(Luz(x, y, 150, (90, 200, 255), 0.5, 0.5, 6.0, electrica=True, semilla=int(x + y),
+                             emergencia=True))
     for senal in extras.get("senales", ()) or ():
         x, y = senal["pos"]
         luces.append(Luz(x, y, 150, (255, 90, 170), 0.35, 0.4, 2.0, electrica=False, semilla=int(x * 3 + y),
@@ -436,7 +437,7 @@ def _niveles_de(radio, color, maximo=1.0):
 
 
 # Luces de las cosas del juego que dependen de cómo están (una consola ya
-# apagada, una compuerta bajada, la caja buena en un apagón, un señuelo...):
+# apagada, una compuerta bajada, la caja buena en un apagón, un cepo que atrapó a uno...):
 # no salen al empezar, pero se preparan igual. (radio, color) como en
 # `_armar_fuentes`.
 LUCES_QUE_PUEDEN_SALIR = [      # (radio, color, la intensidad más alta: intensidad x (1 + pulso))

@@ -42,7 +42,8 @@ COLOR_TENUE = (140, 146, 180)
 COLOR_ARISTA = (70, 76, 108)
 COLOR_NODO = {"verde": (90, 210, 120), "gris": (165, 168, 185), "rojo": (230, 80, 80)}
 COLOR_PUB = {"rumor": (240, 90, 80), "compartido": (240, 90, 80), "desmentido": (90, 220, 130),
-             "testimonio": (90, 220, 130), "trampa": (190, 120, 255), "normal": (150, 190, 255)}
+             "testimonio": (90, 220, 130), "trampa": (190, 120, 255), "normal": (150, 190, 255),
+             "caso": (90, 220, 130)}
 COLOR_CAMINO = (255, 214, 64)
 COLOR_JUGADOR = (120, 190, 255)
 

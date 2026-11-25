@@ -113,7 +113,7 @@ def _es_de_jugador(red, nodo):
 
 def equipo(red, jugador):
     return [p for p in red.feed(jugador)
-            if (p.tipo in ("desmentido", "confirmacion", "compartido") and _es_de_jugador(red, p.autor))
+            if (p.tipo in ("desmentido", "confirmacion", "compartido", "caso") and _es_de_jugador(red, p.autor))
             or p.tipo == "testimonio"]
 
 

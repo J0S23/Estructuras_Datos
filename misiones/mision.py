@@ -45,6 +45,7 @@ MAX_A_MEDIR = 5
 REMEDIR_PX = 250
 
 from data.nexus import FUGA_VIRAL
+from data.historia import ESCAPE
 from data.notas import NOTAS, NOTA_CODIGO, NOTAS_CODIGO_VACIAS
 from misiones.logros import logro
 
@@ -239,6 +240,8 @@ class Mision:
         # "sin_entrar", "escaparon", "quedarse" o "nadie". None = el de siempre
         # (un mapa sin sala oculta).
         self.final = None
+        # Con la sala oculta abierta, irse en la cápsula se confirma (confirmar_escape).
+        self.escape_confirmado = False
 
         # Puertas con código: {"rect", "codigo", "abierta", "nombre", "color",
         # "candidatas"}. La primera es la de la prisión (fase 1).
@@ -492,6 +495,9 @@ class Mision:
     def objetivo(self):
         if not self.activa:
             return None
+        sala = getattr(self.juego, "sala_secreta", None)
+        if sala is not None and sala.activa and sala.estado == "espera":
+            return "Revisa el celular del medio de la sala."
         if self.fase == "sabotaje":
             hechas = sum(c["progreso"] >= 1 for c in self.consolas)
             return TEXTO_FASE["sabotaje"].format(hechas=hechas, total=len(self.consolas))
@@ -660,6 +666,10 @@ class Mision:
             bahia = None
         if bahia is not None and "fruta" in jugador.objetos and self.fase != "prision":
             return bahia.punto_objetivo(jugador)          # la fruta, ya: al Guardia
+        sala = getattr(self.juego, "sala_secreta", None)
+        if sala is not None and sala.activa and sala.estado == "espera" and sala.celular is not None:
+            # Ya hablaron de los niños: la votación empieza al revisar el celular.
+            return tuple(sala.celular), "Revisa el celular"
         if self.fase == "huida":
             if bahia is not None:
                 distraer = bahia.punto_distraer(jugador)
@@ -851,6 +861,8 @@ class Mision:
         for cons in self.consumibles:
             if not cons["tomado"] and self._cerca(jugador, cons["rect"], 15):
                 return f"Recoger {NOMBRE_CONSUMIBLE[cons['tipo']].lower()}"
+        if self.fase == "huida" and self.confirmar_escape_pendiente() and self._en_zona_capsula(jugador):
+            return ESCAPE["pista"] if self._todos_en_capsula() else ESCAPE["faltan"]
         if self.capsula and self.fase == "capsula" and self._cerca(jugador, self.capsula, 10):
             if self.piezas_entregadas < self.piezas_necesarias:
                 return "Dejar piezas en la cápsula" if jugador.piezas else "Cápsula: faltan piezas"
@@ -899,6 +911,12 @@ class Mision:
                 jugador.avisar(f"Recogí: {NOMBRE_CONSUMIBLE[cons['tipo']]}", COLOR_BIEN)
                 self._sonar("recoger", 0.7)
                 return True
+        if self.fase == "huida" and self.confirmar_escape_pendiente() and self._en_zona_capsula(jugador):
+            if self._todos_en_capsula():
+                self._panel_escape(jugador)
+            else:
+                jugador.avisar(ESCAPE["faltan"], COLOR_MAL)
+            return True
         if self.capsula and self.fase == "capsula" and self._cerca(jugador, self.capsula, 10):
             faltan = self.piezas_necesarias - self.piezas_entregadas
             if faltan > 0 and jugador.piezas > 0:
@@ -1285,13 +1303,56 @@ class Mision:
             return          # (los niños: la votación decide cómo termina)
         if self.fase == "huida":
             zona = self.capsula.inflate(60, 60)
+            self._en_capsula = jugadores
             if all(not j.preso and zona.colliderect(j.hitbox) for j in jugadores):
+                if self.confirmar_escape_pendiente():
+                    return      # (se van cuando alguien lo confirme: confirmar_escape)
                 self.resultado = "victoria"
                 self.motivo_fin = "escaparon"
                 if sala is not None and sala.activa and sala.se_abrio and not sala.entraron:
                     self.final = "sin_entrar"
                 for j in jugadores:
                     j.sumar_puntos(PUNTOS_ESCAPE // max(1, len(jugadores)))
+
+    # -- Confirmar el escape (si se abrió la sala oculta) ------------------------------------
+
+    def confirmar_escape_pendiente(self):
+        """Con la sala oculta abierta y sin que nadie haya entrado, llegar a la
+        cápsula no basta para irse: alguien tiene que confirmarlo (Joseph, nov
+        24: si tus compañeros caían y tú reparabas la cápsula, te ibas solo de
+        una y no podías ir donde los niños)."""
+        sala = getattr(self.juego, "sala_secreta", None)
+        return (sala is not None and sala.activa and sala.se_abrio and not sala.entraron
+                and not self.escape_confirmado)
+
+    def _todos_en_capsula(self):
+        if self.capsula is None:
+            return False
+        zona = self.capsula.inflate(60, 60)
+        jugadores = getattr(self, "_en_capsula", None) or [j for j in self.juego.jugadores if j.puede_moverse]
+        return bool(jugadores) and all(not j.preso and zona.colliderect(j.hitbox) for j in jugadores)
+
+    def _en_zona_capsula(self, jugador):
+        return self.capsula is not None and self.capsula.inflate(60, 60).colliderect(jugador.hitbox)
+
+    def _panel_escape(self, jugador):
+        jugador.abrir_panel({
+            "tipo": "opciones", "accion": "escapar",
+            "titulo": ESCAPE["titulo"],
+            "cuerpo": [ESCAPE["cuerpo"]],
+            "opciones": [{"texto": t} for t in ESCAPE["opciones"]],
+            "pie": (f"[{jugador.pista_mover()}] elegir   [{jugador.nombre_tecla('interactuar')}] aceptar"),
+        })
+
+    def confirmar_escape(self, jugador):
+        """Eligió "Escapar ahora" en el panel: se van (si siguen todos en la cápsula)."""
+        if self.fase != "huida" or self.resultado is not None:
+            return
+        if not self._todos_en_capsula():
+            jugador.avisar(ESCAPE["faltan"], COLOR_MAL)
+            return
+        self.escape_confirmado = True
+        self._sonar("cohete")
 
     # -- ¿Todavía se puede escapar? -------------------------------------------------------
 
@@ -1309,7 +1370,7 @@ class Mision:
 
         - No quedan piezas para la cápsula (las que faltan entregar son más que
           las del piso más las que llevan los jugadores: se gastaron en sellos
-          y señuelos).
+          y cepos).
         - Queda UN jugador y lo que falta (la cápsula, las consolas por apagar,
           las piezas) está detrás de una puerta para dos cerrada: hacen falta
           dos para abrirla. Las puertas con código cuentan como abiertas (uno

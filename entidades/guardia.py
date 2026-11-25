@@ -7,7 +7,7 @@ con el editor de mapa (herramienta "Guardia", su puesto frente a la cápsula).
 - Lo ve todo dentro de su sala (no tiene cono): a quien entre, lo persigue
   despacio, sin salir de la sala, y si lo alcanza con los brazos lo atrapa.
   Es un cuerpo sólido: los jugadores no lo atraviesan.
-- No le hacen nada el hackeo, el señuelo ni el infiltrado: es una roca.
+- No le hacen nada el hackeo, el cepo ni el infiltrado: es una roca.
 - **Distraerlo un rato** (Resonante): `distraer()`. Se va a un rincón de la
   Bahía a escuchar la señal y, mientras dura, no ve a nadie: hay que
   reparar la cápsula rápido y salir. Lo hace la Sintonía (de cerca, tecla de
@@ -148,7 +148,7 @@ class Guardia(Alien):
         return
 
     def oir(self, punto):
-        """Ni el señuelo ni los latidos lo mueven de su puesto. (Una Emisión
+        """Ni los ruidos ni los latidos lo mueven de su puesto. (Una Emisión
         que cae en su sala sí lo distrae: acciones_rol.poner_emision llama a
         `distraer`.)"""
         return False

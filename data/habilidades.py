@@ -83,9 +83,9 @@ FORJADOR = {
             "descripcion": ("Crea herramientas y dispositivos usando piezas "
                             "encontradas en la nave."),
             "costo": COSTO_NIVEL_2,
-            "detalle_puntos": "Tecla de habilidad: con 1 pieza arma un señuelo que atrae a los aliens.",
+            "detalle_puntos": "Tecla de habilidad: con 1 pieza arma un cepo: el primer alien que lo pisa queda atrapado 6 s.",
             "uso": "activa",
-            "recarga_s": 6,
+            "recarga_s": 8,
             "hijos": [],
         },
     ],

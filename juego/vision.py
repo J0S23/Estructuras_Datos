@@ -105,25 +105,6 @@ def _info_caja(caja):
     return cerca, centro, mitad
 
 
-def _choque_rapido(info, a, c, s):
-    """Como _choque, pero mirando solo las cajas que el rayo de ángulo `a` puede
-    tocar, de la más cercana a la más lejana, y parando cuando ya ninguna puede
-    quedar más cerca que el choque encontrado. Da lo mismo que _choque.
-
-    (Lo usan las pruebas y quien no tenga un Campo; el Campo usa sus
-    "rebanadas", que es lo mismo pero sin revisar todas las cajas.)"""
-    mejor = math.inf
-    for cerca, centro, mitad, caja in info:
-        if cerca >= mejor:
-            break
-        if abs((a - centro + math.pi) % (2 * math.pi) - math.pi) > mitad + 0.003:
-            continue
-        d = _choque((caja,), c, s)
-        if d < mejor:
-            mejor = d
-    return mejor
-
-
 # El círculo alrededor del jugador se parte en REBANADAS de ángulo, y cada
 # rebanada guarda las cajas que caen (aunque sea en parte) en ella, de la más
 # cercana a la más lejana. Un rayo solo prueba las de su rebanada. Antes cada

@@ -52,6 +52,10 @@ con el mismo nombre (.ogg, .wav o .mp3) y el juego lo usa (audio_manager.py).
                    los niños; generar_monitor)
     monitor_falla  pitidos que se atropellan y desafinan: algo anda mal
     monitor_plano  el tono largo y plano de cuando se corta el latido
+    vidrio_golpe   martillazo contra el vidrio de una cápsula: golpe sordo y
+                   un crujido agudo (generar_vidrio)
+    vidrio_roto    el vidrio que revienta: estallido y tintineo de pedazos
+                   que caen, y el líquido que se derrama
     foto        obturador de cámara: el flash que carga, clic-clac y el
                 motor que pasa el rollo (al tomar la foto de un rumor o de lo
                 que arreglaste; generar_foto)
@@ -723,8 +727,51 @@ def generar_monitor():
     guardar("monitor_plano", plano, 0.5)
 
 
+def generar_vidrio():
+    """El martillo contra las cápsulas de los niños (misiones/sala_secreta.py).
+    Con su propio azar: no cambia los demás sonidos."""
+    azar = random.Random(41)
+
+    def crujido(dur, vol, densidad):
+        # Chasquidos secos y agudos (ruido sin suavizar, a ráfagas).
+        n = int(FRECUENCIA * dur)
+        salida = [0.0] * n
+        i = 0
+        while i < n:
+            largo = azar.randint(20, 90)
+            fuerza = vol * azar.uniform(0.4, 1.0) * math.exp(-i / FRECUENCIA / (dur * 0.5))
+            for k in range(largo):
+                if i + k < n:
+                    salida[i + k] += azar.uniform(-1, 1) * fuerza * (1 - k / largo)
+            i += largo + int(azar.expovariate(densidad) * FRECUENCIA)
+        return salida
+
+    def tintineo(f, dur, vol):
+        # Un pedacito de vidrio: un seno agudo que se apaga rápido, desafinado.
+        n = int(FRECUENCIA * dur)
+        g = f * azar.uniform(1.4, 1.62)
+        return [(math.sin(2 * math.pi * f * i / FRECUENCIA) + 0.5 * math.sin(2 * math.pi * g * i / FRECUENCIA))
+                * vol * math.exp(-i / FRECUENCIA / (dur * 0.22)) for i in range(n)]
+
+    golpe = mezclar(tono(90, 0.25, 0.9, caida=0.05, f_final=55), ruido(0.2, 0.7, caida=0.03, suave=10),
+                    silencio(0.02) + crujido(0.35, 0.55, 60))
+    guardar("vidrio_golpe", golpe, 0.8)
+    estallido = mezclar(tono(70, 0.35, 0.8, caida=0.07, f_final=40), ruido(0.3, 0.9, caida=0.06, suave=2),
+                        crujido(0.5, 0.8, 200))
+    pedazos = silencio(1.6)
+    for _ in range(34):
+        desde = int(FRECUENCIA * (0.05 + azar.random() ** 1.6 * 1.3))
+        for k, v in enumerate(tintineo(azar.uniform(2600, 6200), azar.uniform(0.08, 0.22), azar.uniform(0.12, 0.35))):
+            if desde + k < len(pedazos):
+                pedazos[desde + k] += v
+    # El líquido que se derrama: ruido sordo que dura un poco.
+    agua = silencio(0.15) + [v * min(1.0, i / 3000) for i, v in enumerate(ruido(1.2, 0.35, caida=0.5, suave=14))]
+    guardar("vidrio_roto", mezclar(estallido, pedazos, agua), 0.85)
+
+
 if __name__ == "__main__":
     generar()
     generar_extras()
     generar_foto()
     generar_monitor()
+    generar_vidrio()

@@ -71,26 +71,6 @@ def ips_locales():
     return ips or ["127.0.0.1"]
 
 
-def leer_direccion(texto):
-    """"192.168.43.10" o "192.168.43.10:5051" -> (host, puerto). ValueError
-    con lo que hay que decirle al jugador si está mal escrita. Antes se
-    probaba cualquier cosa: "192.168.1" (un número de menos) es para el
-    sistema 192.168.0.1 y se quedaba 15 s intentando otra máquina."""
-    texto = (texto or "").strip()
-    if not texto:
-        raise ValueError("Escribe la IP de la laptop que creó la partida")
-    host, _, puerto = texto.partition(":")
-    partes = host.split(".")
-    if len(partes) != 4 or not all(p.isdigit() and int(p) <= 255 for p in partes):
-        raise ValueError(f"La IP {host!r} está mal escrita: son 4 números del 0 al 255 con punto "
-                         f"(p. ej. 192.168.43.10)")
-    if not puerto:
-        return host, PUERTO
-    if not puerto.isdigit() or not 1 <= int(puerto) <= 65535:
-        raise ValueError(f"El puerto {puerto!r} está mal escrito (va de 1 a 65535)")
-    return host, int(puerto)
-
-
 def puerto_libre(puerto, host="0.0.0.0"):
     """¿Se puede abrir el servidor en `puerto`? (como lo abre el servidor)"""
     prueba = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -105,11 +85,6 @@ def puerto_libre(puerto, host="0.0.0.0"):
         return False
     finally:
         prueba.close()
-
-
-# Si el 5050 está ocupado (otra partida abierta en esta laptop, otro programa)
-# se prueba con los que siguen; la pantalla de espera dice cuál quedó.
-PUERTOS_DE_MAS = 3
 
 
 def levantar_servidor(jugadores, dificultad, puerto=PUERTO, host="0.0.0.0", extra=()):
@@ -389,7 +364,6 @@ class Buscador:
 
 AZUL_FONDO = (10, 12, 24)
 PANEL = (20, 24, 44)
-PANEL_MARCADO = (30, 40, 74)
 BORDE = (56, 66, 110)
 CIAN = (110, 220, 255)
 ROSA = (233, 120, 200)

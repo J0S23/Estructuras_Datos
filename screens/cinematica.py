@@ -51,10 +51,6 @@ def _suave(t, inicio, duracion):
     return 1 - (1 - x) ** 3
 
 
-def _entre(t, a, b):
-    return a <= t < b
-
-
 def _guardar(clave, armar):
     img = _cache.get(clave)
     if img is None:
@@ -142,25 +138,6 @@ def _sprite(ruta, alto, voltear=False):
         img = pygame.transform.scale(cuadro, (max(1, int(cuadro.get_width() * k)), int(alto)))
         return pygame.transform.flip(img, True, False) if voltear else img
     return _guardar(("sprite", ruta, int(alto), voltear), armar)
-
-
-def _hoja(ruta, alto):
-    """Todos los cuadros de una hoja, recortados con la caja de todos y escalados."""
-    def armar():
-        completa = os.path.join(_RAIZ, ruta)
-        if not os.path.isfile(completa) or pygame.display.get_surface() is None:
-            return []
-        hoja = pygame.image.load(completa).convert_alpha()
-        lado = hoja.get_height()
-        cuadros = [hoja.subsurface(pygame.Rect(i * lado, 0, lado, lado)).copy()
-                   for i in range(max(1, hoja.get_width() // lado))]
-        caja = cuadros[0].get_bounding_rect()
-        for c in cuadros[1:]:
-            caja = caja.union(c.get_bounding_rect())
-        k = alto / max(1, caja.height)
-        return [pygame.transform.scale(c.subsurface(caja), (max(1, int(caja.width * k)), int(alto)))
-                for c in cuadros]
-    return _guardar(("hoja", ruta, int(alto)), armar)
 
 
 # -- Textos -------------------------------------------------------------------------------
@@ -1036,7 +1013,10 @@ TIEMPOS_FINAL = {
     "escaparon": (5200, 6000, 4200),
     "quedarse": (6400, 6000, 4200),
     "nadie": (6400, 6000, 4200),
+    "liberados": (6200, 9600, 4800),
 }
+# Cuánto antes del final del dibujo empiezan los textos de la escena.
+ADELANTO_TEXTOS = {"sin_entrar": 1200, "liberados": 3400}
 
 
 def intro_final_ms(final):
@@ -1056,7 +1036,10 @@ def dibujar_final(screen, final, t, jugadores=(), de_fondo=False):
         if final in ("sin_entrar", "escaparon"):
             escenas._escena_escape(screen, 6000 + t % 60000)
         elif final == "quedarse":
-            _sala_final(screen, 1500, jugadores, quieta=True)
+            escenas._escena_celdas(screen, 5000, list(jugadores), patrulla="cambiaformas")
+        elif final == "liberados":
+            _manana(screen, 2000 + t % 60000, con_celular=False)
+            escenas_oscuras(screen, 90)
         else:
             escenas._escena_celdas(screen, 5000, list(jugadores))
         return
@@ -1072,28 +1055,37 @@ def dibujar_final(screen, final, t, jugadores=(), de_fondo=False):
                 if t > a:
                     escenas.oscurecer(screen, int(min(140, (t - a) / 6)))
         elif final == "quedarse":
+            # Como la derrota normal (las celdas), pero patrulla el
+            # Cambiaformas (Diego, nov 25: antes los aliens se amontonaban).
             if t < a:
-                _sala_final(screen, t, jugadores)
+                escenas._escena_celdas(screen, t, list(jugadores), patrulla="cambiaformas")
             else:
                 _feed_sigue(screen, t - a)
+        elif final == "liberados":
+            if t < a:
+                escenas._escena_escape(screen, t)
+            else:
+                _manana(screen, t - a)
         else:
             if t < a:
                 _guardia_final(screen, t)
             else:
                 escenas._escena_celdas(screen, t - a, list(jugadores))
                 _titular_falso(screen, t - a)
-        if t >= a - 1200 or final in ("sin_entrar",):
-            tramo = b / max(1, len(textos))
-            desde = a if final != "sin_entrar" else a - 1200
+        adelanto = ADELANTO_TEXTOS.get(final, 0)
+        if t >= a - max(1200, adelanto):
+            tramo = (b + adelanto) / max(1, len(textos))
+            desde = a - adelanto
             dentro = t - desde
             if dentro >= 0:
                 k = min(len(textos) - 1, int(dentro // tramo))
                 _subtitulo(screen, area, textos[k], dentro - k * tramo, tramo)
-        if t > a - 300 and t < a + 300 and final in ("quedarse", "nadie"):
+        if t > a - 300 and t < a + 300 and final in ("quedarse", "nadie", "liberados"):
             k = 1 - abs(t - a) / 300
             screen.blit(cache_dibujo.capa((w, h), (0, 0, 0, int(255 * k) // 8 * 8)), (0, 0))
         return
-    _frase(screen, FRASE_FINAL, t - a - b, c, ("dirección", "compartes"))
+    frase = FINALES[final].get("frase", FRASE_FINAL)
+    _frase(screen, frase, t - a - b, c, ("dirección", "compartes", "lugar"))
 
 
 def _noticia_viral(screen, t):
@@ -1125,6 +1117,65 @@ def _noticia_viral(screen, t):
         sup.blit(f2.render(f"Compartido {texto} veces", True, NX_VERDE), (12, y))
         sup.blit(f2.render("TENDENCIA #1 en el mundo", True, NX_MARCA), (12, y + f2.get_linesize() + 4))
     celular(screen, (area.centerx, int(area.height * 0.44)), alto, pintar, t)
+
+
+def _manana(screen, t, con_celular=True):
+    """El final "liberados": a la mañana siguiente, la niña de vuelta en su
+    cuarto; después, en el celular, la noticia de que volvieron."""
+    lienzo = Lienzo(screen)
+    _habitacion(lienzo.sup, t, de_dia=True, con_nina=True)
+    # La luz de la mañana que va subiendo.
+    _brillo(lienzo.sup, (46, 48), int(40 + 10 * _suave(t, 0, 3000)), (60, 50, 30))
+    lienzo.pegar()
+    if t < 700:
+        k = 1 - t / 700
+        screen.blit(cache_dibujo.capa(screen.get_size(), (0, 0, 0, int(255 * k) // 8 * 8)), (0, 0))
+    if not con_celular or t < 3600:
+        return
+    area = lienzo.area
+    sube = 1 - _suave(t, 3600, 800)
+    centro = (area.x + int(area.width * 0.76), area.centery + int(area.height * 0.02 + sube * area.height))
+    celular(screen, centro, int(area.height * 0.76), _noticia_volvieron, t - 3600)
+
+
+def _noticia_volvieron(sup, t):
+    sup.fill(NX_PANTALLA)
+    sw = sup.get_width()
+    y = _barra_estado(sup, "7:02")
+    y = _cabecera(sup, y, "@noticias.colombia", NX_MARCA, letra="N")
+    f = _f(max(10, sw * 0.058))
+    from screens.paneles import partir_lineas
+    y += 6
+    for linea in partir_lineas("Volvieron los niños desaparecidos. Dicen que unos agentes los sacaron de la nave.",
+                               f, sw - 20):
+        sup.blit(f.render(linea, True, NX_TEXTO), (10, y))
+        y += f.get_linesize()
+    # La foto: los niños, de pie, con el cielo de la mañana.
+    foto = pygame.Rect(8, y + 6, sw - 16, int(sw * 0.5))
+    _degradado(sup, foto, (150, 200, 240), (250, 220, 180))
+    pygame.draw.rect(sup, (110, 150, 110), (foto.x, foto.bottom - foto.height // 5, foto.width, foto.height // 5))
+    from data.historia import APAGADAS, SE_APAGA, CAPSULAS
+    vivos = [i for i in range(CAPSULAS) if i not in APAGADAS and i != SE_APAGA.get("capsula")]
+    for k, i in enumerate(vivos):
+        chico = arte.nino(i, despierto=True)
+        escala = foto.height * 0.62 / chico.get_height()
+        img = pygame.transform.scale(chico, (max(1, int(chico.get_width() * escala)), max(1, int(chico.get_height() * escala))))
+        sup.blit(img, img.get_rect(midbottom=(foto.x + int(foto.width * (k + 0.5) / len(vivos)), foto.bottom - 2)))
+    y = foto.bottom + 8
+    compartido = int(9_800_000 * _suave(t, 300, 4500))
+    f2 = _f(max(10, sw * 0.056))
+    sup.blit(f2.render(f"Compartido {compartido:,} veces".replace(",", "."), True, NX_VERDE), (10, y))
+    y += f2.get_linesize() + 8
+    # Lo de los agentes, más abajo (sale después).
+    if t > 2600:
+        tarjeta = pygame.Rect(6, y, sw - 12, int(sw * 0.3))
+        pygame.draw.rect(sup, NX_TARJETA, tarjeta, border_radius=8)
+        pygame.draw.circle(sup, (252, 209, 22), (tarjeta.x + 14, tarjeta.y + 14), 9)
+        sup.blit(f2.render("#NoVolvieron", True, NX_ROJO), (tarjeta.x + 28, tarjeta.y + 6))
+        ly = tarjeta.y + 6 + f2.get_linesize() + 2
+        for linea in partir_lineas("Los agentes se quedaron arriba para que ellos pudieran bajar.", f2, tarjeta.width - 14)[:2]:
+            sup.blit(f2.render(linea, True, NX_TEXTO), (tarjeta.x + 8, ly))
+            ly += f2.get_linesize()
 
 
 def _feed_sigue(screen, t):
@@ -1183,55 +1234,6 @@ def _titular_falso(screen, t):
     if img.get_width() > caja.width - 30:
         img = pygame.transform.smoothscale(img, (caja.width - 30, int(img.get_height() * (caja.width - 30) / img.get_width())))
     screen.blit(img, (caja.x + 18, caja.bottom - img.get_height() - 12))
-
-
-def _sala_final(screen, t, jugadores, quieta=False):
-    """El final "quedarse": los agentes entre las cápsulas, y los aliens que entran."""
-    lienzo = Lienzo(screen)
-    sup = lienzo.sup
-    w, h = BASE
-    _degradado(sup, pygame.Rect(0, 0, w, 120), (14, 20, 24), (26, 32, 40))
-    pygame.draw.rect(sup, (32, 36, 46), (0, 120, w, 60))
-    for x in range(0, w, 20):
-        pygame.draw.line(sup, (40, 44, 56), (x, 120), (x, 180))
-    for y in range(120, 180, 20):
-        pygame.draw.line(sup, (40, 44, 56), (0, y), (w, y))
-    # La alarma: todo se tiñe de rojo, cada vez más.
-    if not quieta:
-        rojo = pygame.Surface(BASE)
-        k = 0.5 + 0.5 * math.sin(t / 180)
-        rojo.fill((int(60 * k + 30 * min(1.0, t / 4000)), 0, 0))
-        sup.blit(rojo, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
-    lienzo.pegar()
-    s = lienzo.s
-    for k in range(5):
-        cap = arte.capsula(k, s * 0.75)
-        if cap is None:
-            continue
-        pie = lienzo.p(70 + k * 50, 132)
-        brillo = _guardar(("brillo_cap", int(cap.get_width())), lambda c=cap: _armar_brillo(int(c.get_width()), (20, 70, 40)))
-        screen.blit(brillo, brillo.get_rect(center=(pie[0], pie[1] - cap.get_height() // 2)), special_flags=pygame.BLEND_RGB_ADD)
-        screen.blit(cap, cap.get_rect(midbottom=pie))
-    roles = [getattr(j, "rol", None) for j in jugadores if getattr(j, "rol", None)] or list(ROLES[:2])
-    for k, rol in enumerate(roles):
-        img = _sprite(os.path.join("Imagenes", "Personajes", rol, f"{rol}_idle_south.png"), int(52 * s))
-        if img is not None:
-            screen.blit(img, img.get_rect(midbottom=lienzo.p(150 + (k - len(roles) / 2) * 34, 172)))
-    if quieta:
-        escenas_oscuras(screen, 120)
-        return
-    # Los aliens entran por la izquierda.
-    for k, (tipo, voz) in enumerate((("Alien_Rapido", 0), ("Alien_Vision", 1), ("Alien_Ciego", 2))):
-        u = _suave(t, 800 + k * 500, 3800)
-        cuadros = _hoja(os.path.join("Imagenes", "Aliens", tipo, f"{tipo}_walking_east.png"), int(60 * s))
-        if not cuadros:
-            continue
-        img = cuadros[int(t / 110) % len(cuadros)]
-        x = -30 + u * (110 - k * 22)
-        screen.blit(img, img.get_rect(midbottom=lienzo.p(x, 176 - k * 4)))
-    if t > 4600:
-        k = min(1.0, (t - 4600) / 1400)
-        screen.blit(cache_dibujo.capa(screen.get_size(), (120, 0, 0, int(160 * k) // 8 * 8)), (0, 0))
 
 
 def escenas_oscuras(screen, cuanto):

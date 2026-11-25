@@ -379,7 +379,6 @@ def _rayas(tam, horizontal):
     img = pygame.Surface(tam)
     img.fill(COLOR_SELLO)
     paso = 16
-    alto = tam[1] if horizontal else tam[0]
     for x in range(-tam[1] - tam[0], tam[0] + tam[1], paso):
         pygame.draw.polygon(img, COLOR_PELIGRO, [(x, 0), (x + paso // 2, 0),
                                                  (x + paso // 2 + tam[1], tam[1]), (x + tam[1], tam[1])])

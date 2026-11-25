@@ -1,7 +1,7 @@
 """Lo que se dibuja por las habilidades de los roles (ver acciones_rol.py).
 
 Todo es provisional en formas simples hasta que llegue el arte: terminales,
-paneles, piezas, el señuelo y la señal falsa. Cada función recibe el `dueño`
+paneles, piezas, el cepo y la señal falsa. Cada función recibe el `dueño`
 del viewport, porque varias cosas solo las ve un rol: las piezas solo el
 Forjador, el pulso de los demás solo la Biomante, las flechas hacia los aliens
 solo la Resonante.
@@ -125,7 +125,7 @@ def _dibujar_terminal(screen, offset, t, dueño, extras, tiempo_ms):
 
 
 def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
-    """Paneles, piezas, señuelos y señales (las terminales: `erguidos`)."""
+    """Paneles, piezas, cepos y señales (las terminales: `erguidos`)."""
     cerca = getattr(dueño, "estacion_cerca", None)
 
     for p in extras.get("paneles", ()):
@@ -181,8 +181,10 @@ def dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms):
             pygame.draw.circle(screen, COLOR_FORJADOR, (cx, cy), 8)
             pygame.draw.circle(screen, (40, 30, 10), (cx, cy), 3)
 
-    for senuelo in extras.get("senuelos", ()):
-        _ondas(screen, senuelo, offset, COLOR_FORJADOR, tiempo_ms, cuerpo=True)
+    for trampa in extras.get("trampas", ()):
+        x, y = trampa["pos"]
+        if camara.inflate(120, 120).collidepoint(x, y):
+            _dibujar_cepo(screen, (x - offset[0], y - offset[1]), trampa, tiempo_ms)
     for senal in extras.get("senales", ()):
         _ondas(screen, senal, offset, COLOR_RESONANTE, tiempo_ms, cuerpo=False)
 
@@ -195,19 +197,126 @@ def _ondas(screen, cosa, offset, color, tiempo_ms, cuerpo):
         capa = pygame.Surface((radio * 2 + 4, radio * 2 + 4), pygame.SRCALPHA)
         pygame.draw.circle(capa, (*color, int(200 * (1 - fase))), (radio + 2, radio + 2), radio, 3)
         screen.blit(capa, (cx - radio - 2, cy - radio - 2))
-    img = sprites_objetos.sprite("senuelo", 40) if cuerpo else None
+
+
+# -- El cepo del Forjador (Fabricación improvisada) ----------------------------------
+
+ESCALA_CEPO = 3
+_cepos = {}
+
+
+def _imagen_cepo(cerrado, luz):
+    """El cepo en pixel art (26x16, escalado), visto desde arriba: el aro de
+    acero con dientes hacia adentro, los resortes a los lados (con las
+    puntas naranjas del Forjador), una cadena y en el medio la placa que hay
+    que pisar, con el núcleo de tecnología alien (cian; `luz` 0..2 = qué tan
+    prendido). Cerrado, las dos mandíbulas se levantan y se muerden."""
+    clave = (cerrado, luz)
+    img = _cepos.get(clave)
     if img is not None:
-        screen.blit(img, img.get_rect(midbottom=(cx, cy + 12)))     # el radio que hace de señuelo
-    elif cuerpo:
-        pygame.draw.rect(screen, (60, 50, 30), (cx - 10, cy - 8, 20, 16), border_radius=3)
-        pygame.draw.rect(screen, color, (cx - 10, cy - 8, 20, 16), 2, border_radius=3)
-        pygame.draw.circle(screen, color, (cx, cy - 12), 3)
+        return img
+    w, h = 26, 16
+    s = pygame.Surface((w, h), pygame.SRCALPHA)
+    borde = (16, 16, 24)
+    acero, acero_luz, acero_osc = (170, 176, 192), (232, 236, 246), (100, 104, 122)
+    naranja = COLOR_FORJADOR
+    nucleo = [(60, 100, 120), (90, 200, 230), (190, 252, 255)][luz]
+    cx, cy = 13, 8
+    # La cadena con su estaca (abajo a la derecha).
+    for k in range(4):
+        s.fill(acero_osc if k % 2 else acero, (cx + 7 + k * 2, cy + 4 + k // 2, 2, 1))
+    s.fill(borde, (24, 13, 2, 3))
+    s.fill(acero_osc, (24, 13, 1, 2))
+    # Los resortes, a los lados.
+    for lado in (-1, 1):
+        x0 = cx + lado * 8
+        for k in range(4):
+            x = x0 + lado * k
+            s.fill(borde, (x, cy - 1, 1, 3))
+            s.fill(acero if k % 2 else acero_osc, (x, cy - (k % 2), 1, 1))
+        s.fill(naranja, (x0 + lado * 4 - (1 if lado < 0 else 0), cy - 1, 2, 2))
+    if not cerrado:
+        # El aro abierto: una elipse de acero con dientes hacia adentro.
+        for y in range(h):
+            for x in range(w):
+                dx, dy = (x + 0.5 - cx) / 7.5, (y + 0.5 - cy) / 6.0
+                d = dx * dx + dy * dy
+                if 0.62 <= d <= 1.0:
+                    s.set_at((x, y), acero_luz if dy < -0.2 else (acero if d < 0.85 else acero_osc))
+                elif 1.0 < d <= 1.25:
+                    s.set_at((x, y), borde)
+        import math as _m
+        for k in range(10):                               # dientes
+            a = k / 10 * 2 * _m.pi
+            x, y = cx + _m.cos(a) * 5.2, cy + _m.sin(a) * 4.0
+            s.fill(acero_luz, (int(x), int(y), 1, 1))
+        # La placa del medio.
+        s.fill(borde, (cx - 3, cy - 2, 6, 5))
+        s.fill((44, 48, 62), (cx - 2, cy - 1, 4, 3))
+        s.fill(nucleo, (cx - 1, cy, 2, 1))
+        if luz == 2:
+            s.fill((255, 255, 255), (cx - 1, cy, 1, 1))
+    else:
+        # Cerrado: las dos mandíbulas levantadas, mordiendo en el medio.
+        for lado in (-1, 1):
+            for y in range(1, 13):
+                ancho = 6 - abs(y - 7) // 2
+                x0 = cx if lado > 0 else cx - ancho
+                s.fill(borde, (x0 - (1 if lado < 0 else 0), y, ancho + 1, 1))
+                s.fill(acero if lado < 0 else acero_osc, (x0, y, ancho, 1))
+                s.fill(acero_luz, (x0 + (0 if lado < 0 else ancho - 1), y, 1, 1))
+        for y in range(2, 12, 2):                         # los dientes encajados
+            s.fill(acero_luz, (cx - 1, y, 1, 1))
+            s.fill(acero_luz, (cx, y + 1, 1, 1))
+        s.fill(nucleo, (cx - 1, 13, 2, 2))
+    img = pygame.transform.scale(s, (w * ESCALA_CEPO, h * ESCALA_CEPO))
+    _cepos[clave] = img
+    return img
+
+
+def _dibujar_cepo(screen, centro, trampa, tiempo_ms):
+    """En el piso: armado, el núcleo parpadea; cerrado (atrapó a uno), las
+    mandíbulas mordiendo y chispas eléctricas alrededor."""
+    cx, cy = int(centro[0]), int(centro[1])
+    cerrado = trampa.get("alien") is not None
+    if cerrado:
+        luz = 2 if (tiempo_ms // 90) % 2 else 1
+    else:
+        fase = (tiempo_ms + int(trampa["pos"][0]) * 7) % 1400
+        luz = 2 if fase < 160 else (1 if fase < 420 else 0)
+    img = _imagen_cepo(cerrado, luz)
+    efectos.sombra(screen, (cx, cy + img.get_height() // 2 - 4), img.get_width() * 0.9, 90)
+    if not cerrado and luz:
+        halo = cache_dibujo.circulo(70, (90, 220, 255, 30 * luz), 30)
+        screen.blit(halo, halo.get_rect(center=(cx, cy)))
+    screen.blit(img, img.get_rect(center=(cx, cy)))
+
+
+def _rayos_cepo(screen, centro, trampa, tiempo_ms):
+    """Encima del alien atrapado: rayitos cian que saltan del cepo."""
+    import random as _random
+    cx, cy = int(centro[0]), int(centro[1])
+    azar = _random.Random(int(tiempo_ms // 70) + int(trampa["pos"][0]))
+    for _ in range(3):
+        x, y = cx + azar.randint(-26, 26), cy - azar.randint(0, 10)
+        puntos = [(x, y)]
+        for _ in range(4):
+            x += azar.randint(-8, 8)
+            y -= azar.randint(8, 18)
+            puntos.append((x, y))
+        pygame.draw.lines(screen, (90, 200, 255), False, puntos, 3)
+        pygame.draw.lines(screen, (220, 250, 255), False, puntos, 1)
 
 
 # -- En el mundo, encima de los personajes ------------------------------------------
 
 def dibujar_encima(screen, offset, camara, dueño, extras, tiempo_ms):
-    """Pulso de los compañeros (Biomante) y rutas de los aliens (Interceptación)."""
+    """Pulso de los compañeros (Biomante), rutas de los aliens (Interceptación)
+    y los rayos del cepo sobre el alien atrapado."""
+    for trampa in extras.get("trampas", ()):
+        if trampa.get("alien") is not None and camara.inflate(120, 160).collidepoint(trampa["pos"]):
+            _rayos_cepo(screen, (trampa["pos"][0] - offset[0], trampa["pos"][1] - offset[1]),
+                        trampa, tiempo_ms)
     if _tiene(dueño, "VINCULO"):
         for otro in extras.get("jugadores", ()):
             if otro is dueño or getattr(otro, "escondido", False) or getattr(otro, "eliminado", False):

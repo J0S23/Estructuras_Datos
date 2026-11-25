@@ -9,6 +9,12 @@ acabar el contador (ni antes ni después); y cada final sale bien:
 
 - "quedarse" (más votos o empate), "escaparon" (más votos por la cápsula),
   "nadie" (nadie votó) y "sin_entrar" (escaparon sin entrar a la sala);
+- el baúl de la prisión: su código está en una nota normal, se abre (el
+  equivocado suena la alarma) y adentro está el martillo; con el martillo,
+  "quedarse" cambia por "liberar" y si gana: los aliens no llegan, quien lo
+  lleva rompe las cápsulas de los vivos, los niños se suben a la cápsula y
+  los agentes se quedan delante ("liberados"); si quien lo lleva queda
+  fuera, vuelve al baúl;
 - el reloj de la Feria no corre durante la votación;
 - en la ronda siguiente la pared vuelve a estar cerrada.
 
@@ -41,7 +47,7 @@ class Teclas(dict):
 pygame.key.get_pressed = lambda: Teclas()
 
 from juego import app as App, objetos_mapa, navegacion
-from data.historia import VOTACION, DESENLACE_MS, ABRIR_PARED_MS
+from data.historia import VOTACION, DESENLACE_MS, ABRIR_PARED_MS, ESCAPE
 from misiones.sala_secreta import geometria
 
 objetos_mapa.mapa_activo = lambda: "MapaFinal"
@@ -124,13 +130,28 @@ def entrar(g, sala):
     while sala.estado == "dialogo":
         cuadros(g, DT)
         dicho.update(j.mensaje for j in g.jugadores if j.mensaje)
+    # Hablaron: la votación no empieza hasta que alguien revise el celular.
+    assert sala.estado == "espera", sala.estado
+    cuadros(g, 1500)
+    assert sala.estado == "espera", "sin revisar el celular no empieza el conteo"
+    j1 = g.jugadores[0]
+    poner(j1, (sala.celular[0] - 30, sala.celular[1]))
+    cuadros(g, 50)
+    g._tecla_en_partida(j1.teclas["interactuar"][0])
+    assert (j1.panel or {}).get("tipo") == "celular_nino", j1.panel
+    cuadros(g, 300)
+    assert sala.estado == "espera", "mientras lee, todavía no"
+    g._tecla_en_partida(j1.teclas["interactuar"][0])       # lo cierra
+    cuadros(g, 50)
+    assert sala.estado == "votacion", sala.estado
     return dicho
 
 
 def votar(g, j, clave):
     """Con las teclas del jugador, como en el juego."""
-    quiere = [o["clave"] for o in VOTACION["opciones"]].index(clave)
-    while j.cursor % 2 != quiere:
+    claves = g.sala_secreta.claves
+    quiere = claves.index(clave)
+    while j.cursor % len(claves) != quiere:
         g._tecla_en_partida(j.teclas["derecha"][0])
     g._tecla_en_partida(j.teclas["interactuar"][0])
 
@@ -138,7 +159,10 @@ def votar(g, j, clave):
 def terminar(g, sala):
     while sala.estado == "votacion":
         cuadros(g, DT)
-    cuadros(g, DESENLACE_MS + 200)
+    ms = 0
+    while g.mision.resultado is None and ms < 20000:
+        cuadros(g, DT)
+        ms += DT
     return g.mision.final, g.mision.resultado
 
 
@@ -181,6 +205,10 @@ for j in g.jugadores:
 # Hablan de los niños y de lo que encontraron por el camino (2 pistas).
 from data.historia import PISTAS_EN_DIALOGO
 assert any("niños" in m for m in dicho), dicho
+# Con los niños no salen otros mensajes (NEXUS: "se volvió viral"...).
+j1 = g.jugadores[0]
+j1.avisar("¡Lo de la Biosfera se volvió viral!")
+assert j1.en_historia and j1.mensaje != "¡Lo de la Biosfera se volvió viral!", "no interrumpe la historia"
 assert any(PISTAS_EN_DIALOGO[2] in m for m in dicho), dicho
 distancias = {a.nombre: math.dist(a.centro, sala.pasillo.center) for a in g.aliens if sala.conduce(a)}
 assert distancias, "hay aliens que vienen"
@@ -211,11 +239,38 @@ abrir(g, sala)
 entrar(g, sala)
 votar(g, g.jugadores[0], "escapar")
 votar(g, g.jugadores[1], "escapar")
-votar(g, g.jugadores[2], "quedarse")
+# El tercero vota con el mando, como en el juego (Game._tecla_mando): con la
+# cruceta/stick escoge (antes izquierda/derecha se perdían) y A vota.
+j3 = g.jugadores[2]
+assert j3.esquema == 2, j3.esquema
+antes = j3.cursor % 2
+g._tecla_mando(j3.esquema, "derecha")
+assert j3.cursor % 2 != antes, "con el mando, derecha cambia de opción"
+g._tecla_mando(j3.esquema, "abajo")
+assert j3.cursor % 2 == antes, "y abajo también"
+while j3.cursor % 2 != 1:
+    g._tecla_mando(j3.esquema, "izquierda")
+g._tecla_mando(j3.esquema, "interactuar")
+assert sala.votos[2] == "quedarse", sala.votos
 cuadros(g, 50)
 assert sala.acortado and sala.quedan_ms <= max(VOTACION["segundos_si_votaron_todos"] * 1000,
                                                 sala.quedan_ms), "votaron todos: se acorta"
-final, resultado = terminar(g, sala)
+while sala.estado == "votacion":
+    cuadros(g, DT)
+assert sala.resultado == "escapar" and sala.a_la_capsula
+# Ganó escapar: los aliens no entran (se devuelven) y ellos caminan solos a la cápsula.
+cerca_sala = []
+ms = 0
+while g.mision.resultado is None and ms < 20000:
+    cuadros(g, DT)
+    ms += DT
+    cerca_sala += [a for a in g.aliens if sala.conduce(a) and sala.sala.collidepoint(a.centro)]
+final, resultado = g.mision.final, g.mision.resultado
+assert not cerca_sala, "ganó escapar: ningún alien entró a la sala"
+zona = g.mision.capsula.inflate(40, 40)
+assert all(zona.colliderect(j.hitbox) for j in g.jugadores[:2]), \
+    [j.hitbox.center for j in g.jugadores]
+print(f"escapar: caminaron solos a la cápsula en {ms / 1000:.1f} s")
 assert (final, resultado) == ("escaparon", "victoria"), (final, resultado)
 print("final con 2 contra 1 por escapar:", final)
 
@@ -237,11 +292,102 @@ final, resultado = terminar(g, sala)
 assert final == "quedarse", final
 print("final con empate:", final)
 
+# == 4b. El baúl, el martillo y "liberar" ======================================================
+from data.historia import BAUL, MARTILLO
+sala = partida(g)
+baul = sala.baul
+assert baul is not None, "MapaFinal tiene el baúl en la prisión"
+assert sala_en(g.salas, baul["rect"].center) == BAUL["sala"], sala_en(g.salas, baul["rect"].center)
+con_codigo = [n for n in g.mision.notas if baul["codigo"] in n["texto"]]
+assert len(con_codigo) == 1 and not con_codigo[0]["de_codigo"], "el código va en una nota normal"
+j1, j2 = g.jugadores[:2]
+poner(j1, (baul["rect"].centerx, baul["rect"].bottom + 30))
+cuadros(g, 50)
+assert j1.pista_mision == BAUL["pista"], j1.pista_mision
+g._tecla_en_partida(j1.teclas["interactuar"][0])
+assert (j1.panel or {}).get("accion") == "codigo_baul" and baul["codigo"] in j1.panel["codigos"], j1.panel
+malo = next(k for k, c in enumerate(j1.panel["codigos"]) if c != baul["codigo"])
+j1.cursor = malo
+g._tecla_en_partida(j1.teclas["interactuar"][0])
+assert not baul["abierto"], "con el código equivocado no abre"
+g._tecla_en_partida(j1.teclas["interactuar"][0])
+j1.cursor = j1.panel["codigos"].index(baul["codigo"])
+g._tecla_en_partida(j1.teclas["interactuar"][0])
+assert baul["abierto"] and baul["con_martillo"]
+g._tecla_en_partida(j1.teclas["interactuar"][0])
+assert "martillo" in j1.objetos and not baul["con_martillo"], "sacó el martillo"
+foto(g, "e_baul")
+# Si quien lo lleva queda fuera, vuelve al baúl.
+j1.objetos.clear()
+cuadros(g, 50)
+assert baul["con_martillo"], "el martillo volvió al baúl"
+poner(j2, (baul["rect"].centerx, baul["rect"].bottom + 30))
+cuadros(g, 50)
+g._tecla_en_partida(j2.teclas["interactuar"][0])
+assert "martillo" in j2.objetos
+abrir(g, sala)
+entrar(g, sala)
+assert sala.claves == ["escapar", "liberar"], "con el martillo, liberar en vez de quedarse"
+vivas = sala.vivas()
+assert vivas and not any(sala.rota(i) for i in vivas)
+votar(g, j1, "escapar")
+votar(g, j2, "liberar")
+while sala.estado == "votacion":
+    cuadros(g, DT)
+assert sala.resultado == "liberar", "empate: liberarlos (también es quedarse)"
+assert sala.fase_liberar == "romper" and sala.cola and set(sala.cola) == set(vivas), sala.cola
+ms, en_sala, vistos = 0, [], set()
+while g.mision.resultado is None and ms < 60000:
+    cuadros(g, DT)
+    ms += DT
+    en_sala += [a for a in g.aliens if sala.conduce(a) and sala.sala.collidepoint(a.centro)]
+    vistos |= {i for i in vivas if sala.posicion_nino(i) is not None}
+    if sala.fase_liberar == "capsula" and "f_ninos" not in vistos and sala.fase_ms > 3000:
+        vistos.add("f_ninos")
+        foto(g, "f_ninos")
+assert not en_sala, "ganó liberar: ningún alien entró a la sala"
+assert all(sala.rota(i) for i in vivas), "rompió las cápsulas de todos los vivos"
+assert all(i in vistos for i in vivas), "cada niño salió"
+assert all(sala.posicion_nino(i) is None for i in vivas), "todos se subieron a la cápsula"
+assert not any(j.preso for j in g.jugadores), "nadie los atrapó mientras tanto"
+zona = g.mision.capsula.inflate(160, 160)
+assert all(zona.colliderect(j.hitbox) for j in g.jugadores[:2]), "se quedaron delante de la cápsula"
+assert (g.mision.final, g.mision.resultado) == ("liberados", "victoria"), (g.mision.final, g.mision.resultado)
+print(f"liberar: rompieron {len(vivas)} cápsulas y los subieron en {ms / 1000:.1f} s")
+
+# Sin el martillo: la opción de siempre.
+sala = partida(g)
+abrir(g, sala)
+entrar(g, sala)
+assert sala.claves == ["escapar", "quedarse"], sala.claves
+votar(g, g.jugadores[0], "quedarse")
+final, _ = terminar(g, sala)
+assert final == "quedarse", final
+
 # == 5. Escapan sin entrar ====================================================================
 sala = partida(g)
 abrir(g, sala)
+# Con la sala abierta, llegar a la cápsula no basta: se confirma (Joseph, nov 24).
+poner(g.jugadores[0], g.mision.capsula.center)
+cuadros(g, 200)
+assert g.mision.resultado is None, "uno solo en la cápsula: no se van"
+j1 = g.jugadores[0]
+g._tecla_en_partida(j1.teclas["interactuar"][0])
+assert j1.panel is None and j1.mensaje, "falta el otro: avisa y no pregunta"
 for j in g.jugadores:
     poner(j, g.mision.capsula.center)
+cuadros(g, 200)
+assert g.mision.resultado is None, "todos en la cápsula: todavía no se van, falta confirmar"
+assert g.mision.pista(j1) == ESCAPE["pista"], g.mision.pista(j1)
+g._tecla_en_partida(j1.teclas["interactuar"][0])
+assert (j1.panel or {}).get("accion") == "escapar", j1.panel
+g._tecla_en_partida(j1.teclas["abajo"][0])          # "Todavía no"
+g._tecla_en_partida(j1.teclas["interactuar"][0])
+cuadros(g, 200)
+assert j1.panel is None and g.mision.resultado is None, "dijo que todavía no"
+g._tecla_en_partida(j1.teclas["interactuar"][0])
+assert j1.cursor == 0
+g._tecla_en_partida(j1.teclas["interactuar"][0])     # "Escapar ahora"
 cuadros(g, 200)
 assert (g.mision.final, g.mision.resultado) == ("sin_entrar", "victoria"), (g.mision.final, g.mision.resultado)
 print("final sin entrar:", g.mision.final)
@@ -251,20 +397,22 @@ sala = partida(g, feria=True)
 assert g.modo_feria and g.tiempo_restante_ms is not None, "la Feria tiene reloj"
 abrir(g, sala)
 entrar(g, sala)
-antes = g.tiempo_restante_ms
+assert g.tiempo_restante_ms >= sala.quedan_ms
+g.tiempo_restante_ms = 5000          # le quedaban 5 s a la partida: se alarga con la votación
 cuadros(g, 3000)
-assert g.tiempo_restante_ms == antes, "con los niños el reloj de la Feria se detiene"
+assert g.mision.resultado is None and g.tiempo_restante_ms == sala.quedan_ms > 0, \
+    ("el reloj de la partida se alarga hasta que se acaba la votación", g.tiempo_restante_ms, sala.quedan_ms)
 final, _ = terminar(g, sala)
 assert final == "nadie", final
-print("feria: el reloj se detuvo y terminó con", final)
+print("feria: el reloj se alargó con la votación y terminó con", final)
 
 # == 7. La escena de cada final se dibuja ======================================================
 from screens import final as escenas
 pantalla = pygame.Surface((1280, 720))
-for clave in ("sin_entrar", "escaparon", "quedarse", "nadie"):
+for clave in ("sin_entrar", "escaparon", "quedarse", "nadie", "liberados"):
     total = escenas.intro_ms(clave)
     for t in range(0, total + 2000, 900):
-        escenas.dibujar(pantalla, clave in ("sin_entrar", "escaparon"), t, g.jugadores, clave)
+        escenas.dibujar(pantalla, clave in ("sin_entrar", "escaparon", "liberados"), t, g.jugadores, clave)
     escenas.dibujar(pantalla, False, 500, g.jugadores, clave, de_fondo=True)
     pygame.image.save(pantalla, os.path.join(CARPETA, f"final_{clave}.png"))
 print("escenas de los finales: OK")
