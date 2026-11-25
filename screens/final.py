@@ -638,8 +638,26 @@ def _escena_celdas(screen, t, jugadores):
 
 # ===========================================================================================
 
-def dibujar(screen, victoria, t, jugadores=()):
-    """La escena del final en todo `screen` en el tiempo `t` (ms)."""
+def intro_ms(final_historia=None):
+    """Cuánto se ve la escena sola antes de los resultados. Los finales de la
+    sala oculta (mision.final) son más largos: tienen su historia y la frase."""
+    if final_historia:
+        from screens import cinematica
+        ms = cinematica.intro_final_ms(final_historia)
+        if ms:
+            return ms
+    return INTRO_MS
+
+
+def dibujar(screen, victoria, t, jugadores=(), final_historia=None, de_fondo=False):
+    """La escena del final en todo `screen` en el tiempo `t` (ms). Con
+    `final_historia` (mision.final: "sin_entrar", "escaparon", "quedarse",
+    "nadie"), la de ese final (screens/cinematica.py)."""
+    if final_historia:
+        from screens import cinematica
+        if final_historia in cinematica.TIEMPOS_FINAL:
+            cinematica.dibujar_final(screen, final_historia, t, jugadores, de_fondo=de_fondo)
+            return
     if victoria:
         _escena_escape(screen, t)
     else:

@@ -1864,3 +1864,186 @@ TEXTOS = {
         "Something went wrong and we went back to the menu (it was logged in Guardado/errores.txt).",
     "Reiniciado (F12 F12).": "Restarted (F12 F12).",
 }
+
+# -- La historia de los niños (data/historia.py, misiones/sala_secreta.py,
+# screens/sala_secreta.py, screens/cinematica.py) ---------------------------------------
+TEXTOS.update({
+    "H: ver la historia": "H: watch the story",
+    # La cinemática de apertura.
+    "Una habitación a oscuras. 11:47 p. m.": "A dark bedroom. 11:47 p.m.",
+    "Una niña de 11 años chatea en NEXUS con la cuenta de su cantante favorita.":
+        "An 11-year-old girl chats on NEXUS with her favorite singer's account.",
+    "Le escribe su dirección y la envía.": "She types her address and sends it.",
+    "Esa misma semana, en otras pantallas.": "That same week, on other screens.",
+    "Un niño comparte su ubicación en vivo para entrar a un reto.":
+        "A boy shares his live location to join a challenge.",
+    "Otro sube una foto con el uniforme y el nombre de su colegio.":
+        "Another posts a photo with his uniform and his school's name.",
+    "A otro, una cuenta nueva le escribe: \"No le cuentes a tus papás\".":
+        "Another gets a message from a new account: \"Don't tell your parents\".",
+    "Esa noche.": "That night.",
+    "Una luz verde cae sobre cada una de esas casas.": "A green light falls on each of those houses.",
+    "A la mañana siguiente hay camas vacías y un celular en el piso.":
+        "The next morning there are empty beds and a phone on the floor.",
+    "Un mes después.": "A month later.",
+    "Desaparecen cientos de niños en todo el mundo, pero en NEXUS nadie habla de ellos.":
+        "Hundreds of children vanish around the world, but nobody on NEXUS talks about them.",
+    "Lo que se publica sobre ellos se borra en minutos.": "Whatever is posted about them is deleted within minutes.",
+    "Una sala del gobierno de Colombia.": "A room in the Colombian government.",
+    "Los famosos de NEXUS dicen lo mismo a la misma hora. Una nave invisible orbita la Tierra.":
+        "NEXUS celebrities all say the same thing at the same time. An invisible ship orbits the Earth.",
+    "Arman una misión secreta con cuatro agentes. Ellos tampoco saben qué van a encontrar.":
+        "They put together a secret mission with four agents. They don't know what they'll find either.",
+    "Allá arriba, la mentira también tiene cuenta.": "Up there, lies have an account too.",
+    "¡¡Hola!! ¿De verdad eres Luna?": "Hiii!! Are you really Luna?",
+    "¡Claro! ¡Ganaste una entrada al concierto!": "Of course! You won a ticket to the concert!",
+    "Solo dime dónde vives para mandártela.": "Just tell me where you live so I can send it.",
+    "Calle 14 # 22-31, apto 302": "14th St # 22-31, apt 302",
+    "Gracias por compartir.": "Thanks for sharing.",
+    "[ENTER] saltar": "[ENTER] skip",
+    "Enviado": "Sent",
+    "Enviando...": "Sending...",
+    "NEXUS · ahora": "NEXUS · now",
+    "Compartir ubicación": "Share location",
+    "en vivo": "live",
+    "COLEGIO SAN MARTÍN": "SAN MARTÍN SCHOOL",
+    "¡Primer día! Grado 5B": "First day! 5th grade B",
+    "Vi tus videos. Eres muy talentoso.": "I saw your videos. You're really talented.",
+    "Te puedo ayudar a ser famoso.": "I can help you get famous.",
+    "No le cuentes a tus papás, es nuestro secreto.": "Don't tell your parents, it's our secret.",
+    "Esta publicación fue eliminada.": "This post was deleted.",
+    "NIÑOS DESAPARECIDOS": "MISSING CHILDREN",
+    "en todo el mundo": "worldwide",
+    "TENDENCIAS": "TRENDING",
+    "¡Nuevo reto! Graba tu baile con #RetoGalaxia": "New challenge! Record your dance with #RetoGalaxia",
+    "Mi hija Sofía no volvió a casa. Tiene 11 años. Por favor compartan.":
+        "My daughter Sofía didn't come home. She's 11. Please share.",
+    "Lo que pasó anoche en la gala... no lo van a creer": "What happened at the gala last night... you won't believe it",
+    "Tres de mis alumnos no han vuelto al colegio. ¿Alguien sabe algo?":
+        "Three of my students haven't come back to school. Does anyone know anything?",
+    "¡Gracias por tanto amor! Nos vemos en el concierto": "Thank you for all the love! See you at the concert",
+    "Dicen que los niños se escaparon de casa. Típico de esta generación.":
+        "They say the kids ran away from home. Typical of this generation.",
+    "¿Alguien ha visto a Mateo? Desapareció el martes.": "Has anyone seen Mateo? He went missing on Tuesday.",
+    "Nuevo look, ¿qué opinan?": "New look, what do you think?",
+    "MISIÓN SECRETA": "SECRET MISSION",
+    "Para ti": "For you",
+    # La sala oculta.
+    "Sala oculta": "Hidden room",
+    "¿Escucharon eso? Algo se abrió en la pared, al lado de la cápsula...":
+        "Did you hear that? Something opened in the wall, next to the capsule...",
+    "¿Quién abrió esa puerta? Nadie debía ver lo que hay ahí.": "Who opened that door? No one was supposed to see what's in there.",
+    "Intrusos en la sala de cría. Todas mis unidades: vayan por ellos.":
+        "Intruders in the nursery. All my units: go get them.",
+    "Son niños... están dormidos. Todavía respiran.": "They're children... they're asleep. They're still breathing.",
+    "Son los niños desaparecidos. Los de las noticias que NEXUS borraba.":
+        "They're the missing children. The ones from the news NEXUS kept deleting.",
+    "Esa niña tiene el celular en la mano. Le escribieron haciéndose pasar por alguien famoso.":
+        "That girl still has her phone in her hand. Someone messaged her pretending to be a celebrity.",
+    "¡A la cápsula, ya! ¡Corran!": "To the capsule, now! Run!",
+    "No los vamos a dejar solos.": "We're not leaving them alone.",
+    "Revisar la mochila": "Check the backpack",
+    "Revisar el zapato": "Check the shoe",
+    "Mirar el dibujo": "Look at the drawing",
+    "Una mochila de colegio, con llaveros y un cuaderno de matemáticas. ¿Qué hace esto en una nave alien?":
+        "A school backpack, with keychains and a math notebook. What is this doing on an alien ship?",
+    "Un zapato pequeño, de niño. Está sucio, como si lo hubieran arrastrado.":
+        "A small kid's shoe. It's dirty, as if someone had been dragged.",
+    "Un dibujo con crayones tirado en el piso: una casa, una familia y una luz verde en el cielo.":
+        "A crayon drawing on the floor: a house, a family and a green light in the sky.",
+    # La votación y la alarma.
+    "¿QUÉ HACEMOS?": "WHAT DO WE DO?",
+    "Correr a la cápsula": "Run to the capsule",
+    "Escapar sabiendo lo que pasa con los niños": "Escape knowing what's happening to the children",
+    "Quedarnos con ellos": "Stay with them",
+    "No dejarlos solos, aunque nos alcancen": "Not leave them alone, even if they catch us",
+    "Gana lo que más voten. Empate: se quedan. Si nadie vota, la nave decide.":
+        "Most votes wins. Tie: you stay. If nobody votes, the ship decides.",
+    "¡ALERTA!": "ALERT!",
+    "LOS ALIENS VIENEN": "THE ALIENS ARE COMING",
+    "¡ALERTA!  LOS ALIENS VIENEN": "ALERT!  THE ALIENS ARE COMING",
+    "¡YA!": "NOW!",
+    "TU VOTO": "YOUR VOTE",
+    "VOTOS {}/{}": "VOTES {}/{}",
+    "escoger": "choose",
+    "votar": "vote",
+    "cambiar el voto": "change your vote",
+    # Los finales.
+    "¡ESCAPARON DE LA NAVE!": "YOU ESCAPED THE SHIP!",
+    "Escaparon sin entrar a la sala oculta.": "You escaped without entering the hidden room.",
+    "Los famosos alienígenas quedan expuestos y NEXUS deja de ser la voz de la nave.":
+        "The alien celebrities are exposed and NEXUS stops being the ship's voice.",
+    "Pero nunca sabrán lo que había detrás de esa pared.": "But you'll never know what was behind that wall.",
+    "Y los niños siguen arriba.": "And the children are still up there.",
+    "ESCAPARON... SIN ELLOS": "YOU ESCAPED... WITHOUT THEM",
+    "Votaron por correr a la cápsula y salieron vivos con lo que vieron.":
+        "You voted to run to the capsule and got out alive with what you saw.",
+    "Por primera vez, NEXUS habla de los niños.": "For the first time, NEXUS talks about the children.",
+    "La noticia es real, y millones de personas la comparten.": "The news is real, and millions of people share it.",
+    "Los niños siguen arriba, pero ya nadie puede esconderlos.": "The children are still up there, but no one can hide them anymore.",
+    "SE QUEDARON CON LOS NIÑOS": "YOU STAYED WITH THE CHILDREN",
+    "Votaron por quedarse. Los aliens los alcanzaron junto a los niños.":
+        "You voted to stay. The aliens caught you next to the children.",
+    "Los aliens los alcanzan junto a las cápsulas.": "The aliens catch them next to the capsules.",
+    "La pantalla se apaga y NEXUS sigue publicando como si nada.": "The screen goes dark and NEXUS keeps posting as if nothing happened.",
+    "En la Tierra nadie sabrá nunca lo que encontraron.": "On Earth, no one will ever know what they found.",
+    "NADIE DECIDIÓ": "NOBODY DECIDED",
+    "Se acabó el tiempo sin votos: el Guardia soltó la fruta y destruyó la cápsula.":
+        "Time ran out with no votes: the Guard dropped the fruit and destroyed the capsule.",
+    "Nadie decidió. Se quedaron en la nave.": "Nobody decided. They stayed on the ship.",
+    "El Guardia de la Bahía suelta la fruta y destruye la cápsula.": "The Bay Guard drops the fruit and destroys the capsule.",
+    "Los capturan a todos. NEXUS publica: \"Agentes colombianos difundían noticias falsas\".":
+        "They're all captured. NEXUS posts: \"Colombian agents were spreading fake news\".",
+    "Ellos compartieron su dirección. Tú decides qué compartes.": "They shared their address. You decide what you share.",
+    "Los niños desaparecidos están en la nave. Lo vimos.": "The missing children are on the ship. We saw them.",
+    "Compartido {} veces": "Shared {} times",
+    "TENDENCIA #1 en el mundo": "#1 TRENDING worldwide",
+    "NEXUS · ÚLTIMA HORA": "NEXUS · BREAKING NEWS",
+    "Agentes colombianos difundían noticias falsas": "Colombian agents were spreading fake news",
+    "¡GRRRAAAH!": "GRRRAAAH!",
+    # Los que no lo lograron (data/historia.py: SE_APAGA, CELULAR_NINO, REGENERAR).
+    "Esa luz estaba prendida hace un momento...": "That light was on just a moment ago...",
+    "Sujeto 23: sin señal. Archivado.": "Subject 23: no signal. Archived.",
+    "Revisar el celular": "Check the phone",
+    "Regenerar la cápsula": "Regenerate the capsule",
+    "Lo intento... pero mi regeneración ya no encuentra nada que curar.":
+        "I'm trying... but my regeneration can't find anything left to heal.",
+    "martes 14 de mayo": "Tuesday, May 14",
+    "47 llamadas perdidas": "47 missed calls",
+    "Mamá": "Mom",
+    "Teléfono": "Phone",
+    "¿Dónde estás, mi amor?": "Where are you, sweetheart?",
+    "Contéstame, por favor": "Answer me, please",
+    "Ya pusimos la denuncia": "We already filed the police report",
+    "Tu hermanito pregunta por ti": "Your little brother keeps asking about you",
+    "Te dejé la luz del cuarto prendida": "I left your bedroom light on for you",
+    "y {} más": "and {} more",
+    "cerrar": "close",
+    # (las palabras de las frases finales que fallan como glitch)
+    "mentira": "lies",
+    "dirección": "address",
+    "compartes": "share",
+})
+
+
+def _lineas_con_pistas():
+    """La última línea del diálogo de los niños lleva lo que encontraron por
+    el camino (data/historia.PISTAS_EN_DIALOGO): las cuatro versiones."""
+    from data.historia import DIALOGO_NINOS, PISTAS_EN_DIALOGO
+    ingles = {
+        3: "The backpack, the shoe, the drawing... they were theirs.",
+        2: "What we found on the ship was theirs.",
+        1: "What we found on the ship belonged to one of them.",
+        0: "That's why nobody talked about them on NEXUS.",
+    }
+    resto_en = "The capsules won't open: they're welded to the ship."
+    for d in DIALOGO_NINOS:
+        if "{pistas}" not in d["texto"]:
+            continue
+        resto = d["texto"].replace("{pistas}", "").strip()
+        for n, frase in PISTAS_EN_DIALOGO.items():
+            TEXTOS[d["texto"].replace("{pistas}", frase).strip()] = (ingles[n] + " " + resto_en).strip()
+        TEXTOS[resto] = resto_en
+
+
+_lineas_con_pistas()

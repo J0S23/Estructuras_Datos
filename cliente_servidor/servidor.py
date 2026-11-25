@@ -103,7 +103,8 @@ INFORME_CADA_S = 60.0         # cada cuánto escribe en la consola cómo va (ren
 # estado.atributos (solo sus datos), las listas elemento por elemento.
 OBJETOS = {"m": "mision", "ev": "eventos", "eq": "equipo", "nx": "nexus", "inf": "infiltrado",
            "gp": "guardia_planta", "tut": "tutorial", "nar": "narrador", "lg": "logros",
-           "pr": "presentacion", "npc": "npcs", "cf": "cambiaformas"}
+           "pr": "presentacion", "npc": "npcs", "cf": "cambiaformas",
+           "ss": "sala_secreta"}      # la sala oculta de los niños (misiones/sala_secreta.py)
 LISTAS = {"pz": "piezas", "te": "terminales", "pa": "paneles", "sn": "senuelos", "sl": "senales",
           "pd": "puertas_dobles", "cp": "compuertas", "es": "escondites"}
 DEL_JUEGO = ("tiempo_jugado_ms", "tiempo_restante_ms", "oscuridad", "mostrar_arbol_alien",

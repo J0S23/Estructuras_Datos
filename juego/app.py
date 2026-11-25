@@ -94,6 +94,7 @@ from juego.presentacion_aliens import PresentacionAliens
 from screens.presentacion_aliens import render_presentacion
 from juego.dificultad import Dificultad
 from entidades.cambiaformas import Cambiaformas, cuadros_transformacion
+from misiones import sala_secreta
 from entidades.sombra import Sombra
 from data.npcs import NPCS_POR_PARTIDA
 from misiones.logros import GestorLogros
@@ -142,7 +143,7 @@ VOLUMEN_MENU_OK = 0.6
 # van la victoria / derrota). Al entrar a la partida se apaga de a poco y entra
 # la de la nave (musica_calma).
 VOLUMEN_MUSICA_MENU = 0.35
-SIN_MUSICA_MENU = {"resultados"}
+SIN_MUSICA_MENU = {"resultados", "intro"}
 
 # Lo que cuesta que te atrape un alien.
 PUNTOS_POR_SER_ATRAPADO = 10
@@ -304,6 +305,8 @@ class Game:
         self.tiempo_jugado_ms = 0  # cronómetro de la partida (no hay límite)
         self.cambiaformas = None  # el alien que se disfraza de ellos (cambiaformas.py)
         self.guardia_planta = None  # el Guardia de la Bahía y la planta (misiones/guardia.py)
+        self.sala_secreta = None    # la sala oculta de los niños (misiones/sala_secreta.py)
+        self.intro = None           # la cinemática de apertura (screens/cinematica.py)
         self.muebles = []       # la decoración del mapa (juego/decoracion.py)
         self.sombra = None        # el alien de los apagones (sombra.py); en self.aliens solo a oscuras
         self._apagon_ms = 0
@@ -442,6 +445,11 @@ class Game:
         # confianza y del aviso del evento (o en el panel del equipo).
         centro_x, arriba, ancho_max = dibujo_celular.columna_avisos(screen, len(dueños), self.nexus)
         arriba += alto_evento(self.eventos, ancho_max)
+        # La alarma de la sala oculta (el contador de la votación), y la IA debajo.
+        from screens import sala_secreta as dibujo_sala
+        caja = dibujo_sala.render_alarma(screen, self.sala_secreta, centro_x, arriba, ancho_max)
+        if caja is not None:
+            arriba = caja.bottom + 40
         self.narrador.dibujar(screen, centro_x, arriba, ancho_max)
         render_terminales_encima(screen, self.jugadores, dueños)
         if self.pausa is None and self.presentacion is not None and self.presentacion.abierta:
@@ -717,6 +725,10 @@ class Game:
         # La Feria (juego/feria.py): una consola, sin el Guardia ni la puerta
         # para dos... fuera del mapa antes de armar nada.
         feria.recortar_objetos(self, self.objetos, self.mundo)
+        # La sala oculta de los niños (si este mapa tiene): su hueco se talla
+        # en las paredes antes de los muebles y de la navegación.
+        sala_secreta.tallar(self.mundo)
+        sala_secreta.apartar_decoracion(self.objetos, self.mundo)
         self.salas = salas_mapa.preparar(self.objetos, self.mundo)
         # Los muebles de la decoración: sus hitboxes pasan a ser parte del mapa
         # ANTES de armar nada más (rutas, puntos de paseo, navegación).
@@ -787,6 +799,11 @@ class Game:
         self.compuertas = puertas.crear_compuertas(self.objetos, self.mundo)
         # El Guardia de la cápsula (entra a self.aliens) y la planta de la Biosfera.
         self.guardia_planta = GuardiaYPlanta(self, self.objetos)
+        # La sala oculta: se abre con la cápsula lista (y las pistas del camino).
+        self.sala_secreta = sala_secreta.SalaSecreta(self, self.objetos)
+        if self.sala_secreta.activa:
+            from screens import sala_secreta as dibujo_sala
+            dibujo_sala.precalentar(self.sala_secreta)
         self._nuevo_ambiente()
         self.tutorial, self.eventos = None, None
         self.nexus = RedNexus(self) if self.mision.activa else None
@@ -1327,6 +1344,10 @@ class Game:
             if self.mision is not None and self.mision.activa:
                 jugador.objetivo = self.mision.objetivo()
                 jugador.pista_mision = self.mision.pista(jugador)
+            if self.sala_secreta is not None and not jugador.pista_mision:
+                pista_sala = self.sala_secreta.pista(jugador)
+                if pista_sala:
+                    jugador.pista_mision = pista_sala
             if self.guardia_planta is not None and not jugador.preso:
                 pista_guardia = self.guardia_planta.pista(jugador)
                 if pista_guardia:
@@ -1411,10 +1432,13 @@ class Game:
             oido = dificultad.valor(self, "oido_aliens", 1.0)
             for alien in self.aliens:
                 alien.ajuste_vel, alien.ajuste_vision, alien.ajuste_oido = vel, vision, oido
+            sala = self.sala_secreta
             for alien in self.aliens:
+                if sala is not None and sala.conduce(alien):
+                    continue         # (los niños: los mueve la sala oculta)
                 alien.actualizar(dt, self.mundo, self.jugadores, self._atrapar,
                                  self.escondites, self._alien_revisa)
-            if self.eventos is not None:
+            if self.eventos is not None and not (sala is not None and sala.en_secuencia):
                 self.eventos.actualizar(dt)
         if self.npcs is not None:
             self.npcs.actualizar(dt)
@@ -1437,8 +1461,12 @@ class Game:
         self._actualizar_ambiente(dt)
         if self.logros is not None:
             self.logros.actualizar(dt)
-        if self.presentacion is not None:
+        secuencia = self.sala_secreta is not None and self.sala_secreta.en_secuencia
+        if self.presentacion is not None and not secuencia:
             self.presentacion.revisar()
+        if self.sala_secreta is not None:
+            self.sala_secreta.actualizar(dt)
+            secuencia = self.sala_secreta.bloquea_fin()
 
         if self.mision is not None:
             self.mision.actualizar(dt)
@@ -1446,7 +1474,8 @@ class Game:
                 self.terminar_ronda()
                 return
 
-        if not en_tutorial:
+        if not en_tutorial and not secuencia:
+            # (con los niños el reloj de la Feria se detiene: el final no se corta)
             self.tiempo_jugado_ms += dt
             if self.tiempo_restante_ms is not None:
                 self.tiempo_restante_ms -= dt
@@ -1465,6 +1494,7 @@ class Game:
             "puertas_dobles": self.puertas_dobles, "compuertas": self.compuertas,
             "eventos": self.eventos, "tutorial": self.tutorial, "infiltrado": self.infiltrado,
             "guardia_planta": self.guardia_planta,
+            "sala_secreta": self.sala_secreta,
             "muebles": getattr(self, "muebles", ()),
             # Campo de visión siempre; la oscuridad de la linterna, solo en un apagón.
             "vision": self.oscuridad,
@@ -1747,6 +1777,10 @@ class Game:
         se revisa primero y su rama sí hacía `continue`.
         """
         for jugador in self.jugadores:
+            # La votación de la sala oculta va antes que todo (también vota el
+            # que está en una celda): misiones/sala_secreta.py.
+            if self.sala_secreta is not None and self.sala_secreta.tecla(jugador, key):
+                return
             # Escondido manda sobre todo lo demás: la tecla de interactuar es
             # la del minijuego si un alien lo está revisando, y si no, la de
             # salir. Mientras está metido no abre habilidades ni zonas (el celular sí).
@@ -1866,6 +1900,8 @@ class Game:
                         return
                     if self.guardia_planta is not None and self.guardia_planta.interactuar(jugador):
                         return
+                    if self.sala_secreta is not None and self.sala_secreta.interactuar(jugador):
+                        return
                     if self.mision is not None and self.mision.interactuar(jugador):
                         return
                     if self.infiltrado is not None and self.infiltrado.interactuar(jugador):
@@ -1956,6 +1992,7 @@ class Game:
             else:
                 self._actualizar_partida(dt)
         self._actualizar_carga(dt)
+        self._actualizar_intro(dt)
         self._actualizar_demo(dt)
         self.transitions.update(self, dt)
         t1 = time.perf_counter()
@@ -1971,6 +2008,24 @@ class Game:
                                          "actualizar": (t1 - t0) * 1000,
                                          "dibujar": (t2 - t1) * 1000,
                                          "flip": (time.perf_counter() - t2) * 1000})
+
+    # -- La cinemática de apertura (screens/cinematica.py) -----------------------------------
+
+    def abrir_intro(self):
+        """La historia de los niños antes del menú (main.py), o con [H] desde el menú."""
+        from screens.cinematica import Cinematica
+        self.intro = Cinematica(sonar=self.sonar)
+        self.current_screen = "intro"
+
+    def _actualizar_intro(self, dt):
+        if self.current_screen != "intro":
+            return
+        if self.intro is None or self.intro.terminada:
+            self.intro = None
+            if self.transitions.is_idle():
+                self.transitions.request(self, "menu")
+            return
+        self.intro.actualizar(dt)
 
     # -- La pantalla de atracción (juego/demo.py) ------------------------------------------
 
@@ -2141,8 +2196,13 @@ class Game:
             audio_manager.bucle("ambiente", volumen)
             # Encima, la música: de tensión si un alien persigue a alguien, en
             # un apagón o en la huida a la cápsula; si no, la tranquila.
-            audio_manager.musica("musica_tension" if self._hay_tension() else "musica_calma",
-                                 0.1 if self.pausa is not None else 0.3)
+            sala = self.sala_secreta
+            if sala is not None and sala.estado == "dialogo":
+                # Al ver a los niños: la música tranquila, bajita.
+                audio_manager.musica("musica_calma", 0.08 if self.pausa is not None else 0.2)
+            else:
+                audio_manager.musica("musica_tension" if self._hay_tension() else "musica_calma",
+                                     0.1 if self.pausa is not None else 0.3)
         else:
             if audio_manager.sonando_bucle:
                 audio_manager.parar_bucle()
@@ -2175,6 +2235,13 @@ class Game:
                 self._menu_quieto_ms = 0        # (alguien está ahí: nada de demo)
             if evento.type == pygame.QUIT:
                 self.running = False
+            elif self.current_screen == "intro" and self.intro is not None:
+                # La cinemática de apertura: cualquier tecla, botón o clic la salta.
+                if evento.type in EVENTOS_SALIR_DEMO:
+                    self.intro.saltar()
+                elif evento.type in EVENTOS_CONEXION:
+                    self.mandos.evento(evento)
+                    self._sincronizar_mandos()
             elif self.demo is not None and evento.type in EVENTOS_SALIR_DEMO:
                 # Cualquier tecla, botón o clic: de la demo al menú, a jugar.
                 self.salir_demo()
@@ -2387,6 +2454,8 @@ class Game:
             elif key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 self.sonar("menu_ok", VOLUMEN_MENU_OK)
                 self._activar_opcion_menu(self.menu_buttons[self.menu_selected].action)
+            elif key == pygame.K_h:
+                self.abrir_intro()          # la cinemática de la historia otra vez
             elif key == pygame.K_ESCAPE:
                 self.running = False
 
@@ -2723,7 +2792,12 @@ class Game:
     # -- Dibujo -----------------------------------------------------------------
 
     def _dibujar(self):
-        if self.current_screen == "cargando":
+        if self.current_screen == "intro":
+            if self.intro is not None:
+                self.intro.dibujar(self.screen)
+            else:
+                self.screen.fill((0, 0, 0))
+        elif self.current_screen == "cargando":
             from screens.carga import render_carga
             carga = self.carga or self.carga_final or {}
             render_carga(self.screen, carga.get("ms", self.MIN_CARGA_MS), self._progreso_carga(),
@@ -2810,4 +2884,6 @@ class Game:
 
 
 if __name__ == "__main__":
-    Game().run()
+    juego = Game()
+    juego.abrir_intro()
+    juego.run()

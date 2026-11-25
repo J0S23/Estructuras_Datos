@@ -235,6 +235,10 @@ class Mision:
         # "atrapados" (todos encerrados), "eliminados" (sin vidas) o
         # "terminaron" (Terminar partida en la pausa).
         self.motivo_fin = None
+        # El final de la historia (data/historia.FINALES; misiones/sala_secreta.py):
+        # "sin_entrar", "escaparon", "quedarse" o "nadie". None = el de siempre
+        # (un mapa sin sala oculta).
+        self.final = None
 
         # Puertas con código: {"rect", "codigo", "abierta", "nombre", "color",
         # "candidatas"}. La primera es la de la prisión (fase 1).
@@ -1276,11 +1280,16 @@ class Mision:
         if self.fase == "sabotaje" and self.consolas and all(c["progreso"] >= 1 for c in self.consolas):
             self.fase = "capsula"
             self._avisar_todos("Navegación apagada. Ahora, a la cápsula.", COLOR_BIEN)
+        sala = getattr(self.juego, "sala_secreta", None)
+        if sala is not None and sala.bloquea_fin():
+            return          # (los niños: la votación decide cómo termina)
         if self.fase == "huida":
             zona = self.capsula.inflate(60, 60)
             if all(not j.preso and zona.colliderect(j.hitbox) for j in jugadores):
                 self.resultado = "victoria"
                 self.motivo_fin = "escaparon"
+                if sala is not None and sala.activa and sala.se_abrio and not sala.entraron:
+                    self.final = "sin_entrar"
                 for j in jugadores:
                     j.sumar_puntos(PUNTOS_ESCAPE // max(1, len(jugadores)))
 

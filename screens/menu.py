@@ -238,7 +238,7 @@ def render_menu(screen, botones=None, seleccionado=0):
             hover = boton.contains(mouse_pos) or i == seleccionado
             boton.draw(screen, hover=hover)
 
-    pista = "Mouse o flechas + Enter"
+    pista = "Mouse o flechas + Enter   ·   H: ver la historia"
     etiqueta = fuente("small").render(pista, True, COLOR_PISTA)
     sombra = fuente("small").render(pista, True, COLOR_SOMBRA_PISTA)
     rect = etiqueta.get_rect(center=(screen.get_width() // 2, screen.get_height() - 34))

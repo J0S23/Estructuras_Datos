@@ -11,10 +11,22 @@ Eventos que usa el juego (ia_nave.py):
     fin_evento, puerta_doble, luz, sello, eliminado, curacion,
     prueba, infiltrado_expuesto, acusacion_falsa, rumor, desmentido, planos, cambiaformas,
     sabotaje, prisionero_rescatado, dificultad_sube, dificultad_baja,
-    sombra, sombra_linterna, guardia_distraido, guardia_come, planta
+    sombra, sombra_linterna, guardia_distraido, guardia_come, planta,
+    sala_abierta, sala_alarma, sala_archivado
 """
 
 FRASES = {
+    # La sala oculta de los niños (misiones/sala_secreta.py, data/historia.py).
+    "sala_abierta": [
+        "¿Quién abrió esa puerta? Nadie debía ver lo que hay ahí.",
+    ],
+    "sala_alarma": [
+        "Intrusos en la sala de cría. Todas mis unidades: vayan por ellos.",
+    ],
+    # (cuando la cápsula que parpadea se apaga: fría, como un registro)
+    "sala_archivado": [
+        "Sujeto 23: sin señal. Archivado.",
+    ],
     "guardia_distraido": [
         "¿Qué es esa frecuencia, {rol}? Mi Guardia se quedó embobado. Que no les dure.",
         "Interesante, {rol}. El Guardia escucha. Ustedes, corran.",

@@ -43,6 +43,7 @@ from screens import roles as dibujo_roles
 from screens import mision_dibujo
 from screens import celular as dibujo_celular
 from screens import foto
+from screens import sala_secreta as dibujo_sala
 
 
 COLOR_SEPARADOR = (18, 16, 30)
@@ -153,6 +154,7 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=None,
     # Partículas, huellas, puertas que se mueven: una vez por cuadro, con lo
     # que cambió del estado (juego/efectos.py).
     efectos.tick(extras, jugadores)
+    dibujo_sala.tick(extras.get("sala_secreta"))      # (el polvo de la losa, los golpes)
     # (Antes se pintaba toda la pantalla de fondo en cada cuadro: las vistas
     # ya la tapan entera con el mapa; si el mapa es más chico que una vista,
     # _dibujar_vista pinta el fondo de esa vista.)
@@ -168,6 +170,7 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=None,
         tapado = barra if barra is not None and barra.colliderect(vista) else None
         _dibujar_vista(screen, vista, mundo, jugadores, jugador, zonas, mostrar_hitboxes,
                        aliens, escondites, extras)
+        dibujo_sala.render_vista_alarma(screen, vista, extras.get("sala_secreta"))
 
         # Lo de la interfaz va después del mundo pero sigue recortado al
         # viewport: si un jugador abre un panel, los demás no lo ven ni se les
@@ -190,6 +193,8 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=None,
             pass    # la Terminal NEXUS va encima de todo (render_terminales_encima)
         elif jugador.panel is not None and jugador.panel.get("tipo") == "tarea":
             pass    # el minijuego de la tarea va al final (juego/tareas.py)
+        elif jugador.panel is not None and jugador.panel.get("tipo") in ("votacion", "celular_nino"):
+            pass    # la votación y el celular de la sala oculta van más abajo, encima del inventario
         else:
             render_panel(screen, vista, jugador)
         render_mensaje(screen, vista, jugador, tapado)
@@ -198,6 +203,10 @@ def render_partida(screen, mundo, jugadores, zonas=(), segundos_restantes=None,
         render_inventario(screen, vista, jugador)
         dibujo_roles.render_minimapa(screen, vista, jugador, extras)
         mision_dibujo.render_progreso(screen, vista, jugador)
+        if jugador.panel is not None and jugador.panel.get("tipo") == "votacion":
+            dibujo_sala.render_voto(screen, vista, jugador, extras.get("sala_secreta"))
+        if jugador.panel is not None and jugador.panel.get("tipo") == "celular_nino":
+            dibujo_sala.render_celular_nino(screen, vista, jugador)
         if jugador.panel is not None and jugador.panel.get("tipo") == "celular":
             dibujo_celular.render_celular(screen, vista, jugador, extras.get("nexus"), tapado)
         render_minijuego(screen, vista, jugador)
@@ -292,6 +301,9 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
     luces.dibujar_fondo(screen, fondo_offset, camara, mundo, tiempo_ms)
     luces.dibujar_brillos(screen, fondo_offset, camara, mundo, extras or {}, tiempo_ms)
     salas_selladas.dibujar(screen, (camara.x - destino[0], camara.y - destino[1]), camara, mundo)
+    # Lo de adentro de la sala oculta: solo para quien ya cruzó su puerta.
+    sala_oculta = (extras or {}).get("sala_secreta")
+    dibujo_sala.dibujar_revelado(screen, fondo_offset, camara, sala_oculta, dueño)
 
     if mostrar_hitboxes:
         # Hitboxes del fondo: paredes y zonas interactuables del mapa.
@@ -325,6 +337,7 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         mision_dibujo.dibujar_piso(screen, offset, camara, dueño, extras.get("mision"), tiempo_ms)
         if extras.get("guardia_planta") is not None:
             extras["guardia_planta"].dibujar_planta(screen, offset, camara, tiempo_ms)
+        dibujo_sala.dibujar_piso(screen, offset, camara, extras.get("sala_secreta"), tiempo_ms, dueño)
         dibujo_roles.dibujar_piso(screen, offset, camara, dueño, extras, tiempo_ms)
 
     if extras:
@@ -357,6 +370,12 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
             dueño=dueño, puede_esperar=len(todos) >= 2 and turno % 2 == 1)
         aliens = [a for a in aliens if campo.ve_a(a.hitbox)]
         npcs = [n for n in npcs if campo.ve_a(n.hitbox)]
+    # Los que están adentro de la sala oculta no se ven desde afuera.
+    vistos = list(jugadores)
+    if sala_oculta is not None and sala_oculta.activa and not mostrar_hitboxes:
+        aliens = [a for a in aliens if not dibujo_sala.oculto(sala_oculta, dueño, a.hitbox)]
+        npcs = [n for n in npcs if not dibujo_sala.oculto(sala_oculta, dueño, n.hitbox)]
+        vistos = [j for j in vistos if j is dueño or not dibujo_sala.oculto(sala_oculta, dueño, j.hitbox)]
 
     # Los conos de visión van en el piso, debajo de todos los personajes.
     if not a_oscuras:
@@ -374,10 +393,11 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
         muebles_aqui += dibujo_roles.erguidos(camara, dueño, extras, tiempo_ms)
         if extras.get("guardia_planta") is not None:
             muebles_aqui += extras["guardia_planta"].erguidos(camara, tiempo_ms)
+        muebles_aqui += dibujo_sala.erguidos(extras.get("sala_secreta"), camara, tiempo_ms, dueño)
     muebles_aqui += erguidos_nexus(zonas, camara, dueño)
     muebles_aqui += erguidos_escondites(escondites, camara, dueño)
     decoracion.marcar_transparentes(muebles_aqui, jugadores)
-    for jugador in sorted(list(jugadores) + list(aliens) + npcs + muebles_aqui,
+    for jugador in sorted(vistos + list(aliens) + npcs + muebles_aqui,
                           key=lambda j: j.hitbox.bottom):
         jugador.dibujar(screen, offset)
         if mostrar_hitboxes:
@@ -388,6 +408,9 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
                                  _a_pantalla(interaccion, vista, camara), 1)
             pygame.draw.rect(screen, COLOR_COLISION,
                              _a_pantalla(jugador.hitbox, vista, camara), 2)
+    # La pared de encima de la puerta de la sala oculta va delante de todos:
+    # los que cruzan la puerta pasan por debajo.
+    dibujo_sala.dibujar_dintel(screen, offset, camara, sala_oculta)
 
     # Oscuridad: encima del mundo y de los personajes, debajo de los avisos.
     # Con [H] se apaga para poder revisar las hitboxes.
@@ -426,6 +449,7 @@ def _dibujar_vista(screen, vista, mundo, jugadores, dueño, zonas, mostrar_hitbo
     if a_oscuras:
         efectos.dibujar_polvo(screen, vista, offset, camara, dueño, oscuridad.mapa_de_luz(vista, dueño))
     luces.dibujar_alarma(screen, vista, eventos, tiempo_ms, tenido=a_oscuras or campo is not None)
+    dibujo_sala.dibujar_luces(screen, vista, camara, offset, sala_oculta, tiempo_ms, dueño)
     # Los ojos de la Sombra brillan encima de la oscuridad: a oscuras es lo
     # único que se le ve (sombra.py).
     for alien in aliens:

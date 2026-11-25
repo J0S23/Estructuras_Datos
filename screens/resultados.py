@@ -96,6 +96,9 @@ def _paso_alcanzado(mision):
 def _motivo(mision):
     if mision is None or not mision.activa:
         return ""
+    fin = _final(mision)
+    if fin is not None:
+        return fin["motivo"]
     motivo = getattr(mision, "motivo_fin", None)
     if motivo == "imposible" and getattr(mision, "razon_imposible_txt", None):
         return mision.razon_imposible_txt          # (por qué: mision.razon_imposible)
@@ -104,14 +107,22 @@ def _motivo(mision):
     return MOTIVOS["escaparon"] if mision.resultado == "victoria" else ""
 
 
+def _final(mision):
+    """Los datos del final de la sala oculta (data/historia.FINALES), o None."""
+    from data.historia import FINALES
+    clave = getattr(mision, "final", None) if mision is not None else None
+    return FINALES.get(clave) if clave else None
+
+
 # -- Animación de entrada -------------------------------------------------------------
 
 _entrada = {"clave": None, "t0": 0, "intro": 0}
 
 
-def _desde(clave):
-    """ms desde que apareció esta pantalla de resultados (muy grande sin efectos)."""
-    if not efectos.ACTIVOS:
+def _desde(clave, siempre=False):
+    """ms desde que apareció esta pantalla de resultados (muy grande sin
+    efectos, salvo con `siempre`: el final de la sala oculta se ve igual)."""
+    if not efectos.ACTIVOS and not siempre:
         return 10 ** 9
     ahora = pygame.time.get_ticks()
     if _entrada["clave"] != clave:
@@ -121,7 +132,7 @@ def _desde(clave):
 
 def en_intro():
     """¿Se está viendo la escena del final sola (antes de los resultados)?"""
-    return (efectos.ACTIVOS and _entrada["intro"] > 0
+    return (_entrada["intro"] > 0
             and pygame.time.get_ticks() - _entrada["t0"] < _entrada["intro"])
 
 
@@ -135,15 +146,21 @@ def saltar_intro():
 
 
 def _hay_escena(mision):
-    return (efectos.ACTIVOS and mision is not None and mision.activa
+    return ((efectos.ACTIVOS or _final(mision) is not None) and mision is not None and mision.activa
             and mision.resultado in ("victoria", "derrota"))
 
 
-def _intro(screen, victoria, t, jugadores, titular, color, motivo):
+def _intro(screen, victoria, t, jugadores, titular, color, motivo, final_historia=None):
     """La escena del final sola, con el titular y la pista para saltarla."""
     from screens import estilo, final
     ancho, alto = screen.get_size()
-    final.dibujar(screen, victoria, t, jugadores)
+    final.dibujar(screen, victoria, t, jugadores, final_historia)
+    if final_historia:
+        # (los finales de la sala oculta traen su historia y su frase: el
+        # titular sale después, en los resultados)
+        if t > 700:
+            estilo.pie(screen, "[ENTER] ver los resultados", alto - 34)
+        return
     e = max(0.72, min(1.6, min(ancho / 1280, alto / 720)))
     aparece = _suave(t, 2600 if victoria else 1700, 700)
     if aparece > 0:
@@ -471,24 +488,32 @@ def render_resultados(screen, jugadores, font=None, small_font=None,
     margen = int(28 * e)
 
     victoria = mision is not None and mision.activa and mision.resultado == "victoria"
+    fin = _final(mision)
+    final_historia = getattr(mision, "final", None) if fin is not None else None
     if mision is None or not mision.activa:
         titular, color = "SE ACABÓ LA RONDA", COLOR_TEXTO
+    elif fin is not None:
+        titular, color = fin["titular"], (COLOR_BIEN if victoria else COLOR_MAL)
     elif victoria:
         titular, color = "¡ESCAPARON DE LA NAVE!", COLOR_BIEN
     else:
         titular, color = "NO LOGRARON ESCAPAR", COLOR_MAL
-    t = _desde((id(mision), id(logros), len(jugadores)))
+    t = _desde((id(mision), id(logros), len(jugadores)), siempre=final_historia is not None)
+    if not _hay_escena(mision):
+        _entrada["intro"] = 0
     if _hay_escena(mision):
         # Primero la escena del final sola (screens/final.py); después queda de
         # fondo, oscurecida, y los resultados entran encima.
         from screens import final
-        _entrada["intro"] = final.INTRO_MS
-        if t < final.INTRO_MS:
-            _intro(screen, victoria, t, jugadores, titular, color, _motivo(mision))
+        intro = final.intro_ms(final_historia)
+        _entrada["intro"] = intro
+        if t < intro:
+            _intro(screen, victoria, t, jugadores, titular, color, _motivo(mision), final_historia)
             return []
-        final.dibujar(screen, victoria, t, jugadores)
+        final.dibujar(screen, victoria, t if not final_historia else t - intro, jugadores,
+                      final_historia, de_fondo=True)
         final.oscurecer(screen, 140)
-        t -= final.INTRO_MS
+        t -= intro
     else:
         _fondo(screen, color, t)
 

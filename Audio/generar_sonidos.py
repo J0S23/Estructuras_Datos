@@ -48,6 +48,10 @@ con el mismo nombre (.ogg, .wav o .mp3) y el juego lo usa (audio_manager.py).
                      más seguidos y un acorde eléctrico
     captura_sombra   te alcanzó la Sombra: un susurro que crece, silencio y un
                      chasquido de dientes con un golpe grave
+    monitor_bip    el pitido de un monitor de signos vitales (las cápsulas de
+                   los niños; generar_monitor)
+    monitor_falla  pitidos que se atropellan y desafinan: algo anda mal
+    monitor_plano  el tono largo y plano de cuando se corta el latido
     foto        obturador de cámara: el flash que carga, clic-clac y el
                 motor que pasa el rollo (al tomar la foto de un rumor o de lo
                 que arreglaste; generar_foto)
@@ -690,7 +694,37 @@ def generar_foto():
     guardar("foto", pista, 0.75)
 
 
+def generar_monitor():
+    """Los monitores de las cápsulas de los niños (misiones/sala_secreta.py)."""
+    def bip(f, dur, vol):
+        n = int(FRECUENCIA * dur)
+        salida = []
+        for i in range(n):
+            t = i / FRECUENCIA
+            env = min(1.0, t / 0.004, (dur - t) / 0.012)
+            # Un seno con un poco de su octava: el "bip" de hospital.
+            salida.append((math.sin(2 * math.pi * f * t) + 0.18 * math.sin(4 * math.pi * f * t)) * env * vol)
+        return salida
+
+    guardar("monitor_bip", bip(988, 0.11, 0.6) + silencio(0.05), 0.55)
+    falla = []
+    for k, (f, espera) in enumerate(((988, 0.16), (988, 0.09), (940, 0.22), (1010, 0.06),
+                                      (900, 0.3), (870, 0.12), (820, 0.45))):
+        falla += bip(f, 0.09 if k < 5 else 0.07, 0.6 - k * 0.05) + silencio(espera)
+    guardar("monitor_falla", falla, 0.55)
+    # El tono plano: largo, sin vibrato, y se va apagando al final.
+    dur = 2.6
+    n = int(FRECUENCIA * dur)
+    plano = []
+    for i in range(n):
+        t = i / FRECUENCIA
+        env = min(1.0, t / 0.01) * (1.0 if t < 1.9 else max(0.0, (dur - t) / 0.7))
+        plano.append((math.sin(2 * math.pi * 988 * t) + 0.18 * math.sin(4 * math.pi * 988 * t)) * env * 0.6)
+    guardar("monitor_plano", plano, 0.5)
+
+
 if __name__ == "__main__":
     generar()
     generar_extras()
     generar_foto()
+    generar_monitor()

@@ -271,6 +271,11 @@ class Espejo:
         # quita de mundo.paredes (mision.abrir_puerta) y el espejo nunca la
         # quitaba: la vista del cliente seguía tapada por una puerta abierta
         # (el campo de visión, vision.obstaculos, usa mundo.paredes).
+        # La sala oculta: su losa en mundo.paredes mientras está cerrada y la
+        # sala pintada en el mapa al abrirse (como en el servidor).
+        sala = getattr(g, "sala_secreta", None)
+        if sala is not None and hasattr(sala, "sincronizar"):
+            sala.sincronizar()
         mision = getattr(g, "mision", None)
         paredes = getattr(getattr(g, "mundo", None), "paredes", None)
         if mision is not None and paredes is not None:

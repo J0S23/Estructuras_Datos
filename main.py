@@ -24,4 +24,6 @@ from juego.app import Game
 
 
 if __name__ == "__main__":
-    Game().run()
+    juego = Game()
+    juego.abrir_intro()       # la historia de los niños (screens/cinematica.py); se salta con cualquier tecla
+    juego.run()
