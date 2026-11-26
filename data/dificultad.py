@@ -59,9 +59,11 @@ AJUSTES = {
     # Qué tanto convence la verdad (desmentidos, confirmaciones, testimonios):
     # multiplica la prob. de que un prisionero al que le llega se convenza.
     # Antes (1.0) un desmentido con foto dejaba en verde a casi todos (~85-90 %)
-    # y los planos salían con uno (Diego, nov 21). Con 0.45 en Normal hacen
-    # falta ~4 (2-7; redes/nexus._avanzar, pruebas/prueba_feria.py sección 6).
-    "convencer":         [0.55,   0.45,  0.40,  0.35],
+    # y los planos salían con uno (Diego, nov 21). Con 0.55/0.45/0.40 hacían
+    # falta ~2/5/5 misiones (Joseph, nov 25: "demasiadas"). Ahora, medido con
+    # fotos recortadas, un rumor cada minuto (10 semillas): mediana de 2 en
+    # Fácil, 3 en Normal y 3 en Difícil (redes/nexus._avanzar; pruebas/prueba_feria.py).
+    "convencer":         [0.62,   0.60,  0.55,  0.50],
     # La Sombra (sale en los apagones): si alcanza a alguien le apaga la
     # linterna. ¿Hasta que vuelva la luz? (>= 0.5 sí; si no, `sombra_apaga_ms`).
     "sombra_hasta_luz":  [0,      0,     0,     1],

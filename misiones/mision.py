@@ -976,7 +976,8 @@ class Mision:
                        "Si te equivocas, suena la alarma."],
             "opciones": [{"texto": c} for c in opciones],
             "pie": (f"[{jugador.pista_mover()}] elegir   "
-                    f"[{jugador.nombre_tecla('interactuar')}] marcar"),
+                    f"[{jugador.nombre_tecla('interactuar')}] marcar   "
+                    f"[{jugador.nombre_tecla('celular')}] salir"),
         })
 
     def resolver_codigo(self, jugador, indice):

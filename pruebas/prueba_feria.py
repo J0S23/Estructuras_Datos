@@ -160,11 +160,11 @@ assert g.nexus.reloj_rumor_ms == FERIA["primer_rumor_s"] * 1000
 assert normal.nexus.umbral_planos == normal.dificultad.umbral_planos
 assert g.nexus.umbral_planos == max(g.dificultad.umbral_planos, FERIA["umbral_planos_min"]) >= 0.70
 from data.feria import AJUSTES_FERIA
-assert g.nexus.factor_convencer() == AJUSTES_FERIA["convencer"] < 1
+assert g.nexus.factor_convencer() == AJUSTES_FERIA["convencer"][1] < 1      # (g: Normal)
 assert normal.nexus.factor_convencer() == normal.dificultad.valor("convencer") < 1
 from data.nexus import TICK_PROPAGACION_MS as _TICK
 assert g.nexus.tick_verde_ms == FERIA["tick_verde_ms"] < _TICK and normal.nexus.tick_verde_ms == _TICK
-assert AJUSTES_FERIA["convencer"] > normal.dificultad.valor("convencer")
+assert all(f > n for f, n in zip(AJUSTES_FERIA["convencer"], __import__("data.dificultad").dificultad.AJUSTES["convencer"]))
 assert g.dificultad.valor("bot_crece_cada") > 50 and normal.dificultad.valor("bot_crece_cada") < 5
 # Las vidas y los aliens son los de la dificultad (Normal: 5 vidas; Fácil: infinitas).
 assert all(j.vidas == 5 and not j.vidas_infinitas for j in g.jugadores)
@@ -541,9 +541,10 @@ assert len(con_ok) >= 6 and len(sin_ok) >= 6, (con, sin)
 # (Nov 24, Diego bajó la confianza de la feria a 70 %: la mediana pasó de 3 a
 # 2 desmentidos, y alguna vez basta con uno.)
 assert con_ok[len(con_ok) // 2] >= 2, f"en la feria los planos salen con muy pocos desmentidos: {con}"
-# Sin el modo feria también hacen falta varios (antes bastaba uno: Diego llegó
-# al 85 % con una foto sin recortar).
-assert sin_ok[len(sin_ok) // 2] >= 3, f"en Normal los planos salen con muy pocos desmentidos: {sin}"
+# Sin el modo feria también hace falta más de uno (antes bastaba uno: Diego
+# llegó al 85 % con una foto sin recortar). Nov 25 (Joseph: hacían falta
+# demasiadas): con fotos sin recortar, como aquí, la mediana es 2.
+assert sin_ok[len(sin_ok) // 2] >= 2, f"en Normal los planos salen con muy pocos desmentidos: {sin}"
 # Diego: "en modo feria la confianza sube muy lento". Ahora sube más rápido.
 media = {k: sum(v) / len(v) for k, v in a_los_10_s.items()}
 assert media[True] > 1.5 * media[False], f"en la feria la confianza no sube más rápido: {media}"

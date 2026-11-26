@@ -57,5 +57,9 @@ FERIA = {
 AJUSTES_FERIA = {
     "rumor_cada": 0.85,             # un rumor más seguido (para que se use NEXUS en 7 minutos)
     "bot_crece_cada": 100.0,        # las cuentas falsas no ganan seguidores (no da tiempo de explicarlo)
-    "convencer": 0.65,              # cuánto convence la verdad (en cualquier dificultad; ver arriba)
+    # Cuánto convence la verdad, por dificultad (Fácil, Normal, Difícil,
+    # Pesadilla; ver arriba). Antes 0.65 en todas: con el 70 % hacían falta
+    # ~4-5 misiones (Joseph, nov 25). Ahora, medido como en data/dificultad.py:
+    # mediana de 2 en Fácil y Normal, y 2-3 en Difícil.
+    "convencer": [0.85, 0.78, 0.68, 0.62],
 }

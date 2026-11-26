@@ -75,7 +75,7 @@ peligroso y la mision. La tecla de habilidad salta un paso si alguien se traba.
 | Caminar en sigilo (mantener) | Espacio | Ctrl derecho o 0 del numerico | LB o LT | LB o LT |
 | Celular (NEXUS): abrir / atras | TAB | . (punto) | RB (o J) | RB (o B) |
 | Soltar algo del inventario | X | , (coma) | B (o L) | B (o N) |
-| Cerrar un panel | - | - | B | B |
+| Cerrar un panel (codigo, terminal...) | TAB | . (punto) | B o RB | B o RB |
 
 Cada jugador puede escoger con que juega: WASD, flechas, Mando 1 o Mando 2 (el
 primer y el segundo mando que se conectan). Si hay algun mando conectado, despues

@@ -1896,10 +1896,13 @@ class Game:
                     self.sonar("menu_mover", 0.35)
                 return
 
-            # El celular (NEXUS): abre, va atrás o cierra. Con una Terminal NEXUS
-            # abierta, la cierra (no abre el celular).
+            # El celular (NEXUS): abre, va atrás o cierra. Con otra ventana
+            # abierta (una Terminal NEXUS, el teclado de una puerta o del baúl,
+            # una nota...), la cierra sin abrir el celular: así quien la abrió
+            # sin querer no queda obligado a poner un código (Diego, nov 25).
+            # La votación de la sala no se cierra (la maneja sala_secreta.tecla).
             if jugador.es_tecla(key, "celular"):
-                if jugador.panel is not None and jugador.panel.get("nexus_terminal"):
+                if (jugador.panel is not None and jugador.panel.get("tipo") not in ("celular", "votacion")):
                     jugador.cerrar_panel()
                     self.sonar("menu_mover", 0.4)
                 elif jugador.panel is not None and jugador.panel.get("tipo") == "celular":

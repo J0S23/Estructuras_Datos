@@ -207,6 +207,13 @@ def probar_liberar(feria):
     pasar(s, espejo)
     panel = espejo.g.jugadores[0].panel or {}
     assert panel.get("titulo") == "Baúl con candado" and len(panel.get("opciones", [])) == 4, panel
+    # Abierto sin querer: el botón del celular lo cierra sin marcar (y no abre el celular).
+    s._pulsar(j1, "celular")
+    cuadros(s, 2)
+    pasar(s, espejo)
+    assert espejo.g.jugadores[0].panel is None and not baul["abierto"], "el celular cierra el teclado"
+    s._pulsar(j1, "interactuar")
+    cuadros(s, 2)
     j1.cursor = j1.panel["codigos"].index(baul["codigo"])
     s._pulsar(j1, "interactuar")
     cuadros(s, 2)

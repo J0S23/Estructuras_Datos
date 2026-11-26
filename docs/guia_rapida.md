@@ -25,8 +25,8 @@ python main.py
 
 Jugar → cuántos juegan (2, 3 o 4) → dificultad → (si hay mandos) con qué
 juega cada uno → rol de cada uno → cinemática de apertura (la niña y el
-chat; mientras se ve, la partida se arma en otro hilo; se salta con
-cualquier tecla) → (si todavía no está lista, la pantalla de carga) →
+chat; mientras se ve, la partida se arma en otro hilo; se salta solo
+con Esc, o B en el mando) → (si todavía no está lista, la pantalla de carga) →
 partida. Desde el menú, [H] vuelve a mostrar la cinemática. El mapa que
 se carga lo dice `Hitboxes/mapa_activo.json` (hoy `MapaFinal`); se cambia
 desde el editor de mapa con la tecla M.

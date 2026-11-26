@@ -65,7 +65,9 @@ class Dificultad:
 
     def valor(self, nombre):
         if self.feria and nombre in AJUSTES_FERIA:
-            return AJUSTES_FERIA[nombre]          # (modo feria: juego/feria.py)
+            v = AJUSTES_FERIA[nombre]             # (modo feria: juego/feria.py)
+            # (un número: igual en todas; una lista: Fácil, Normal, Difícil, Pesadilla)
+            return _interpolar(v, self.nivel) if isinstance(v, (list, tuple)) else v
         return _interpolar(AJUSTES[nombre], self.nivel)
 
     @property

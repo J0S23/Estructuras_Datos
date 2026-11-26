@@ -164,6 +164,15 @@ for a in g.aliens:
     a.descanso_ms = 0
 g._tecla_en_partida(pygame.K_e)
 assert tec.panel and tec.panel.get("accion") == "codigo"
+# Abierto sin querer: la tecla del celular lo cierra sin marcar nada (ni
+# alarma) y sin abrir el celular (Diego, nov 25: antes había que marcar uno).
+assert "salir" in tec.panel["pie"]
+g._tecla_en_partida(tec.teclas["celular"][0])
+assert tec.panel is None and not m.puerta_abierta
+assert not any(a.punto_ruido == m.puerta.center for a in g.aliens), "cerrar no suena la alarma"
+print("el teclado de la puerta se cierra con la tecla del celular, sin marcar")
+g._tecla_en_partida(pygame.K_e)
+assert tec.panel and tec.panel.get("accion") == "codigo"
 codigos = tec.panel["codigos"]
 tec.cursor = next(i for i, c in enumerate(codigos) if c != m.codigo)
 g.confirmar(tec)

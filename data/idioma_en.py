@@ -1077,6 +1077,7 @@ TEXTOS = {
     "Teclado de la puerta{}": "Keypad of the{} door",
     "[{}] cerrar": "[{}] close",
     "[{}] elegir   [{}] marcar": "[{}] choose   [{}] enter",
+    "[{}] elegir   [{}] marcar   [{}] salir": "[{}] choose   [{}] enter   [{}] exit",
     "¡La puerta {} se abrió!": "The {} door opened!",
     "Faltan los planos: ganen la confianza en NEXUS.": "Blueprints missing: earn the trust on NEXUS.",
     "Faltan los planos: revisa NEXUS aquí": "Blueprints missing: check NEXUS here",
